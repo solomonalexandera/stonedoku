@@ -1,0 +1,23 @@
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Node modules (if using Firebase CLI)
+node_modules/
+npm-debug.log
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
