@@ -24,3 +24,10 @@ Thumbs.db
 
 # Manuals
 manuals
+
+# Build outputs
+functions/lib/
+dist/
+
+# Logs
+*.log
