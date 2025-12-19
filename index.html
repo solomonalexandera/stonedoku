@@ -1,1 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Versus - Real-Time Competitive Sudoku</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+    <div id="app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <h1>Sudoku Versus</h1>
+            </div>
+            <nav class="nav-controls">
+                <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme">
+                    <span class="theme-icon">🌙</span>
+                </button>
+                <button id="sound-toggle" class="btn btn-icon" aria-label="Toggle sound">
+                    <span class="sound-icon">🔊</span>
+                </button>
+                <div class="user-info" id="user-info" style="display: none;">
+                    <span class="user-status" id="user-status"></span>
+                    <span class="user-name" id="user-name"></span>
+                    <button id="logout-btn" class="btn btn-secondary btn-sm">Logout</button>
+                </div>
+            </nav>
+        </header>
 
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Auth View -->
+            <section id="auth-view" class="view">
+                <div class="auth-container">
+                    <h2>Welcome to Sudoku Versus</h2>
+                    <p>Compete in real-time 1v1 Sudoku battles!</p>
+                    <div class="auth-buttons">
+                        <button id="anonymous-login" class="btn btn-primary btn-lg">Play as Guest</button>
+                        <div class="auth-divider"><span>or</span></div>
+                        <form id="email-auth-form" class="auth-form">
+                            <input type="email" id="auth-email" placeholder="Email" required>
+                            <input type="password" id="auth-password" placeholder="Password" required>
+                            <div class="auth-form-buttons">
+                                <button type="submit" id="email-login" class="btn btn-primary">Login</button>
+                                <button type="button" id="email-signup" class="btn btn-secondary">Sign Up</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Lobby View -->
+            <section id="lobby-view" class="view" style="display: none;">
+                <div class="lobby-container">
+                    <div class="lobby-header">
+                        <h2>Game Lobby</h2>
+                        <div class="online-count">
+                            <span class="status-dot online"></span>
+                            <span id="online-count">0</span> players online
+                        </div>
+                    </div>
+
+                    <div class="lobby-grid">
+                        <!-- Game Mode Selection -->
+                        <div class="lobby-section game-modes">
+                            <h3>Game Modes</h3>
+                            <div class="mode-cards">
+                                <div class="mode-card" data-mode="single">
+                                    <div class="mode-icon">🧩</div>
+                                    <h4>Single Player</h4>
+                                    <p>Practice your skills</p>
+                                    <select id="difficulty-select" class="select-input">
+                                        <option value="easy">Easy</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="hard">Hard</option>
+                                    </select>
+                                    <button class="btn btn-primary" id="start-single">Start Game</button>
+                                </div>
+                                <div class="mode-card" data-mode="versus">
+                                    <div class="mode-icon">⚔️</div>
+                                    <h4>Bust the Board</h4>
+                                    <p>1v1 Real-time battle</p>
+                                    <button class="btn btn-primary" id="create-room">Create Room</button>
+                                    <div class="join-room-inline">
+                                        <input type="text" id="room-code-input" placeholder="Room Code" maxlength="4" pattern="[0-9]{4}">
+                                        <button class="btn btn-secondary" id="join-room">Join</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Online Players -->
+                        <div class="lobby-section online-players">
+                            <h3>Online Players</h3>
+                            <div class="players-list" id="players-list">
+                                <!-- Player items will be dynamically added -->
+                            </div>
+                        </div>
+
+                        <!-- Chat Section -->
+                        <div class="lobby-section lobby-chat">
+                            <h3>Global Chat</h3>
+                            <div class="chat-container">
+                                <div class="chat-messages" id="global-chat-messages">
+                                    <!-- Chat messages will be added here -->
+                                </div>
+                                <form class="chat-input-form" id="global-chat-form">
+                                    <input type="text" id="global-chat-input" placeholder="Type a message..." maxlength="200">
+                                    <button type="submit" class="btn btn-primary">Send</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Player Stats -->
+                        <div class="lobby-section player-stats">
+                            <h3>Your Stats</h3>
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <span class="stat-value" id="stat-wins">0</span>
+                                    <span class="stat-label">Wins</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="stat-losses">0</span>
+                                    <span class="stat-label">Losses</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="stat-winrate">0%</span>
+                                    <span class="stat-label">Win Rate</span>
+                                </div>
+                            </div>
+                            <div class="badges-section">
+                                <h4>Badges</h4>
+                                <div class="badges-list" id="badges-list">
+                                    <!-- Badges will be added here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Waiting Room View -->
+            <section id="waiting-view" class="view" style="display: none;">
+                <div class="waiting-container">
+                    <h2>Waiting for Opponent</h2>
+                    <div class="room-code-display">
+                        <p>Share this code with your opponent:</p>
+                        <div class="code-box" id="display-room-code">----</div>
+                        <button class="btn btn-secondary" id="copy-code">Copy Code</button>
+                    </div>
+                    <div class="loading-spinner"></div>
+                    <button class="btn btn-danger" id="cancel-waiting">Cancel</button>
+                </div>
+            </section>
+
+            <!-- Game View -->
+            <section id="game-view" class="view" style="display: none;">
+                <div class="game-container">
+                    <!-- Game Header -->
+                    <div class="game-header">
+                        <div class="player-info player-self">
+                            <span class="player-name" id="game-player-name">You</span>
+                            <span class="player-score" id="player-score">0</span>
+                        </div>
+                        <div class="game-status">
+                            <span class="game-timer" id="game-timer">00:00</span>
+                            <span class="game-mode-label" id="game-mode-label">Single Player</span>
+                        </div>
+                        <div class="player-info player-opponent" id="opponent-info" style="display: none;">
+                            <span class="player-name" id="opponent-name">Opponent</span>
+                            <span class="player-score" id="opponent-score">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Sudoku Grid -->
+                    <div class="sudoku-wrapper">
+                        <div class="sudoku-grid" id="sudoku-grid">
+                            <!-- 9x9 grid will be generated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Number Pad -->
+                    <div class="number-pad" id="number-pad">
+                        <button class="num-btn" data-num="1">1</button>
+                        <button class="num-btn" data-num="2">2</button>
+                        <button class="num-btn" data-num="3">3</button>
+                        <button class="num-btn" data-num="4">4</button>
+                        <button class="num-btn" data-num="5">5</button>
+                        <button class="num-btn" data-num="6">6</button>
+                        <button class="num-btn" data-num="7">7</button>
+                        <button class="num-btn" data-num="8">8</button>
+                        <button class="num-btn" data-num="9">9</button>
+                        <button class="num-btn erase-btn" data-num="0">⌫</button>
+                    </div>
+
+                    <!-- Game Controls -->
+                    <div class="game-controls">
+                        <button class="btn btn-secondary" id="hint-btn">💡 Hint</button>
+                        <button class="btn btn-danger" id="quit-game">Quit Game</button>
+                    </div>
+
+                    <!-- In-Game Chat (Versus mode) -->
+                    <div class="game-chat" id="game-chat" style="display: none;">
+                        <div class="chat-messages" id="game-chat-messages"></div>
+                        <form class="chat-input-form" id="game-chat-form">
+                            <input type="text" id="game-chat-input" placeholder="Chat..." maxlength="100">
+                            <button type="submit" class="btn btn-sm">Send</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Game Over Modal -->
+            <div id="game-over-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 id="game-over-title">Game Over!</h2>
+                    </div>
+                    <div class="modal-body">
+                        <div class="result-display" id="result-display">
+                            <div class="result-icon" id="result-icon">🏆</div>
+                            <p id="result-message">You won!</p>
+                        </div>
+                        <div class="game-stats">
+                            <div class="stat-row">
+                                <span>Your Score:</span>
+                                <span id="final-score">0</span>
+                            </div>
+                            <div class="stat-row" id="opponent-score-row" style="display: none;">
+                                <span>Opponent Score:</span>
+                                <span id="final-opponent-score">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>Time:</span>
+                                <span id="final-time">00:00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-primary" id="play-again">Play Again</button>
+                        <button class="btn btn-secondary" id="back-to-lobby">Back to Lobby</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Challenge Modal -->
+            <div id="challenge-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Challenge Received!</h2>
+                    </div>
+                    <div class="modal-body">
+                        <p><strong id="challenger-name">Player</strong> has challenged you to a match!</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-primary" id="accept-challenge">Accept</button>
+                        <button class="btn btn-secondary" id="decline-challenge">Decline</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Modal -->
+            <div id="profile-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Player Profile</h2>
+                        <button class="modal-close" id="close-profile">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="profile-info">
+                            <h3 id="profile-name">Player Name</h3>
+                            <p id="profile-member-since">Member since: ---</p>
+                        </div>
+                        <div class="profile-stats">
+                            <div class="stat-item">
+                                <span class="stat-value" id="profile-wins">0</span>
+                                <span class="stat-label">Wins</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="profile-losses">0</span>
+                                <span class="stat-label">Losses</span>
+                            </div>
+                        </div>
+                        <div class="profile-badges" id="profile-badges">
+                            <!-- Badges will be displayed here -->
+                        </div>
+                        <button class="btn btn-primary" id="challenge-player">Challenge to Match</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>&copy; 2024 Sudoku Versus. Real-time competitive Sudoku.</p>
+        </footer>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

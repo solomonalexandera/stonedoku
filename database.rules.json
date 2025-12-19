@@ -1,7 +1,53 @@
 {
-  /* Visit https://firebase.google.com/docs/database/security to learn more about security rules. */
   "rules": {
-    ".read": false,
-    ".write": false
+    "presence": {
+      "$userId": {
+        ".read": true,
+        ".write": "$userId === auth.uid"
+      }
+    },
+    "lobbies": {
+      "$roomCode": {
+        ".read": true,
+        ".write": "auth != null && (data.child('players').hasChild(auth.uid) || !data.exists() || data.child('host').val() === auth.uid)",
+        "players": {
+          "$playerId": {
+            ".write": "$playerId === auth.uid || data.parent().parent().child('host').val() === auth.uid"
+          }
+        }
+      }
+    },
+    "matches": {
+      "$matchId": {
+        ".read": "auth != null && data.child('playerIds').hasChild(auth.uid)",
+        ".write": "auth != null && (data.child('playerIds').hasChild(auth.uid) || !data.exists())",
+        "board": {
+          "$cellId": {
+            ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid) && (data.child('filledBy').val() === null || !data.child('given').val())"
+          }
+        },
+        "scores": {
+          "$playerId": {
+            ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid)"
+          }
+        },
+        "chat": {
+          ".write": "auth != null && data.parent().child('playerIds').hasChild(auth.uid)"
+        }
+      }
+    },
+    "globalChat": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$messageId": {
+        ".validate": "newData.hasChildren(['userId', 'displayName', 'text', 'timestamp']) && newData.child('userId').val() === auth.uid"
+      }
+    },
+    "notifications": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "auth != null"
+      }
+    }
   }
 }
