@@ -43,13 +43,15 @@ import {
 // ===========================================
 // Firebase Configuration
 // ===========================================
+// NOTE: Replace these placeholder values with your actual Firebase project config
+// For production, consider using environment variables or a separate config file
 const firebaseConfig = {
-    apiKey: "AIzaSyExample-replace-with-your-key",
+    apiKey: "YOUR_API_KEY",
     authDomain: "stonedoku-c0898.firebaseapp.com",
     projectId: "stonedoku-c0898",
     storageBucket: "stonedoku-c0898.firebasestorage.app",
-    messagingSenderId: "123456789",
-    appId: "1:123456789:web:abcdef123456",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
     databaseURL: "https://stonedoku-c0898-default-rtdb.firebaseio.com"
 };
 
@@ -247,12 +249,18 @@ const SudokuGenerator = {
 // Profanity Filter (Basic)
 // ===========================================
 const ProfanityFilter = {
-    badWords: ['badword1', 'badword2'], // Add actual words as needed
+    // Basic list of common inappropriate words
+    // In production, consider using a more comprehensive third-party service
+    badWords: [
+        'spam', 'scam', 'hack', 'cheat', 'exploit',
+        // Common mild profanity that should be filtered in a game context
+        'stupid', 'idiot', 'loser', 'noob'
+    ],
     
     filter(text) {
         let filtered = text;
         for (const word of this.badWords) {
-            const regex = new RegExp(word, 'gi');
+            const regex = new RegExp(`\\b${word}\\b`, 'gi');
             filtered = filtered.replace(regex, '*'.repeat(word.length));
         }
         return filtered;
