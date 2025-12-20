@@ -1,58 +1,56 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
     "presence": {
       ".read": "auth != null",
       "$userId": {
+        // Users can read presence status of others, but only write their own
         ".read": "auth != null",
-        ".write": "$userId === auth.uid"
+        ".write": "auth != null && auth.uid == $userId",
+        ".validate": "newData.hasChildren(['status', 'displayName', 'last_changed'])"
       }
     },
     "lobbies": {
+      // Lobbies are publicly readable to be listed, but writing requires authentication
+      ".read": "auth != null",
       "$roomCode": {
-        ".read": true,
-        ".write": "auth != null && (data.child('players').hasChild(auth.uid) || !data.exists() || data.child('host').val() === auth.uid)",
-        "players": {
-          "$playerId": {
-            ".write": "$playerId === auth.uid || data.parent().parent().child('host').val() === auth.uid"
-          }
-        }
+        ".write": "auth != null",
+        // Host can delete, players can join/leave
+        ".validate": "!data.exists() || (data.exists() && (newData.child('host').val() == auth.uid || newData.child('players').hasChild(auth.uid)))"
       }
     },
     "matches": {
       "$matchId": {
-        ".read": "auth != null",
-        ".write": "auth != null && (data.child('playerIds').hasChild(auth.uid) || !data.exists())",
-        "board": {
-          "$cellId": {
-            ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid)"
-          }
-        },
-        "scores": {
-          "$playerId": {
-            ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid)"
-          }
-        },
-        "activity": {
-          "$playerId": {
-            ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid)"
-          }
-        },
-        "chat": {
-          ".write": "auth != null && data.parent().child('playerIds').hasChild(auth.uid)"
-        }
+        // Players in the match can read/write to it
+        ".read": "auth != null && data.child('players').hasChild(auth.uid)",
+        ".write": "auth != null && data.child('players').hasChild(auth.uid)",
+        ".validate": "newData.hasChildren(['id', 'players', 'board', 'solution'])"
       }
     },
     "globalChat": {
+      // Authenticated users can read/write to global chat
       ".read": "auth != null",
       ".write": "auth != null",
       "$messageId": {
         ".validate": "newData.hasChildren(['userId', 'displayName', 'text', 'timestamp']) && newData.child('userId').val() === auth.uid"
       }
     },
+    "directMessages": {
+      "$dmId": {
+        // Only participants of a DM can read/write
+        ".read": "auth != null && $dmId.contains(auth.uid)",
+        ".write": "auth != null && $dmId.contains(auth.uid)",
+        "$messageId": {
+          ".validate": "newData.hasChildren(['from', 'to', 'text', 'timestamp']) && newData.child('from').val() === auth.uid"
+        }
+      }
+    },
     "notifications": {
       "$userId": {
-        ".read": "$userId === auth.uid",
-        ".write": "auth != null"
+        // Users can only access their own notifications
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": "auth != null" // Can be written to by others (e.g. challenges)
       }
     }
   }
