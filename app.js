@@ -44,6 +44,7 @@ import {
     arrayRemove,
     Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import {
     getStorage,
     ref as storageRef,
@@ -130,9 +131,6 @@ const AppState = {
     }
 };
 
-// ===========================================
-// Audio Manager (Web Audio API)
-// ===========================================
 const AudioManager = {
     context: null,
     
@@ -457,20 +455,56 @@ const ProfileManager = {
                 socialLinks: {},
                 isPublic: true
             });
+            // Create a vanity link mapping for registered users
+            try {
+                const vanityRef = doc(firestore, 'vanityLinks', usernameLower);
+                await setDoc(vanityRef, {
+                    userId: userId,
+                    username: username,
+                    path: `/profile/${usernameLower}`,
+                    createdAt: Timestamp.now()
+                });
+            } catch (e) {
+                console.warn('Failed to create vanity link:', e);
+            }
         } else {
             // Update existing profile if username is provided and different
             const existingData = existing.data();
-            if (data.username && !existingData.username) {
-                const usernameLower = data.username.toLowerCase();
-                const usernameRef = doc(firestore, 'usernames', usernameLower);
-                await setDoc(usernameRef, { 
+            if (data.username && (!existingData.username || existingData.usernameLower !== data.username.toLowerCase())) {
+                const newLower = data.username.toLowerCase();
+                const usernameRef = doc(firestore, 'usernames', newLower);
+                await setDoc(usernameRef, {
                     userId: userId,
                     createdAt: Timestamp.now()
                 });
+
+                // Remove old vanity mapping if present
+                try {
+                    if (existingData.usernameLower && existingData.usernameLower !== newLower) {
+                        const oldVanityRef = doc(firestore, 'vanityLinks', existingData.usernameLower);
+                        await setDoc(oldVanityRef, { deprecated: true }, { merge: true });
+                    }
+                } catch (e) {
+                    console.warn('Error updating vanity mappings:', e);
+                }
+
                 await updateDoc(profileRef, {
                     username: data.username,
-                    usernameLower: usernameLower
+                    usernameLower: newLower
                 });
+
+                // Ensure vanity link exists/updated
+                try {
+                    const vanityRef = doc(firestore, 'vanityLinks', newLower);
+                    await setDoc(vanityRef, {
+                        userId: userId,
+                        username: data.username,
+                        path: `/profile/${newLower}`,
+                        updatedAt: Timestamp.now()
+                    }, { merge: true });
+                } catch (e) {
+                    console.warn('Failed to set vanity link on update:', e);
+                }
             }
         }
         
@@ -499,6 +533,37 @@ const ProfileManager = {
     
     async updateProfile(userId, data) {
         const profileRef = doc(firestore, 'users', userId);
+        const existingSnap = await getDoc(profileRef);
+        const existing = existingSnap.exists() ? existingSnap.data() : {};
+
+        // If username is changing, update username reservation and vanity mapping
+        if (data.username && data.username.toLowerCase() !== existing.usernameLower) {
+            const newLower = data.username.toLowerCase();
+            try {
+                await setDoc(doc(firestore, 'usernames', newLower), {
+                    userId: userId,
+                    createdAt: Timestamp.now()
+                });
+
+                // Deprecate old vanity link if present
+                if (existing.usernameLower && existing.usernameLower !== newLower) {
+                    const oldVanityRef = doc(firestore, 'vanityLinks', existing.usernameLower);
+                    await setDoc(oldVanityRef, { deprecated: true }, { merge: true });
+                }
+
+                // Create/merge new vanity link
+                const vanityRef = doc(firestore, 'vanityLinks', newLower);
+                await setDoc(vanityRef, {
+                    userId: userId,
+                    username: data.username,
+                    path: `/profile/${newLower}`,
+                    updatedAt: Timestamp.now()
+                }, { merge: true });
+            } catch (e) {
+                console.warn('Error updating username/vanity mapping:', e);
+            }
+        }
+
         await updateDoc(profileRef, data);
         return await getDoc(profileRef);
     },
@@ -564,7 +629,7 @@ const ProfileManager = {
             throw new Error('Image must be under 2MB');
         }
         
-        const fileRef = storageRef(storage, `profilePictures/${userId}`);
+        const fileRef = storageRef(storage, `avatars/${userId}`);
         await uploadBytes(fileRef, file);
         const downloadURL = await getDownloadURL(fileRef);
         
@@ -866,6 +931,13 @@ const MatchManager = {
             const matchSnapshot = await get(matchRef);
             const match = matchSnapshot.val();
             
+            // Ensure the acting user is a participant in this match
+            const participants = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds || [];
+            if (!participants.includes(userId)) {
+                console.warn('makeMove rejected: user is not a participant of match', { userId, participants });
+                return { success: false, reason: 'Not a participant' };
+            }
+
             if (!match || !match.solution) {
                 console.error('Match data invalid:', match);
                 return { success: false, reason: 'Match data invalid' };
@@ -916,13 +988,13 @@ const MatchManager = {
                 // Check win condition (board complete)
                 await this.checkWinCondition(matchId);
             } else {
-                // Wrong guess - increment mistakes
+                // Wrong guess - increment mistakes (only for acting user)
                 const currentMistakes = (match.mistakes?.[userId] || 0) + 1;
+                console.log('About to record mistake', { matchId, userId, currentMistakes, previousMistakes: match.mistakes });
                 await update(ref(rtdb, `matches/${matchId}/mistakes`), {
                     [userId]: currentMistakes
                 });
-                
-                console.log('Mistake recorded:', { userId, currentMistakes, maxMistakes: match.maxMistakes || 3 });
+                console.log('Mistake recorded:', { matchId, userId, currentMistakes, maxMistakes: match.maxMistakes || 3 });
                 
                 // Check if player has lost (3 mistakes)
                 if (currentMistakes >= (match.maxMistakes || 3)) {
@@ -965,6 +1037,7 @@ const MatchManager = {
         
         // Find the winning player (the one who didn't lose)
         const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds;
+        console.log('endMatchByMistakes invoked', { matchId, losingPlayerId, playerIds, matchMistakes: match.mistakes });
         const winningPlayerId = playerIds.find(id => id !== losingPlayerId);
         
         console.log('Match ended by mistakes:', { losingPlayerId, winningPlayerId });
@@ -1047,60 +1120,47 @@ const MatchManager = {
         console.log('Starting opponent presence monitor for:', opponentId);
         
         const opponentPresenceRef = ref(rtdb, `presence/${opponentId}`);
-        let lastSeenOnline = Date.now();
-        let disconnectTimeout = null;
-        const IDLE_TIMEOUT = 30000; // 30 seconds before considered idle/disconnected
-        
+        // Store timers so we can cancel if opponent returns
+        AppState.opponentDisconnectTimers = AppState.opponentDisconnectTimers || {};
+
         const listener = onValue(opponentPresenceRef, (snapshot) => {
             const presenceData = snapshot.val();
             console.log('Opponent presence update:', presenceData);
-            
+
+            // If opponent is online, clear any pending disconnect timer
             if (presenceData && presenceData.status === 'online') {
-                // Opponent is online
-                lastSeenOnline = Date.now();
-                
-                // Clear any pending disconnect timeout
-                if (disconnectTimeout) {
-                    clearTimeout(disconnectTimeout);
-                    disconnectTimeout = null;
+                const existing = AppState.opponentDisconnectTimers[opponentId];
+                if (existing) {
+                    clearTimeout(existing);
+                    delete AppState.opponentDisconnectTimers[opponentId];
+                    console.log('Cleared pending disconnect timer for opponent');
                 }
-            } else {
-                // Opponent went offline or presence is missing
-                console.log('Opponent appears offline, starting timeout...');
-                
-                if (!disconnectTimeout) {
-                    disconnectTimeout = setTimeout(() => {
-                        console.log('Opponent disconnect timeout reached');
-                        onDisconnect();
-                    }, 5000); // Give 5 seconds grace period
-                }
-            }
-        });
-        
-        // Also set up a periodic check for idle detection
-        const idleCheckInterval = setInterval(() => {
-            if (AppState.currentMatch !== matchId) {
-                // Match ended, stop checking
-                clearInterval(idleCheckInterval);
-                if (disconnectTimeout) clearTimeout(disconnectTimeout);
                 return;
             }
-            
-            const timeSinceLastSeen = Date.now() - lastSeenOnline;
-            if (timeSinceLastSeen > IDLE_TIMEOUT) {
-                console.log('Opponent idle timeout reached:', timeSinceLastSeen);
-                clearInterval(idleCheckInterval);
-                onDisconnect();
+
+            // Opponent appears offline or presence missing — start a cancellable grace timer
+            console.log('Opponent appears offline, starting grace timeout...');
+            const graceMs = 30000; // 30s grace period
+            const timerId = setTimeout(() => {
+                console.log('Opponent disconnect timeout reached, invoking onDisconnect');
+                delete AppState.opponentDisconnectTimers[opponentId];
+                try {
+                    onDisconnect();
+                } catch (e) {
+                    console.error('onDisconnect handler threw:', e);
+                }
+            }, graceMs);
+
+            // Replace any existing timer
+            if (AppState.opponentDisconnectTimers[opponentId]) {
+                clearTimeout(AppState.opponentDisconnectTimers[opponentId]);
             }
-        }, 10000); // Check every 10 seconds
+            AppState.opponentDisconnectTimers[opponentId] = timerId;
+        });
         
         AppState.listeners.push({ 
             ref: opponentPresenceRef, 
-            callback: listener,
-            cleanup: () => {
-                clearInterval(idleCheckInterval);
-                if (disconnectTimeout) clearTimeout(disconnectTimeout);
-            }
+            callback: listener
         });
         
         return listener;
@@ -1175,6 +1235,46 @@ const MatchManager = {
         });
     }
 };
+
+// Global cleanup after a match (hoisted so other modules can call it)
+async function cleanupAfterMatch() {
+    // Clean up rematch listener
+    try {
+        if (rematchListener && AppState.lastMatch?.id) {
+            off(ref(rtdb, `matches/${AppState.lastMatch.id}/rematch`));
+            rematchListener = null;
+        }
+    } catch (e) {
+        console.warn('Error cleaning rematch listener:', e);
+    }
+
+    // Leave room if still in one
+    try {
+        if (AppState.currentRoom) {
+            await LobbyManager.leaveRoom(AppState.currentRoom, AppState.currentUser?.uid);
+            AppState.currentRoom = null;
+        }
+    } catch (e) {
+        console.warn('Error leaving room during cleanup:', e);
+    }
+
+    // Reset states
+    AppState.currentMatch = null;
+    AppState.lastMatch = null;
+    AppState.lastOpponentId = null;
+    AppState.currentOpponent = null;
+    AppState.gameMode = 'lobby';
+
+    // Remove versus-mode class
+    const gameContainer = document.querySelector('.game-container');
+    if (gameContainer) gameContainer.classList.remove('versus-mode');
+
+    // Clear any pending opponent disconnect timers
+    if (AppState.opponentDisconnectTimers) {
+        Object.values(AppState.opponentDisconnectTimers).forEach(t => clearTimeout(t));
+        AppState.opponentDisconnectTimers = {};
+    }
+}
 
 // ===========================================
 // Onboarding System
@@ -1463,9 +1563,7 @@ const OnboardingSystem = {
             let avatarUrl = null;
             if (avatarFile) {
                 try {
-                    const avatarRef = storageRef(storage, `profilePictures/${user.uid}`);
-                    await uploadBytes(avatarRef, avatarFile);
-                    avatarUrl = await getDownloadURL(avatarRef);
+                    avatarUrl = await ProfileManager.uploadProfilePicture(user.uid, avatarFile);
                 } catch (uploadError) {
                     console.error('Avatar upload error:', uploadError);
                     // Continue without avatar
@@ -1511,6 +1609,18 @@ const OnboardingSystem = {
                 isPublic: true,
                 isNewUser: true
             });
+
+            // Create vanity link mapping for this username (registered users only)
+            try {
+                await setDoc(doc(firestore, 'vanityLinks', username.toLowerCase()), {
+                    userId: user.uid,
+                    username: username,
+                    path: `/profile/${username.toLowerCase()}`,
+                    createdAt: serverTimestamp()
+                });
+            } catch (e) {
+                console.warn('Failed to create vanity link during onboarding:', e);
+            }
             
             // Update AppState with user
             AppState.currentUser = user;
@@ -1903,20 +2013,25 @@ const ChatManager = {
     },
     
     async sendDirectMessage(fromUserId, fromDisplayName, toUserId, text) {
-        const filteredText = ProfanityFilter.filter(text);
-        const dmId = [fromUserId, toUserId].sort().join('_');
-        const dmRef = ref(rtdb, `directMessages/${dmId}`);
-        
-        await push(dmRef, {
-            from: fromUserId,
-            fromDisplayName: fromDisplayName,
-            to: toUserId,
-            text: filteredText,
-            timestamp: serverTimestamp(),
-            read: false
-        });
-        
-        return dmId;
+        try {
+            const filteredText = ProfanityFilter.filter(text);
+            const dmId = [fromUserId, toUserId].sort().join('_');
+            const dmRef = ref(rtdb, `directMessages/${dmId}`);
+
+            await push(dmRef, {
+                from: fromUserId,
+                fromDisplayName: fromDisplayName,
+                to: toUserId,
+                text: filteredText,
+                timestamp: serverTimestamp(),
+                read: false
+            });
+
+            return dmId;
+        } catch (e) {
+            console.error('sendDirectMessage failed', { fromUserId, toUserId, error: e });
+            throw e;
+        }
     },
     
     listenToDirectMessages(dmId, callback) {
@@ -2182,10 +2297,20 @@ const UI = {
         document.getElementById('profile-page-member-since').textContent = 
             memberDate ? memberDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Unknown';
         
-        // Vanity URL
+        // Vanity URL - show only for registered users (not anonymous guest accounts)
+        const vanityEl = document.getElementById('profile-vanity-url');
+        const vanityLinkEl = document.getElementById('profile-vanity-link');
         const vanityUrl = `stone-doku.web.app/profile/${encodeURIComponent(username.toLowerCase())}`;
-        document.getElementById('profile-vanity-link').href = `/profile/${encodeURIComponent(username.toLowerCase())}`;
-        document.getElementById('profile-vanity-link').textContent = vanityUrl;
+        // Consider a user 'registered' if they have an email on their profile
+        const isRegistered = !!data.email;
+        if (isRegistered) {
+            vanityLinkEl.href = `/profile/${encodeURIComponent(username.toLowerCase())}`;
+            vanityLinkEl.textContent = vanityUrl;
+            vanityEl.style.display = 'flex';
+        } else {
+            // Hide vanity URL for anonymous/guest profiles
+            vanityEl.style.display = 'none';
+        }
         
         // Stats
         const stats = data.stats || { wins: 0, losses: 0, gamesPlayed: 0 };
@@ -2952,38 +3077,47 @@ const GameUI = {
             AudioManager.playDefeat();
         }
         
-        ViewManager.showModal('game-over-modal');
+        ViewManager.show('lobby');
     },
     
     endVersusGame(match) {
+        if (AppState.isGameOver) return;
+        AppState.isGameOver = true;
+
         this.stopTimer();
-        
+
         const userId = AppState.currentUser?.uid;
-        const isWinner = match.winner === userId;
+        let isWinner = match.winner === userId;
         const isTie = match.winner === 'tie';
         const isDisconnect = match.winReason === 'opponent_disconnect';
         const isMistakesLoss = match.winReason === 'opponent_mistakes';
-        
-        // Convert playerIds object to array
+
+        // If the game ended because the board is complete, determine the winner by score
+        if (match.winReason === 'board_complete') {
+            const scores = match.scores;
+            const playerIds = Object.keys(match.players);
+            const opponentId = playerIds.find(id => id !== userId);
+            if (scores[userId] > scores[opponentId]) {
+                isWinner = true;
+            } else if (scores[userId] < scores[opponentId]) {
+                isWinner = false;
+            } else {
+                isWinner = null; // Tie
+            }
+        }
+
         const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds;
         const opponentId = playerIds?.find(id => id !== userId);
-        
-        // Only update stats if not already handled by disconnect handler
-        if (!isDisconnect) {
-            if (isWinner) {
-                AudioManager.playVictory();
-                CreativeFeatures.showConfetti();
-                ProfileManager.updateStats(userId, true);
-            } else if (!isTie) {
-                AudioManager.playDefeat();
-                ProfileManager.updateStats(userId, false);
-            }
-        } else if (isWinner) {
+
+        if (isWinner) {
             AudioManager.playVictory();
             CreativeFeatures.showConfetti();
+            ProfileManager.updateStats(userId, true);
+        } else if (isWinner === false) {
+            AudioManager.playDefeat();
+            ProfileManager.updateStats(userId, false);
         }
-        
-        // Show post-match view
+
         showPostMatchScreen(match, userId, opponentId, isWinner, isTie, isDisconnect, isMistakesLoss);
     },
     
@@ -3435,32 +3569,7 @@ function setupEventListeners() {
         PresenceSystem.updateActivity('In Lobby');
     });
     
-    // Helper function to clean up after a match
-    function cleanupAfterMatch() {
-        // Clean up rematch listener
-        if (rematchListener) {
-            off(ref(rtdb, `matches/${AppState.lastMatch?.id}/rematch`));
-            rematchListener = null;
-        }
-        
-        // Leave room if still in one
-        if (AppState.currentRoom) {
-            LobbyManager.leaveRoom(AppState.currentRoom, AppState.currentUser?.uid);
-            AppState.currentRoom = null;
-        }
-        
-        // Reset states
-        AppState.currentMatch = null;
-        AppState.lastMatch = null;
-        AppState.lastOpponentId = null;
-        AppState.currentOpponent = null;
-        AppState.gameMode = 'lobby';
-        
-        // Remove versus-mode class
-        const gameContainer = document.querySelector('.game-container');
-        if (gameContainer) gameContainer.classList.remove('versus-mode');
-    }
-    
+
     // Number pad
     document.querySelectorAll('.num-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -3651,6 +3760,12 @@ function setupEventListeners() {
     handleVanityUrl();
 }
 
+// NOTE: Responsive scaling is handled by CSS (fluid layout & clamp-based typography).
+// The previous JS-based `adjustScale()` caused layout flashes and competing behavior; removed.
+// If a future need arises to apply JS-based adjustments, consider a non-invasive resize observer that
+// only tweaks micro-layouts (not the global scale), and ensure it runs *after* the initial render.
+
+
 // ===========================================
 // Profile Page Initialization
 // ===========================================
@@ -3805,7 +3920,7 @@ function initProfilePage() {
     });
     
     // DM from profile
-    document.getElementById('profile-dm-btn')?.addEventListener('click', () => {
+    document.getElementById('profile-dm-btn')?.addEventListener('click', async () => {
         const profileUserId = document.getElementById('profile-view')?.dataset.userId;
         if (!profileUserId) return;
         
@@ -3826,7 +3941,29 @@ function initProfilePage() {
         document.querySelector('.widget-tab[data-chat="dms"]')?.classList.add('active');
         
         // Start listening to DMs with this user
-        ChatManager.listenToDirectMessages(AppState.currentUser.uid, profileUserId);
+        // Compute dmId and load history + listener
+        try {
+            const dmId = [AppState.currentUser.uid, profileUserId].sort().join('_');
+            const messagesEl = document.getElementById('chat-widget-messages');
+            if (messagesEl) {
+                messagesEl.innerHTML = '<div class="chat-info">Direct messages with this user</div>';
+                // Load existing history
+                const dmSnapshot = await get(ref(rtdb, `directMessages/${dmId}`));
+                if (dmSnapshot.exists()) {
+                    dmSnapshot.forEach(child => {
+                        const msg = child.val();
+                        UI.addChatMessage('chat-widget-messages', msg.fromDisplayName || msg.from, msg.text, msg.timestamp, msg.from);
+                    });
+                }
+            }
+
+            ChatManager.listenToDirectMessages(dmId, (msg) => {
+                UI.addChatMessage('chat-widget-messages', msg.fromDisplayName || msg.from, msg.text, msg.timestamp, msg.from);
+                if (typeof window.incrementUnread === 'function') window.incrementUnread();
+            });
+        } catch (e) {
+            console.warn('Failed to open DM conversation:', e);
+        }
         
         // Clear messages and load DM history
         const messagesEl = document.getElementById('chat-widget-messages');
@@ -4040,16 +4177,29 @@ function initFloatingChat() {
             const activeTab = document.querySelector('.widget-tab.active');
             const chatMode = activeTab?.dataset.chat || 'global';
             
-            if (chatMode === 'game' && AppState.currentMatch) {
-                await ChatManager.sendGameMessage(AppState.currentMatch, AppState.currentUser.uid, displayName, text);
-            } else if (AppState.widgetChatMode.startsWith('dm_')) {
-                // Sending to a specific DM conversation
-                const otherUserId = AppState.widgetChatMode.replace('dm_', '');
-                await ChatManager.sendDirectMessage(AppState.currentUser.uid, otherUserId, displayName, text);
-            } else {
-                await ChatManager.sendGlobalMessage(AppState.currentUser.uid, displayName, text);
+            try {
+                if (chatMode === 'game' && AppState.currentMatch) {
+                    await ChatManager.sendGameMessage(AppState.currentMatch, AppState.currentUser.uid, displayName, text);
+                } else if (AppState.widgetChatMode.startsWith('dm_')) {
+                    // Sending to a specific DM conversation
+                    const otherUserId = AppState.widgetChatMode.replace('dm_', '');
+                    await ChatManager.sendDirectMessage(AppState.currentUser.uid, displayName, otherUserId, text);
+                } else {
+                    await ChatManager.sendGlobalMessage(AppState.currentUser.uid, displayName, text);
+                }
+            } catch (err) {
+                console.error('Failed to send chat message', err);
+                alert('Failed to send message: ' + (err.message || err));
             }
             if (input) input.value = '';
+        }
+    });
+
+    // Autocomplete whisper command: @whi -> @whisper
+    input?.addEventListener('input', (e) => {
+        const val = e.target.value;
+        if (/^@whi(?!s)/i.test(val)) {
+            e.target.value = val.replace(/^@whi/i, '@whisper');
         }
     });
     
@@ -5378,6 +5528,45 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Set up event listeners
     setupEventListeners();
+
+    // Run QA diagnostics if requested via ?qa=1
+    if (location.search.includes('qa=1')) {
+        (async function runQA() {
+            try {
+                const vp = window.visualViewport || { width: window.innerWidth, height: window.innerHeight };
+                const viewportW = Math.round(vp.width);
+                const viewportH = Math.round(vp.height);
+                const appEl = document.getElementById('app');
+                const appRect = appEl ? appEl.getBoundingClientRect() : { width: 0, height: 0, left: 0 };
+                const gaps = { left: Math.round(appRect.left), right: Math.round(viewportW - (appRect.left + appRect.width)) };
+                const rootFont = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+                const inlineTransformCount = document.querySelectorAll('[style*="transform:"]').length;
+                const criticalInline = !!document.querySelector('head style') && Array.from(document.querySelectorAll('head style')).some(s=>/Critical inline CSS/i.test(s.textContent||''));
+                const bodyOverflow = getComputedStyle(document.body).overflow || document.body.style.overflow || '';
+                const report = {
+                    createdAt: new Date().toISOString(),
+                    userAgent: navigator.userAgent,
+                    viewport: { width: viewportW, height: viewportH },
+                    app: { width: Math.round(appRect.width), height: Math.round(appRect.height), left: Math.round(appRect.left) },
+                    gaps, percentViewportUsed: Math.round((appRect.width / viewportW) * 100),
+                    rootFontSize: rootFont,
+                    inlineTransformCount,
+                    criticalInline,
+                    bodyOverflow
+                };
+                console.log('QA report', report);
+                try {
+                    // Write to Firestore for remote review (collection: qaReports)
+                    await addDoc(collection(firestore, 'qaReports'), report);
+                    console.log('QA report saved to Firestore: qaReports');
+                } catch (e) {
+                    console.warn('Failed to save QA report to Firestore', e);
+                }
+            } catch (e) {
+                console.warn('QA run failed', e);
+            }
+        })();
+    }
     
     // Create initial grid structure
     GameUI.createGrid();
