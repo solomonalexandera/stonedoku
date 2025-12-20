@@ -3,7 +3,7 @@
     "presence": {
       ".read": "auth != null",
       "$userId": {
-        ".read": true,
+        ".read": "auth != null",
         ".write": "$userId === auth.uid"
       }
     },
