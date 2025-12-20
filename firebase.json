@@ -23,8 +23,8 @@
   "firestore": {
     "database": "(default)",
     "location": "europe-west1",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "rules": "firebase/firestore.rules",
+    "indexes": "firebase/firestore.indexes.json"
   },
   "functions": [
     {
@@ -58,6 +58,6 @@
     }
   ],
   "database": {
-    "rules": "database.rules.json"
+    "rules": "firebase/database.rules.json"
   }
 }

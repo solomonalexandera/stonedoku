@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=20251221A">
+    <link rel="stylesheet" href="styles.css?v=20251221D">
 </head>
 <body>
     <!-- Skip Links for Accessibility -->
@@ -39,6 +39,9 @@
                 <div class="user-info" id="user-info" style="display: none;">
                     <span class="user-status" id="user-status"></span>
                     <span class="user-name" id="user-name"></span>
+                    <button id="my-profile-btn" class="btn btn-icon" aria-label="My Profile" title="My Profile">
+                        👤
+                    </button>
                     <button id="logout-btn" class="btn btn-secondary btn-sm">Logout</button>
                 </div>
             </nav>
@@ -136,30 +139,198 @@
                             <p class="guest-note">No account needed • Progress saved locally</p>
                         </div>
                         
-                        <!-- Sign Up Panel -->
+                        <!-- Sign Up Panel - Now triggers onboarding -->
                         <div class="auth-panel" id="signup-panel" style="display: none;">
-                            <form id="signup-form" class="auth-form">
-                                <div class="form-group">
-                                    <label for="signup-email">Email</label>
-                                    <input type="email" id="signup-email" placeholder="you@example.com" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="signup-password">Password</label>
-                                    <input type="password" id="signup-password" placeholder="Min 6 characters" required minlength="6">
-                                </div>
-                                <div class="form-group">
-                                    <label for="signup-confirm">Confirm Password</label>
-                                    <input type="password" id="signup-confirm" placeholder="Confirm password" required minlength="6">
-                                </div>
-                                <button type="submit" class="btn btn-primary btn-lg btn-block">
-                                    Create Account
+                            <div class="signup-intro">
+                                <p class="signup-intro-text">Ready to join the community? Let's get you set up!</p>
+                                <button type="button" id="start-onboarding" class="btn btn-primary btn-lg btn-block">
+                                    <span>✨</span> Let's Go
                                 </button>
-                            </form>
+                            </div>
                             <p class="auth-terms">By signing up, you agree to our <button type="button" class="link-btn-inline" id="auth-terms-link">Terms of Service</button> and <button type="button" class="link-btn-inline" id="auth-privacy-link">Privacy Policy</button></p>
                         </div>
                     </div>
                 </div>
             </section>
+
+            <!-- Onboarding View - Multi-step signup flow -->
+            <section id="onboarding-view" class="view" style="display: none;">
+                <div class="onboarding-container">
+                    <!-- Progress indicator -->
+                    <div class="onboarding-progress">
+                        <div class="progress-step active" data-step="1">
+                            <div class="step-circle">1</div>
+                            <span class="step-label">Name</span>
+                        </div>
+                        <div class="progress-line"></div>
+                        <div class="progress-step" data-step="2">
+                            <div class="step-circle">2</div>
+                            <span class="step-label">Account</span>
+                        </div>
+                        <div class="progress-line"></div>
+                        <div class="progress-step" data-step="3">
+                            <div class="step-circle">3</div>
+                            <span class="step-label">Profile</span>
+                        </div>
+                        <div class="progress-line"></div>
+                        <div class="progress-step" data-step="4">
+                            <div class="step-circle">4</div>
+                            <span class="step-label">Done!</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Username -->
+                    <div class="onboarding-step active" id="onboarding-step-1">
+                        <div class="onboarding-card">
+                            <div class="onboarding-emoji">👋</div>
+                            <h2 class="onboarding-title">Hey there!</h2>
+                            <p class="onboarding-subtitle">Nice to meet you. What would you like to be called?</p>
+                            
+                            <div class="onboarding-form">
+                                <div class="form-group">
+                                    <input type="text" id="onboard-username" class="onboard-input" placeholder="Enter your username" minlength="3" maxlength="20" pattern="^[a-zA-Z0-9_]+$" autofocus>
+                                    <span class="form-hint">3-20 characters • Letters, numbers, underscore</span>
+                                    <span class="form-error" id="username-error"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="onboarding-actions">
+                                <button type="button" class="btn btn-secondary" id="onboard-back-1">
+                                    ← Back
+                                </button>
+                                <button type="button" class="btn btn-primary" id="onboard-next-1" disabled>
+                                    Continue →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Email & Password -->
+                    <div class="onboarding-step" id="onboarding-step-2">
+                        <div class="onboarding-card">
+                            <div class="onboarding-emoji">📧</div>
+                            <h2 class="onboarding-title">Great choice, <span id="onboard-display-name">Player</span>!</h2>
+                            <p class="onboarding-subtitle">Now let's secure your account</p>
+                            
+                            <div class="onboarding-form">
+                                <div class="form-group">
+                                    <label for="onboard-email">Email Address</label>
+                                    <input type="email" id="onboard-email" class="onboard-input" placeholder="you@example.com">
+                                    <span class="form-error" id="email-error"></span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="onboard-password">Create Password</label>
+                                    <input type="password" id="onboard-password" class="onboard-input" placeholder="Min 6 characters" minlength="6">
+                                    <div class="password-strength" id="password-strength">
+                                        <div class="strength-bar"></div>
+                                        <span class="strength-text"></span>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="onboard-confirm">Confirm Password</label>
+                                    <input type="password" id="onboard-confirm" class="onboard-input" placeholder="Type password again" minlength="6">
+                                    <span class="form-error" id="confirm-error"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="onboarding-actions">
+                                <button type="button" class="btn btn-secondary" id="onboard-back-2">
+                                    ← Back
+                                </button>
+                                <button type="button" class="btn btn-primary" id="onboard-next-2" disabled>
+                                    Continue →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Profile Picture (Optional) -->
+                    <div class="onboarding-step" id="onboarding-step-3">
+                        <div class="onboarding-card">
+                            <div class="onboarding-emoji">📸</div>
+                            <h2 class="onboarding-title">Looking good!</h2>
+                            <p class="onboarding-subtitle">Add a profile picture so others can recognize you</p>
+                            
+                            <div class="onboarding-form">
+                                <div class="profile-upload-area" id="profile-upload-area">
+                                    <div class="upload-preview" id="upload-preview">
+                                        <div class="upload-placeholder">
+                                            <span class="upload-icon">📷</span>
+                                            <span class="upload-text">Click or drag to upload</span>
+                                        </div>
+                                        <img id="preview-image" src="" alt="Preview" style="display: none;">
+                                    </div>
+                                    <input type="file" id="onboard-avatar" accept="image/*" hidden>
+                                </div>
+                                <p class="upload-hint">Optional • Max 2MB • JPG, PNG, GIF</p>
+                            </div>
+                            
+                            <div class="onboarding-actions">
+                                <button type="button" class="btn btn-secondary" id="onboard-back-3">
+                                    ← Back
+                                </button>
+                                <button type="button" class="btn btn-outline" id="onboard-skip-3">
+                                    Skip for now
+                                </button>
+                                <button type="button" class="btn btn-primary" id="onboard-next-3">
+                                    Continue →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Welcome & Tour Offer -->
+                    <div class="onboarding-step" id="onboarding-step-4">
+                        <div class="onboarding-card onboarding-final">
+                            <div class="onboarding-confetti" id="onboarding-confetti"></div>
+                            <div class="onboarding-emoji">🎉</div>
+                            <h2 class="onboarding-title">Welcome to Stonedoku!</h2>
+                            <p class="onboarding-subtitle">Your account is all set up. Ready to explore?</p>
+                            
+                            <div class="tour-offer">
+                                <div class="tour-card">
+                                    <div class="tour-icon">🗺️</div>
+                                    <h3>Take a Quick Tour</h3>
+                                    <p>Learn where everything is in just 30 seconds</p>
+                                    <button type="button" class="btn btn-primary btn-lg" id="start-tour">
+                                        Show Me Around
+                                    </button>
+                                </div>
+                                
+                                <div class="tour-alt">
+                                    <button type="button" class="btn btn-outline" id="skip-tour">
+                                        I'll explore on my own
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tour Overlay -->
+            <div id="tour-overlay" class="tour-overlay" style="display: none;">
+                <div class="tour-spotlight" id="tour-spotlight"></div>
+                <div class="tour-tooltip" id="tour-tooltip">
+                    <div class="tour-tooltip-content">
+                        <h4 id="tour-title">Welcome!</h4>
+                        <p id="tour-description">Let's show you around.</p>
+                    </div>
+                    <div class="tour-tooltip-footer">
+                        <div class="tour-progress">
+                            <span id="tour-current">1</span> / <span id="tour-total">5</span>
+                        </div>
+                        <div class="tour-actions">
+                            <button type="button" class="btn btn-sm btn-secondary" id="tour-skip">
+                                End Tour
+                            </button>
+                            <button type="button" class="btn btn-sm btn-primary" id="tour-next">
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Lobby View -->
             <section id="lobby-view" class="view" style="display: none;">
@@ -648,6 +819,107 @@
                 </div>
             </section>
 
+            <!-- Profile Page View -->
+            <section id="profile-view" class="view" style="display: none;">
+                <div class="profile-page-container">
+                    <div class="profile-page-header">
+                        <button class="btn btn-secondary btn-back" id="profile-back-btn">← Back</button>
+                        <h1 id="profile-page-title">Player Profile</h1>
+                    </div>
+                    
+                    <div class="profile-page-content">
+                        <!-- Profile Card -->
+                        <div class="profile-card-main">
+                            <div class="profile-picture-wrapper">
+                                <img src="" alt="Profile Picture" id="profile-page-picture" class="profile-picture">
+                                <div class="profile-picture-placeholder" id="profile-picture-placeholder">👤</div>
+                                <label class="profile-picture-edit" id="profile-picture-edit" style="display: none;">
+                                    <input type="file" accept="image/*" id="profile-picture-input">
+                                    <span class="edit-icon">📷</span>
+                                </label>
+                            </div>
+                            
+                            <div class="profile-details">
+                                <h2 id="profile-page-username">Username</h2>
+                                <p class="profile-bio" id="profile-page-bio">No bio yet...</p>
+                                <textarea class="profile-bio-edit" id="profile-bio-edit" placeholder="Write something about yourself..." maxlength="200" style="display: none;"></textarea>
+                                <p class="profile-member-date">Member since <span id="profile-page-member-since">---</span></p>
+                                <div class="profile-vanity-url" id="profile-vanity-url">
+                                    <span class="vanity-label">Profile URL:</span>
+                                    <a href="#" id="profile-vanity-link">stone-doku.web.app/profile/username</a>
+                                    <button class="btn btn-icon btn-copy-url" id="copy-profile-url" title="Copy URL">📋</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Stats Section -->
+                        <div class="profile-stats-section">
+                            <h3>📊 Statistics</h3>
+                            <div class="profile-stats-grid">
+                                <div class="profile-stat-card">
+                                    <span class="stat-icon">🏆</span>
+                                    <span class="stat-value" id="profile-page-wins">0</span>
+                                    <span class="stat-label">Wins</span>
+                                </div>
+                                <div class="profile-stat-card">
+                                    <span class="stat-icon">💔</span>
+                                    <span class="stat-value" id="profile-page-losses">0</span>
+                                    <span class="stat-label">Losses</span>
+                                </div>
+                                <div class="profile-stat-card accent">
+                                    <span class="stat-icon">📈</span>
+                                    <span class="stat-value" id="profile-page-winrate">0%</span>
+                                    <span class="stat-label">Win Rate</span>
+                                </div>
+                                <div class="profile-stat-card">
+                                    <span class="stat-icon">🎮</span>
+                                    <span class="stat-value" id="profile-page-games">0</span>
+                                    <span class="stat-label">Games Played</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Badges Section -->
+                        <div class="profile-badges-section">
+                            <h3>🏅 Badges</h3>
+                            <div class="profile-badges-grid" id="profile-page-badges">
+                                <div class="badge-empty">No badges yet. Keep playing to earn badges!</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Social Sharing -->
+                        <div class="profile-social-section">
+                            <h3>📤 Share Your Stats</h3>
+                            <div class="social-share-buttons">
+                                <button class="btn btn-social btn-twitter" id="share-twitter">
+                                    <span class="social-icon">𝕏</span> Share on X
+                                </button>
+                                <button class="btn btn-social btn-facebook" id="share-facebook">
+                                    <span class="social-icon">f</span> Share on Facebook
+                                </button>
+                                <button class="btn btn-social btn-copy" id="share-copy">
+                                    <span class="social-icon">📋</span> Copy Stats
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Actions for own profile -->
+                        <div class="profile-actions" id="profile-own-actions" style="display: none;">
+                            <button class="btn btn-primary" id="edit-profile-btn">✏️ Edit Profile</button>
+                            <button class="btn btn-success" id="save-profile-btn" style="display: none;">💾 Save Changes</button>
+                            <button class="btn btn-secondary" id="cancel-edit-btn" style="display: none;">Cancel</button>
+                        </div>
+                        
+                        <!-- Actions for other profiles -->
+                        <div class="profile-actions" id="profile-other-actions" style="display: none;">
+                            <button class="btn btn-primary" id="profile-challenge-btn">⚔️ Challenge</button>
+                            <button class="btn btn-secondary" id="profile-friend-btn">👥 Add Friend</button>
+                            <button class="btn btn-accent" id="profile-dm-btn">💬 Message</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Challenge Modal -->
             <div id="challenge-modal" class="modal" style="display: none;">
                 <div class="modal-content">
@@ -721,9 +993,10 @@
         <!-- Floating Chat Widget -->
         <div id="chat-widget" class="chat-widget minimized">
             <div class="chat-widget-header" id="chat-widget-header">
-                <div class="chat-widget-tabs">
+                <div class="chat-widget-tabs" id="chat-widget-tabs">
                     <button class="widget-tab active" data-chat="global">🌐 Global</button>
                     <button class="widget-tab" data-chat="game" id="widget-game-tab" style="display: none;">👥 Game</button>
+                    <button class="widget-tab" data-chat="dms" id="widget-dms-tab">💬 DMs</button>
                 </div>
                 <div class="chat-widget-controls">
                     <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
@@ -732,6 +1005,16 @@
                 </div>
             </div>
             <div class="chat-widget-body">
+                <!-- DM List (shown when DMs tab active) -->
+                <div class="dm-list" id="dm-list" style="display: none;">
+                    <div class="dm-list-header">
+                        <span>Direct Messages</span>
+                        <button class="btn btn-sm btn-icon" id="new-dm-btn" title="Start new conversation">+</button>
+                    </div>
+                    <div class="dm-conversations" id="dm-conversations">
+                        <div class="dm-empty">No conversations yet. Start a chat by clicking a player's name or using @whisper username message</div>
+                    </div>
+                </div>
                 <div class="chat-widget-messages" id="chat-widget-messages"></div>
                 <div class="emoji-picker-widget" id="emoji-picker-widget" style="display: none;">
                     <div class="emoji-grid">
@@ -760,6 +1043,9 @@
                         <button type="button" class="emoji-btn">🙌</button>
                         <button type="button" class="emoji-btn">🤝</button>
                     </div>
+                </div>
+                <div class="chat-hint" id="chat-hint">
+                    💡 Tip: Use @whisper username message to send private messages
                 </div>
                 <form class="chat-widget-form" id="chat-widget-form">
                     <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle">😊</button>
@@ -1207,6 +1493,6 @@
     </div>
 
     <!-- Firebase SDK -->
-    <script type="module" src="app.js?v=20251221A"></script>
+    <script type="module" src="app.js?v=20251221D"></script>
 </body>
 </html>

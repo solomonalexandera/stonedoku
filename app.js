@@ -7,6 +7,7 @@ import {
     signInAnonymously, 
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
+    updateProfile,
     signOut,
     onAuthStateChanged 
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
@@ -37,9 +38,18 @@ import {
     query,
     where,
     getDocs,
+    orderBy,
+    limit,
     arrayUnion,
+    arrayRemove,
     Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import {
+    getStorage,
+    ref as storageRef,
+    uploadBytes,
+    getDownloadURL
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
 // ===========================================
 // Firebase Configuration
@@ -61,6 +71,7 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const rtdb = getDatabase(firebaseApp);
 const firestore = getFirestore(firebaseApp);
+const storage = getStorage(firebaseApp);
 
 // ===========================================
 // Application State
@@ -83,6 +94,25 @@ const AppState = {
     listeners: [],
     onlinePlayers: {},
     currentOpponent: null, // opponent ID in 1v1 mode
+    pendingUsername: null, // Username pending for new signups
+    authReady: false, // Flag for auth state ready
+    // Onboarding state
+    onboarding: {
+        active: false,
+        step: 1,
+        data: {
+            username: '',
+            email: '',
+            password: '',
+            avatarFile: null,
+            avatarUrl: null
+        }
+    },
+    // Tour state
+    tour: {
+        active: false,
+        step: 0
+    },
     // New QOL features
     mistakes: 0,
     maxMistakes: 3,
@@ -90,7 +120,9 @@ const AppState = {
     notes: {}, // cellIndex -> Set of numbers
     moveHistory: [], // for undo
     currentDifficulty: 'medium',
-    widgetChatMode: 'global', // 'global' or 'game' for floating widget
+    widgetChatMode: 'global', // 'global', 'game', or 'dm_[userId]'
+    activeDMs: {}, // userId -> { messages: [], unread: 0 }
+    friends: [], // Array of friend user IDs
     settings: {
         highlightConflicts: true,
         highlightSameNumbers: true,
@@ -287,7 +319,7 @@ const ProfanityFilter = {
 // View Manager
 // ===========================================
 const ViewManager = {
-    views: ['auth', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch'],
+    views: ['auth', 'onboarding', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch', 'profile'],
     
     show(viewName) {
         this.views.forEach(view => {
@@ -391,24 +423,83 @@ const ProfileManager = {
         const existing = await getDoc(profileRef);
         
         if (!existing.exists()) {
-            // Create new profile
+            // Create new profile with username
+            const username = data.username || data.displayName || `Player_${userId.substring(0, 6)}`;
+            const usernameLower = username.toLowerCase();
+            
+            // Reserve the username in a separate collection
+            if (data.username) {
+                const usernameRef = doc(firestore, 'usernames', usernameLower);
+                await setDoc(usernameRef, { 
+                    userId: userId,
+                    createdAt: Timestamp.now()
+                });
+            }
+            
             await setDoc(profileRef, {
                 userId: userId,
-                displayName: data.displayName || `Player_${userId.substring(0, 6)}`,
+                username: username,
+                usernameLower: usernameLower,
+                displayName: data.displayName || username,
+                email: data.email || null,
                 memberSince: Timestamp.now(),
                 badges: [],
                 stats: {
                     wins: 0,
-                    losses: 0
-                }
+                    losses: 0,
+                    gamesPlayed: 0,
+                    bestTime: null
+                },
+                bio: '',
+                profilePicture: null,
+                friends: [],
+                friendRequests: [],
+                socialLinks: {},
+                isPublic: true
             });
+        } else {
+            // Update existing profile if username is provided and different
+            const existingData = existing.data();
+            if (data.username && !existingData.username) {
+                const usernameLower = data.username.toLowerCase();
+                const usernameRef = doc(firestore, 'usernames', usernameLower);
+                await setDoc(usernameRef, { 
+                    userId: userId,
+                    createdAt: Timestamp.now()
+                });
+                await updateDoc(profileRef, {
+                    username: data.username,
+                    usernameLower: usernameLower
+                });
+            }
         }
         
         return await getDoc(profileRef);
     },
     
+    async checkUsernameAvailable(username) {
+        const usernameLower = username.toLowerCase();
+        const usernameRef = doc(firestore, 'usernames', usernameLower);
+        const snapshot = await getDoc(usernameRef);
+        return !snapshot.exists();
+    },
+    
+    async getProfileByUsername(username) {
+        const usernameLower = username.toLowerCase();
+        const q = query(collection(firestore, 'users'), where('usernameLower', '==', usernameLower));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) return null;
+        return snapshot.docs[0];
+    },
+    
     async getProfile(userId) {
         const profileRef = doc(firestore, 'users', userId);
+        return await getDoc(profileRef);
+    },
+    
+    async updateProfile(userId, data) {
+        const profileRef = doc(firestore, 'users', userId);
+        await updateDoc(profileRef, data);
         return await getDoc(profileRef);
     },
     
@@ -457,6 +548,97 @@ const ProfileManager = {
         await updateDoc(profileRef, {
             badges: arrayUnion(badge)
         });
+    },
+    
+    // Upload profile picture
+    async uploadProfilePicture(userId, file) {
+        if (!file || !userId) return null;
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            throw new Error('File must be an image');
+        }
+        
+        // Max 2MB
+        if (file.size > 2 * 1024 * 1024) {
+            throw new Error('Image must be under 2MB');
+        }
+        
+        const fileRef = storageRef(storage, `profilePictures/${userId}`);
+        await uploadBytes(fileRef, file);
+        const downloadURL = await getDownloadURL(fileRef);
+        
+        // Update profile with new picture URL
+        await this.updateProfile(userId, { profilePicture: downloadURL });
+        
+        return downloadURL;
+    },
+    
+    // Friend system
+    async sendFriendRequest(fromUserId, toUserId) {
+        const toProfileRef = doc(firestore, 'users', toUserId);
+        await updateDoc(toProfileRef, {
+            friendRequests: arrayUnion({
+                from: fromUserId,
+                timestamp: Timestamp.now()
+            })
+        });
+    },
+    
+    async acceptFriendRequest(userId, friendId) {
+        const userRef = doc(firestore, 'users', userId);
+        const friendRef = doc(firestore, 'users', friendId);
+        
+        // Add each other as friends
+        await updateDoc(userRef, {
+            friends: arrayUnion(friendId)
+        });
+        await updateDoc(friendRef, {
+            friends: arrayUnion(userId)
+        });
+        
+        // Remove the friend request
+        const userDoc = await getDoc(userRef);
+        const requests = userDoc.data().friendRequests || [];
+        const updatedRequests = requests.filter(r => r.from !== friendId);
+        await updateDoc(userRef, { friendRequests: updatedRequests });
+    },
+    
+    async declineFriendRequest(userId, friendId) {
+        const userRef = doc(firestore, 'users', userId);
+        const userDoc = await getDoc(userRef);
+        const requests = userDoc.data().friendRequests || [];
+        const updatedRequests = requests.filter(r => r.from !== friendId);
+        await updateDoc(userRef, { friendRequests: updatedRequests });
+    },
+    
+    async removeFriend(userId, friendId) {
+        const userRef = doc(firestore, 'users', userId);
+        const friendRef = doc(firestore, 'users', friendId);
+        
+        await updateDoc(userRef, {
+            friends: arrayRemove(friendId)
+        });
+        await updateDoc(friendRef, {
+            friends: arrayRemove(userId)
+        });
+    },
+    
+    async getFriends(userId) {
+        const profile = await this.getProfile(userId);
+        if (!profile.exists()) return [];
+        
+        const friendIds = profile.data().friends || [];
+        const friends = [];
+        
+        for (const friendId of friendIds) {
+            const friendProfile = await this.getProfile(friendId);
+            if (friendProfile.exists()) {
+                friends.push({ id: friendId, ...friendProfile.data() });
+            }
+        }
+        
+        return friends;
     }
 };
 
@@ -995,10 +1177,692 @@ const MatchManager = {
 };
 
 // ===========================================
+// Onboarding System
+// ===========================================
+const OnboardingSystem = {
+    // Initialize the onboarding flow
+    start() {
+        AppState.onboarding.active = true;
+        AppState.onboarding.step = 1;
+        AppState.onboarding.data = {
+            username: '',
+            email: '',
+            password: '',
+            avatarFile: null,
+            avatarUrl: null
+        };
+        ViewManager.show('onboarding');
+        this.updateProgress();
+        this.setupListeners();
+        
+        // Focus the first input
+        setTimeout(() => {
+            document.getElementById('onboard-username')?.focus();
+        }, 300);
+    },
+    
+    // Setup all onboarding event listeners
+    setupListeners() {
+        // Step 1: Username
+        const usernameInput = document.getElementById('onboard-username');
+        const nextBtn1 = document.getElementById('onboard-next-1');
+        const backBtn1 = document.getElementById('onboard-back-1');
+        
+        usernameInput?.addEventListener('input', async (e) => {
+            const value = e.target.value.trim();
+            const errorEl = document.getElementById('username-error');
+            const isValid = /^[a-zA-Z0-9_]{3,20}$/.test(value);
+            
+            if (value.length < 3) {
+                errorEl.textContent = value.length > 0 ? 'Username must be at least 3 characters' : '';
+                nextBtn1.disabled = true;
+            } else if (!isValid) {
+                errorEl.textContent = 'Only letters, numbers, and underscore allowed';
+                nextBtn1.disabled = true;
+            } else {
+                // Check availability
+                errorEl.textContent = 'Checking availability...';
+                const available = await ProfileManager.checkUsernameAvailable(value);
+                if (available) {
+                    errorEl.textContent = '';
+                    errorEl.style.color = '';
+                    nextBtn1.disabled = false;
+                    AppState.onboarding.data.username = value;
+                } else {
+                    errorEl.textContent = 'Username already taken';
+                    errorEl.style.color = 'var(--color-danger)';
+                    nextBtn1.disabled = true;
+                }
+            }
+        });
+        
+        backBtn1?.addEventListener('click', () => {
+            AppState.onboarding.active = false;
+            ViewManager.show('auth');
+        });
+        
+        nextBtn1?.addEventListener('click', () => {
+            if (!nextBtn1.disabled) {
+                this.goToStep(2);
+            }
+        });
+        
+        // Step 2: Email & Password
+        const emailInput = document.getElementById('onboard-email');
+        const passwordInput = document.getElementById('onboard-password');
+        const confirmInput = document.getElementById('onboard-confirm');
+        const nextBtn2 = document.getElementById('onboard-next-2');
+        const backBtn2 = document.getElementById('onboard-back-2');
+        
+        const validateStep2 = () => {
+            const email = emailInput?.value.trim();
+            const password = passwordInput?.value;
+            const confirm = confirmInput?.value;
+            
+            const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+            const passwordValid = password.length >= 6;
+            const confirmValid = password === confirm;
+            
+            // Update error messages
+            document.getElementById('email-error').textContent = 
+                email && !emailValid ? 'Please enter a valid email' : '';
+            document.getElementById('confirm-error').textContent = 
+                confirm && !confirmValid ? 'Passwords do not match' : '';
+            
+            // Update password strength
+            this.updatePasswordStrength(password);
+            
+            nextBtn2.disabled = !(emailValid && passwordValid && confirmValid);
+            
+            if (emailValid && passwordValid && confirmValid) {
+                AppState.onboarding.data.email = email;
+                AppState.onboarding.data.password = password;
+            }
+        };
+        
+        emailInput?.addEventListener('input', validateStep2);
+        passwordInput?.addEventListener('input', validateStep2);
+        confirmInput?.addEventListener('input', validateStep2);
+        
+        backBtn2?.addEventListener('click', () => this.goToStep(1));
+        nextBtn2?.addEventListener('click', () => {
+            if (!nextBtn2.disabled) {
+                this.goToStep(3);
+            }
+        });
+        
+        // Step 3: Profile Picture
+        const uploadArea = document.getElementById('profile-upload-area');
+        const uploadPreview = document.getElementById('upload-preview');
+        const avatarInput = document.getElementById('onboard-avatar');
+        const previewImage = document.getElementById('preview-image');
+        const nextBtn3 = document.getElementById('onboard-next-3');
+        const skipBtn3 = document.getElementById('onboard-skip-3');
+        const backBtn3 = document.getElementById('onboard-back-3');
+        
+        uploadPreview?.addEventListener('click', () => avatarInput?.click());
+        
+        // Drag and drop
+        uploadPreview?.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadPreview.style.borderColor = 'var(--color-primary)';
+        });
+        
+        uploadPreview?.addEventListener('dragleave', () => {
+            uploadPreview.style.borderColor = '';
+        });
+        
+        uploadPreview?.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadPreview.style.borderColor = '';
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                this.handleAvatarSelect(file);
+            }
+        });
+        
+        avatarInput?.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                this.handleAvatarSelect(file);
+            }
+        });
+        
+        backBtn3?.addEventListener('click', () => this.goToStep(2));
+        skipBtn3?.addEventListener('click', () => this.createAccount());
+        nextBtn3?.addEventListener('click', () => this.createAccount());
+        
+        // Step 4: Tour
+        document.getElementById('start-tour')?.addEventListener('click', () => {
+            TourSystem.start();
+        });
+        
+        document.getElementById('skip-tour')?.addEventListener('click', () => {
+            this.complete();
+        });
+    },
+    
+    // Handle avatar file selection
+    handleAvatarSelect(file) {
+        if (file.size > 2 * 1024 * 1024) {
+            alert('Image must be less than 2MB');
+            return;
+        }
+        
+        AppState.onboarding.data.avatarFile = file;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const previewImage = document.getElementById('preview-image');
+            const placeholder = document.querySelector('.upload-placeholder');
+            const uploadPreview = document.getElementById('upload-preview');
+            
+            if (previewImage) {
+                previewImage.src = e.target.result;
+                previewImage.style.display = 'block';
+            }
+            if (placeholder) placeholder.style.display = 'none';
+            if (uploadPreview) uploadPreview.classList.add('has-image');
+        };
+        reader.readAsDataURL(file);
+    },
+    
+    // Update password strength indicator
+    updatePasswordStrength(password) {
+        const strengthBar = document.querySelector('.strength-bar');
+        const strengthText = document.querySelector('.strength-text');
+        
+        if (!strengthBar || !strengthText) return;
+        
+        let strength = 0;
+        let text = '';
+        let color = '';
+        
+        if (password.length >= 6) strength += 25;
+        if (password.length >= 8) strength += 25;
+        if (/[A-Z]/.test(password)) strength += 15;
+        if (/[a-z]/.test(password)) strength += 10;
+        if (/[0-9]/.test(password)) strength += 15;
+        if (/[^A-Za-z0-9]/.test(password)) strength += 10;
+        
+        if (strength < 30) {
+            text = 'Weak';
+            color = 'var(--color-danger)';
+        } else if (strength < 60) {
+            text = 'Fair';
+            color = 'var(--color-warning)';
+        } else if (strength < 80) {
+            text = 'Good';
+            color = 'var(--color-success)';
+        } else {
+            text = 'Strong';
+            color = 'var(--color-cyan)';
+        }
+        
+        strengthBar.style.setProperty('--strength', `${strength}%`);
+        strengthBar.style.setProperty('--strength-color', color);
+        strengthText.textContent = password ? text : '';
+        strengthText.style.color = color;
+    },
+    
+    // Navigate to a specific step
+    goToStep(step) {
+        // Hide current step
+        document.querySelectorAll('.onboarding-step').forEach(el => {
+            el.classList.remove('active');
+        });
+        
+        // Show new step
+        const newStep = document.getElementById(`onboarding-step-${step}`);
+        if (newStep) {
+            newStep.classList.add('active');
+        }
+        
+        AppState.onboarding.step = step;
+        this.updateProgress();
+        
+        // Update display name on step 2
+        if (step === 2) {
+            const displayName = document.getElementById('onboard-display-name');
+            if (displayName) {
+                displayName.textContent = AppState.onboarding.data.username;
+            }
+        }
+    },
+    
+    // Update progress indicators
+    updateProgress() {
+        const currentStep = AppState.onboarding.step;
+        
+        document.querySelectorAll('.progress-step').forEach(el => {
+            const step = parseInt(el.dataset.step);
+            el.classList.remove('active', 'completed');
+            
+            if (step < currentStep) {
+                el.classList.add('completed');
+            } else if (step === currentStep) {
+                el.classList.add('active');
+            }
+        });
+    },
+    
+    // Create the account
+    async createAccount() {
+        const { username, email, password, avatarFile } = AppState.onboarding.data;
+        
+        try {
+            // Show loading state
+            const buttons = document.querySelectorAll('#onboarding-step-3 .btn');
+            buttons.forEach(btn => btn.disabled = true);
+            
+            // Create the user account
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+            
+            // Upload avatar if provided (do this first so we have the URL)
+            let avatarUrl = null;
+            if (avatarFile) {
+                try {
+                    const avatarRef = storageRef(storage, `profilePictures/${user.uid}`);
+                    await uploadBytes(avatarRef, avatarFile);
+                    avatarUrl = await getDownloadURL(avatarRef);
+                } catch (uploadError) {
+                    console.error('Avatar upload error:', uploadError);
+                    // Continue without avatar
+                }
+            }
+            
+            // Update Firebase Auth profile with username and photo
+            await updateProfile(user, { 
+                displayName: username,
+                photoURL: avatarUrl 
+            });
+            
+            // Reserve the username in usernames collection
+            await setDoc(doc(firestore, 'usernames', username.toLowerCase()), {
+                userId: user.uid,
+                createdAt: serverTimestamp()
+            });
+            
+            // Create complete user profile in Firestore
+            await setDoc(doc(firestore, 'users', user.uid), {
+                userId: user.uid,
+                displayName: username,
+                username: username,
+                usernameLower: username.toLowerCase(),
+                email: email,
+                profilePicture: avatarUrl,
+                memberSince: serverTimestamp(),
+                createdAt: serverTimestamp(),
+                badges: [],
+                stats: {
+                    wins: 0,
+                    losses: 0,
+                    gamesPlayed: 0,
+                    bestTime: null
+                },
+                wins: 0,
+                losses: 0,
+                gamesPlayed: 0,
+                bio: '',
+                friends: [],
+                friendRequests: [],
+                socialLinks: {},
+                isPublic: true,
+                isNewUser: true
+            });
+            
+            // Update AppState with user
+            AppState.currentUser = user;
+            
+            // Show success step
+            this.goToStep(4);
+            this.showConfetti();
+            
+        } catch (error) {
+            console.error('Account creation error:', error);
+            
+            // Re-enable buttons
+            const buttons = document.querySelectorAll('#onboarding-step-3 .btn');
+            buttons.forEach(btn => btn.disabled = false);
+            
+            // Show error
+            let message = 'Failed to create account. Please try again.';
+            if (error.code === 'auth/email-already-in-use') {
+                message = 'This email is already registered. Try signing in instead.';
+            } else if (error.code === 'auth/weak-password') {
+                message = 'Password is too weak. Please use a stronger password.';
+            }
+            alert(message);
+        }
+    },
+    
+    // Show confetti animation
+    showConfetti() {
+        const container = document.getElementById('onboarding-confetti');
+        if (!container) return;
+        
+        const colors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#22d3ee', '#a78bfa'];
+        
+        for (let i = 0; i < 50; i++) {
+            const confetti = document.createElement('div');
+            confetti.style.cssText = `
+                position: absolute;
+                width: 10px;
+                height: 10px;
+                background: ${colors[Math.floor(Math.random() * colors.length)]};
+                left: ${Math.random() * 100}%;
+                top: -10px;
+                border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+                animation: confettiFall ${2 + Math.random() * 2}s linear forwards;
+                animation-delay: ${Math.random() * 0.5}s;
+            `;
+            container.appendChild(confetti);
+        }
+        
+        // Add confetti animation if not exists
+        if (!document.getElementById('confetti-style')) {
+            const style = document.createElement('style');
+            style.id = 'confetti-style';
+            style.textContent = `
+                @keyframes confettiFall {
+                    to {
+                        transform: translateY(500px) rotate(720deg);
+                        opacity: 0;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Clean up after animation
+        setTimeout(() => {
+            container.innerHTML = '';
+        }, 4000);
+    },
+    
+    // Complete onboarding and properly initialize the user session
+    async complete() {
+        AppState.onboarding.active = false;
+        
+        const user = AppState.currentUser;
+        if (!user) {
+            ViewManager.show('auth');
+            return;
+        }
+        
+        try {
+            // Get the user's profile from Firestore
+            const profileRef = doc(firestore, 'users', user.uid);
+            const profileSnap = await getDoc(profileRef);
+            const profileData = profileSnap.exists() ? profileSnap.data() : null;
+            
+            // Use username as display name
+            const displayName = profileData?.username || profileData?.displayName || user.displayName || 'Player';
+            const truncatedName = displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName;
+            
+            // Update UI
+            document.getElementById('user-info').style.display = 'flex';
+            document.getElementById('user-name').textContent = truncatedName;
+            document.getElementById('welcome-name').textContent = displayName;
+            
+            // Store friends in state
+            AppState.friends = profileData?.friends || [];
+            
+            // Update stats
+            UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
+            UI.updateBadges(profileData?.badges || []);
+            
+            // Initialize presence
+            await PresenceSystem.init(user.uid, displayName);
+            
+            // Listen to online players
+            PresenceSystem.listenToOnlinePlayers((players) => {
+                AppState.onlinePlayers = players;
+                UI.updatePlayersList(players);
+            });
+            
+            // Listen to global chat
+            ChatManager.listenToGlobalChat((message) => {
+                const widgetMessages = document.getElementById('chat-widget-messages');
+                const activeTab = document.querySelector('.widget-tab.active');
+                const widgetMode = activeTab?.dataset.chat || 'global';
+                
+                if (widgetMessages && widgetMode === 'global') {
+                    UI.addChatMessage('chat-widget-messages', message.displayName, message.text, message.timestamp, message.userId);
+                }
+                
+                if (typeof window.incrementUnread === 'function') {
+                    window.incrementUnread();
+                }
+            });
+            
+            // Listen for challenges
+            ChallengeSystem.listenToNotifications(user.uid, (challengerId, notification) => {
+                if (notification.status === 'pending') {
+                    document.getElementById('challenger-name').textContent = notification.fromName;
+                    ViewManager.showModal('challenge-modal');
+                }
+            });
+            
+            // Show chat widget
+            const chatWidget = document.getElementById('chat-widget');
+            const chatFab = document.getElementById('chat-fab');
+            if (chatWidget) chatWidget.style.display = 'flex';
+            if (chatFab) chatFab.style.display = 'flex';
+            
+            ViewManager.show('lobby');
+            PresenceSystem.updateActivity('In Lobby');
+            
+        } catch (error) {
+            console.error('Error completing onboarding:', error);
+            ViewManager.show('lobby');
+        }
+    }
+};
+
+// ===========================================
+// Tour System
+// ===========================================
+const TourSystem = {
+    steps: [
+        {
+            target: '.single-card',
+            title: '🧩 Solo Practice',
+            description: 'Play classic Sudoku at your own pace. Choose from Easy, Medium, or Hard difficulty to sharpen your skills.',
+            position: 'right'
+        },
+        {
+            target: '.versus-card',
+            title: '⚔️ Challenge Friends',
+            description: 'Create a game room or join with a code to compete in real-time 1v1 battles. Race to fill the most cells correctly!',
+            position: 'left'
+        },
+        {
+            target: '.stats-card',
+            title: '📊 Track Progress',
+            description: 'Your wins, losses, and win rate are tracked here. Watch yourself improve over time!',
+            position: 'left'
+        },
+        {
+            target: '.players-card',
+            title: '👥 See Who\'s Online',
+            description: 'View other players currently online. Click their name to see their profile or challenge them to a game.',
+            position: 'left'
+        },
+        {
+            target: '#chat-fab',
+            title: '💬 Chat & Connect',
+            description: 'Use the chat to talk with other players, send whispers (@whisper username), or start direct messages.',
+            position: 'top'
+        }
+    ],
+    
+    start() {
+        // Make sure we're in the lobby first
+        OnboardingSystem.complete();
+        
+        // Small delay to let lobby render
+        setTimeout(() => {
+            AppState.tour.active = true;
+            AppState.tour.step = 0;
+            
+            const overlay = document.getElementById('tour-overlay');
+            if (overlay) {
+                overlay.style.display = 'block';
+                overlay.classList.add('active');
+            }
+            
+            document.getElementById('tour-total').textContent = this.steps.length;
+            this.showStep(0);
+            this.setupListeners();
+        }, 300);
+    },
+    
+    setupListeners() {
+        document.getElementById('tour-next')?.addEventListener('click', () => {
+            if (AppState.tour.step < this.steps.length - 1) {
+                this.showStep(AppState.tour.step + 1);
+            } else {
+                this.end();
+                this.offerTutorial();
+            }
+        });
+        
+        document.getElementById('tour-skip')?.addEventListener('click', () => {
+            this.end();
+        });
+    },
+    
+    showStep(stepIndex) {
+        const step = this.steps[stepIndex];
+        if (!step) return;
+        
+        AppState.tour.step = stepIndex;
+        
+        const target = document.querySelector(step.target);
+        const spotlight = document.getElementById('tour-spotlight');
+        const tooltip = document.getElementById('tour-tooltip');
+        
+        if (!target || !spotlight || !tooltip) return;
+        
+        // Update spotlight
+        const rect = target.getBoundingClientRect();
+        const padding = 10;
+        
+        spotlight.style.left = `${rect.left - padding}px`;
+        spotlight.style.top = `${rect.top - padding}px`;
+        spotlight.style.width = `${rect.width + padding * 2}px`;
+        spotlight.style.height = `${rect.height + padding * 2}px`;
+        
+        // Update tooltip content
+        document.getElementById('tour-title').textContent = step.title;
+        document.getElementById('tour-description').textContent = step.description;
+        document.getElementById('tour-current').textContent = stepIndex + 1;
+        
+        // Update next button text
+        const nextBtn = document.getElementById('tour-next');
+        if (nextBtn) {
+            nextBtn.textContent = stepIndex === this.steps.length - 1 ? 'Finish' : 'Next →';
+        }
+        
+        // Position tooltip
+        tooltip.className = 'tour-tooltip position-' + step.position;
+        
+        const tooltipRect = tooltip.getBoundingClientRect();
+        let tooltipX, tooltipY;
+        
+        switch (step.position) {
+            case 'bottom':
+                tooltipX = rect.left + rect.width / 2 - tooltipRect.width / 2;
+                tooltipY = rect.bottom + 20;
+                break;
+            case 'top':
+                tooltipX = rect.left + rect.width / 2 - tooltipRect.width / 2;
+                tooltipY = rect.top - tooltipRect.height - 20;
+                break;
+            case 'left':
+                tooltipX = rect.left - tooltipRect.width - 20;
+                tooltipY = rect.top + rect.height / 2 - tooltipRect.height / 2;
+                break;
+            case 'right':
+                tooltipX = rect.right + 20;
+                tooltipY = rect.top + rect.height / 2 - tooltipRect.height / 2;
+                break;
+        }
+        
+        // Keep tooltip in viewport
+        tooltipX = Math.max(10, Math.min(tooltipX, window.innerWidth - tooltipRect.width - 10));
+        tooltipY = Math.max(10, Math.min(tooltipY, window.innerHeight - tooltipRect.height - 10));
+        
+        tooltip.style.left = `${tooltipX}px`;
+        tooltip.style.top = `${tooltipY}px`;
+    },
+    
+    end() {
+        AppState.tour.active = false;
+        
+        const overlay = document.getElementById('tour-overlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+            overlay.classList.remove('active');
+        }
+    },
+    
+    offerTutorial() {
+        // Create and show tutorial offer modal
+        const modal = document.createElement('div');
+        modal.className = 'tutorial-offer-modal';
+        modal.id = 'tutorial-offer-modal';
+        modal.innerHTML = `
+            <div class="tutorial-offer-card">
+                <div class="modal-emoji">🎓</div>
+                <h3>Learn How to Play?</h3>
+                <p>Would you like a quick tutorial on how Sudoku works and some tips for competing?</p>
+                <div class="tutorial-offer-actions">
+                    <button class="btn btn-primary btn-lg" id="start-tutorial">Yes, Show Me!</button>
+                    <button class="btn btn-outline" id="skip-tutorial">I Know How to Play</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        document.getElementById('start-tutorial')?.addEventListener('click', () => {
+            modal.remove();
+            this.startTutorial();
+        });
+        
+        document.getElementById('skip-tutorial')?.addEventListener('click', () => {
+            modal.remove();
+        });
+    },
+    
+    startTutorial() {
+        // Start an easy practice game with tutorial overlays
+        alert('Starting tutorial... (Tutorial mode would show step-by-step Sudoku instructions during an easy game)');
+        // For now, just start an easy game
+        const event = new CustomEvent('startTutorialGame');
+        document.dispatchEvent(event);
+    }
+};
+
+// ===========================================
 // Chat Manager
 // ===========================================
 const ChatManager = {
     async sendGlobalMessage(userId, displayName, text) {
+        // Check for whisper command
+        if (text.startsWith('@whisper ') || text.startsWith('@w ')) {
+            const parts = text.match(/^@w(?:hisper)?\s+(\S+)\s+(.+)$/i);
+            if (parts) {
+                const targetUsername = parts[1];
+                const message = parts[2];
+                await this.sendWhisper(userId, displayName, targetUsername, message);
+                return { type: 'whisper', target: targetUsername };
+            }
+        }
+        
         const filteredText = ProfanityFilter.filter(text);
         const chatRef = ref(rtdb, 'globalChat');
         
@@ -1008,6 +1872,60 @@ const ChatManager = {
             text: filteredText,
             timestamp: serverTimestamp()
         });
+        
+        return { type: 'global' };
+    },
+    
+    async sendWhisper(fromUserId, fromDisplayName, targetUsername, text) {
+        // Find target user by username
+        const targetProfile = await ProfileManager.getProfileByUsername(targetUsername);
+        if (!targetProfile) {
+            throw new Error(`User "${targetUsername}" not found`);
+        }
+        
+        const targetUserId = targetProfile.data().userId;
+        const filteredText = ProfanityFilter.filter(text);
+        
+        // Create a DM conversation ID (sorted user IDs to ensure consistency)
+        const dmId = [fromUserId, targetUserId].sort().join('_');
+        const dmRef = ref(rtdb, `directMessages/${dmId}`);
+        
+        await push(dmRef, {
+            from: fromUserId,
+            fromDisplayName: fromDisplayName,
+            to: targetUserId,
+            text: filteredText,
+            timestamp: serverTimestamp(),
+            read: false
+        });
+        
+        return { dmId, targetUserId, targetUsername };
+    },
+    
+    async sendDirectMessage(fromUserId, fromDisplayName, toUserId, text) {
+        const filteredText = ProfanityFilter.filter(text);
+        const dmId = [fromUserId, toUserId].sort().join('_');
+        const dmRef = ref(rtdb, `directMessages/${dmId}`);
+        
+        await push(dmRef, {
+            from: fromUserId,
+            fromDisplayName: fromDisplayName,
+            to: toUserId,
+            text: filteredText,
+            timestamp: serverTimestamp(),
+            read: false
+        });
+        
+        return dmId;
+    },
+    
+    listenToDirectMessages(dmId, callback) {
+        const dmRef = ref(rtdb, `directMessages/${dmId}`);
+        const listener = onChildAdded(dmRef, (snapshot) => {
+            callback(snapshot.val());
+        });
+        AppState.listeners.push({ ref: dmRef, callback: listener });
+        return listener;
     },
     
     listenToGlobalChat(callback) {
@@ -1223,6 +2141,104 @@ const UI = {
         };
         
         ViewManager.showModal('profile-modal');
+    },
+    
+    // Full profile page view
+    async showProfilePage(userId) {
+        const isOwnProfile = userId === AppState.currentUser?.uid;
+        
+        const profile = await ProfileManager.getProfile(userId);
+        if (!profile.exists()) {
+            alert('Profile not found');
+            return;
+        }
+        
+        const data = profile.data();
+        AppState.viewingProfileId = userId;
+        
+        // Update profile page elements
+        const username = data.username || data.displayName || 'Anonymous';
+        document.getElementById('profile-page-title').textContent = isOwnProfile ? 'Your Profile' : `${username}'s Profile`;
+        document.getElementById('profile-page-username').textContent = username;
+        document.getElementById('profile-page-bio').textContent = data.bio || 'No bio yet...';
+        
+        // Profile picture
+        const pictureEl = document.getElementById('profile-page-picture');
+        const placeholderEl = document.getElementById('profile-picture-placeholder');
+        if (data.profilePicture) {
+            pictureEl.src = data.profilePicture;
+            pictureEl.style.display = 'block';
+            placeholderEl.style.display = 'none';
+        } else {
+            pictureEl.style.display = 'none';
+            placeholderEl.style.display = 'flex';
+        }
+        
+        // Show edit button only for own profile
+        document.getElementById('profile-picture-edit').style.display = isOwnProfile ? 'block' : 'none';
+        
+        // Member since
+        const memberDate = data.memberSince?.toDate?.();
+        document.getElementById('profile-page-member-since').textContent = 
+            memberDate ? memberDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Unknown';
+        
+        // Vanity URL
+        const vanityUrl = `stone-doku.web.app/profile/${encodeURIComponent(username.toLowerCase())}`;
+        document.getElementById('profile-vanity-link').href = `/profile/${encodeURIComponent(username.toLowerCase())}`;
+        document.getElementById('profile-vanity-link').textContent = vanityUrl;
+        
+        // Stats
+        const stats = data.stats || { wins: 0, losses: 0, gamesPlayed: 0 };
+        document.getElementById('profile-page-wins').textContent = stats.wins || 0;
+        document.getElementById('profile-page-losses').textContent = stats.losses || 0;
+        const totalGames = (stats.wins || 0) + (stats.losses || 0);
+        const winRate = totalGames > 0 ? Math.round((stats.wins / totalGames) * 100) : 0;
+        document.getElementById('profile-page-winrate').textContent = `${winRate}%`;
+        document.getElementById('profile-page-games').textContent = totalGames;
+        
+        // Badges
+        const badgesContainer = document.getElementById('profile-page-badges');
+        badgesContainer.innerHTML = '';
+        const badges = data.badges || [];
+        if (badges.length === 0) {
+            badgesContainer.innerHTML = '<div class="badge-empty">No badges yet. Keep playing to earn badges!</div>';
+        } else {
+            const badgeInfo = {
+                'veteran': { icon: '🎖️', name: 'Veteran' },
+                'winner': { icon: '🏆', name: 'Winner' },
+                'champion': { icon: '👑', name: 'Champion' },
+                'speedster': { icon: '⚡', name: 'Speedster' }
+            };
+            badges.forEach(badge => {
+                const info = badgeInfo[badge] || { icon: '🏅', name: badge };
+                const badgeEl = document.createElement('div');
+                badgeEl.className = 'badge-item';
+                badgeEl.innerHTML = `
+                    <span class="badge-icon">${info.icon}</span>
+                    <span class="badge-name">${info.name}</span>
+                `;
+                badgesContainer.appendChild(badgeEl);
+            });
+        }
+        
+        // Show appropriate action buttons
+        document.getElementById('profile-own-actions').style.display = isOwnProfile ? 'flex' : 'none';
+        document.getElementById('profile-other-actions').style.display = isOwnProfile ? 'none' : 'flex';
+        
+        // Check friend status if viewing other profile
+        if (!isOwnProfile) {
+            const isFriend = AppState.friends.includes(userId);
+            const friendBtn = document.getElementById('profile-friend-btn');
+            if (isFriend) {
+                friendBtn.textContent = '✓ Friends';
+                friendBtn.disabled = true;
+            } else {
+                friendBtn.textContent = '👥 Add Friend';
+                friendBtn.disabled = false;
+            }
+        }
+        
+        ViewManager.show('profile');
     },
     
     addChatMessage(containerId, sender, text, timestamp, userId = null) {
@@ -2084,6 +3100,16 @@ function setupEventListeners() {
         });
     });
     
+    // Start Onboarding (from signup panel)
+    document.getElementById('start-onboarding')?.addEventListener('click', () => {
+        OnboardingSystem.start();
+    });
+    
+    // Tutorial game listener
+    document.addEventListener('startTutorialGame', () => {
+        startSinglePlayerGame('easy');
+    });
+    
     // Sign In form
     document.getElementById('signin-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -2113,10 +3139,22 @@ function setupEventListeners() {
     // Sign Up form
     document.getElementById('signup-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const username = document.getElementById('signup-username').value.trim();
         const email = document.getElementById('signup-email').value;
         const password = document.getElementById('signup-password').value;
         const confirm = document.getElementById('signup-confirm').value;
         const btn = e.target.querySelector('button[type="submit"]');
+        
+        // Validate username
+        if (!username || username.length < 3 || username.length > 20) {
+            alert('Username must be between 3 and 20 characters.');
+            return;
+        }
+        
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+            alert('Username can only contain letters, numbers, and underscores.');
+            return;
+        }
         
         if (password !== confirm) {
             alert('Passwords do not match. Please try again.');
@@ -2130,8 +3168,26 @@ function setupEventListeners() {
         
         try {
             btn.disabled = true;
+            btn.textContent = 'Checking username...';
+            
+            // Check if username is already taken
+            const usernameAvailable = await ProfileManager.checkUsernameAvailable(username.toLowerCase());
+            if (!usernameAvailable) {
+                alert('This username is already taken. Please choose another.');
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+                return;
+            }
+            
             btn.textContent = 'Creating account...';
-            await createUserWithEmailAndPassword(auth, email, password);
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            
+            // Update the user's display name in Firebase Auth
+            await updateProfile(userCredential.user, { displayName: username });
+            
+            // The profile will be created in onAuthStateChanged with the username
+            AppState.pendingUsername = username;
+            
         } catch (error) {
             console.error('Sign up failed:', error);
             if (error.code === 'auth/email-already-in-use') {
@@ -2583,7 +3639,277 @@ function setupEventListeners() {
             if (hint) hint.classList.toggle('visible');
         }
     });
+    
+    // ===========================================
+    // Profile Page Event Listeners
+    // ===========================================
+    initProfilePage();
+    
+    // ===========================================
+    // Check for profile vanity URL on load
+    // ===========================================
+    handleVanityUrl();
 }
+
+// ===========================================
+// Profile Page Initialization
+// ===========================================
+function initProfilePage() {
+    // Back button
+    document.getElementById('profile-back-btn')?.addEventListener('click', () => {
+        ViewManager.show('lobby');
+        PresenceSystem.updateActivity('In Lobby');
+    });
+    
+    // Edit profile button
+    document.getElementById('edit-profile-btn')?.addEventListener('click', () => {
+        document.querySelector('.profile-view-mode')?.classList.add('hidden');
+        document.querySelector('.profile-edit-mode')?.classList.remove('hidden');
+    });
+    
+    // Save profile changes
+    document.getElementById('save-profile-btn')?.addEventListener('click', async () => {
+        const bio = document.getElementById('profile-bio-input')?.value || '';
+        const twitter = document.getElementById('profile-twitter')?.value || '';
+        const discord = document.getElementById('profile-discord')?.value || '';
+        
+        try {
+            await ProfileManager.updateProfile(AppState.currentUser.uid, {
+                bio: bio.substring(0, 200),
+                socialLinks: { twitter, discord }
+            });
+            
+            // Update display
+            const bioDisplay = document.getElementById('profile-bio');
+            if (bioDisplay) bioDisplay.textContent = bio || 'No bio yet';
+            
+            // Switch back to view mode
+            document.querySelector('.profile-edit-mode')?.classList.add('hidden');
+            document.querySelector('.profile-view-mode')?.classList.remove('hidden');
+            
+            alert('Profile updated!');
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            alert('Failed to update profile');
+        }
+    });
+    
+    // Cancel edit
+    document.getElementById('cancel-edit-btn')?.addEventListener('click', () => {
+        document.querySelector('.profile-edit-mode')?.classList.add('hidden');
+        document.querySelector('.profile-view-mode')?.classList.remove('hidden');
+    });
+    
+    // Profile picture upload
+    document.getElementById('profile-picture-input')?.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !AppState.currentUser) return;
+        
+        // Validate file
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file');
+            return;
+        }
+        
+        if (file.size > 2 * 1024 * 1024) {
+            alert('Image must be less than 2MB');
+            return;
+        }
+        
+        try {
+            const progressIndicator = document.createElement('div');
+            progressIndicator.className = 'upload-progress';
+            progressIndicator.textContent = 'Uploading...';
+            document.querySelector('.profile-picture-wrapper')?.appendChild(progressIndicator);
+            
+            const url = await ProfileManager.uploadProfilePicture(AppState.currentUser.uid, file);
+            
+            // Update display
+            const img = document.getElementById('profile-picture-display');
+            if (img) {
+                img.src = url;
+                img.style.display = 'block';
+            }
+            
+            progressIndicator.remove();
+            alert('Profile picture updated!');
+        } catch (error) {
+            console.error('Error uploading profile picture:', error);
+            alert('Failed to upload profile picture');
+        }
+    });
+    
+    // Copy profile URL
+    document.getElementById('copy-profile-url')?.addEventListener('click', () => {
+        const urlInput = document.getElementById('profile-vanity-url');
+        if (urlInput) {
+            navigator.clipboard.writeText(urlInput.value).then(() => {
+                alert('Profile URL copied!');
+            });
+        }
+    });
+    
+    // Social sharing
+    document.getElementById('share-twitter')?.addEventListener('click', () => {
+        shareToSocial('twitter');
+    });
+    
+    document.getElementById('share-facebook')?.addEventListener('click', () => {
+        shareToSocial('facebook');
+    });
+    
+    document.getElementById('share-copy')?.addEventListener('click', () => {
+        const shareText = generateShareText();
+        navigator.clipboard.writeText(shareText).then(() => {
+            alert('Stats copied to clipboard!');
+        });
+    });
+    
+    // Challenge from profile
+    document.getElementById('profile-challenge-btn')?.addEventListener('click', async () => {
+        const profileUserId = document.getElementById('profile-view')?.dataset.userId;
+        if (!profileUserId || !AppState.currentUser) return;
+        
+        // Create a room and send invite
+        const roomId = await LobbyManager.createRoom(AppState.currentUser.uid);
+        
+        // Send challenge notification (simplified - would use push notifications in production)
+        alert(`Room created! Share code: ${roomId} with this player.`);
+    });
+    
+    // Friend button
+    document.getElementById('profile-friend-btn')?.addEventListener('click', async () => {
+        const profileUserId = document.getElementById('profile-view')?.dataset.userId;
+        if (!profileUserId || !AppState.currentUser) return;
+        
+        const btn = document.getElementById('profile-friend-btn');
+        const currentText = btn?.textContent || '';
+        
+        try {
+            if (currentText.includes('Add Friend')) {
+                await ProfileManager.sendFriendRequest(AppState.currentUser.uid, profileUserId);
+                if (btn) btn.textContent = '📤 Request Sent';
+                alert('Friend request sent!');
+            } else if (currentText.includes('Remove Friend')) {
+                await ProfileManager.removeFriend(AppState.currentUser.uid, profileUserId);
+                if (btn) btn.textContent = '👤 Add Friend';
+                alert('Friend removed');
+            } else if (currentText.includes('Accept Request')) {
+                await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, profileUserId);
+                if (btn) btn.textContent = '✓ Friends';
+            }
+        } catch (error) {
+            console.error('Friend action error:', error);
+            alert('Failed to complete action');
+        }
+    });
+    
+    // DM from profile
+    document.getElementById('profile-dm-btn')?.addEventListener('click', () => {
+        const profileUserId = document.getElementById('profile-view')?.dataset.userId;
+        if (!profileUserId) return;
+        
+        // Open chat widget with DM tab
+        const widget = document.getElementById('chat-widget');
+        const fab = document.getElementById('chat-fab');
+        
+        if (widget && fab) {
+            widget.classList.remove('minimized');
+            fab.classList.add('hidden');
+        }
+        
+        // Switch to DM mode with this user
+        AppState.widgetChatMode = `dm_${profileUserId}`;
+        
+        // Highlight DM tab
+        document.querySelectorAll('.widget-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.widget-tab[data-chat="dms"]')?.classList.add('active');
+        
+        // Start listening to DMs with this user
+        ChatManager.listenToDirectMessages(AppState.currentUser.uid, profileUserId);
+        
+        // Clear messages and load DM history
+        const messagesEl = document.getElementById('chat-widget-messages');
+        if (messagesEl) {
+            messagesEl.innerHTML = '<div class="chat-info">Direct messages with this user</div>';
+        }
+    });
+    
+    // My Profile button in header
+    document.getElementById('my-profile-btn')?.addEventListener('click', () => {
+        if (AppState.currentUser) {
+            UI.showProfilePage(AppState.currentUser.uid);
+        }
+    });
+}
+
+// ===========================================
+// Social Sharing Functions
+// ===========================================
+function generateShareText() {
+    const profile = AppState.currentUser ? ProfileManager.cache.get(AppState.currentUser.uid) : null;
+    const wins = profile?.wins || 0;
+    const losses = profile?.losses || 0;
+    const badges = profile?.badges?.length || 0;
+    
+    return `🎮 My Stonedoku Stats!\n` +
+           `🏆 Wins: ${wins}\n` +
+           `📊 Win Rate: ${wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0}%\n` +
+           `🎖️ Badges: ${badges}\n` +
+           `Play now: https://stone-doku.web.app`;
+}
+
+function shareToSocial(platform) {
+    const text = generateShareText();
+    const url = 'https://stone-doku.web.app';
+    
+    let shareUrl;
+    
+    switch (platform) {
+        case 'twitter':
+            shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            break;
+        case 'facebook':
+            shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`;
+            break;
+        default:
+            return;
+    }
+    
+    window.open(shareUrl, '_blank', 'width=600,height=400');
+}
+
+// ===========================================
+// Vanity URL Handler
+// ===========================================
+async function handleVanityUrl() {
+    // Check URL hash for profile path
+    const hash = window.location.hash;
+    if (hash.startsWith('#profile/')) {
+        const username = hash.replace('#profile/', '');
+        if (username) {
+            try {
+                const profile = await ProfileManager.getProfileByUsername(username);
+                if (profile) {
+                    // Wait for auth to be ready
+                    const checkAuth = () => {
+                        if (AppState.authReady) {
+                            UI.showProfilePage(profile.id);
+                        } else {
+                            setTimeout(checkAuth, 100);
+                        }
+                    };
+                    checkAuth();
+                }
+            } catch (error) {
+                console.error('Error loading profile from URL:', error);
+            }
+        }
+    }
+}
+
+// Listen for hash changes
+window.addEventListener('hashchange', handleVanityUrl);
 
 // ===========================================
 // Floating Chat Widget
@@ -2658,13 +3984,28 @@ function initFloatingChat() {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.widget-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            AppState.widgetChatMode = tab.dataset.chat;
+            const chatMode = tab.dataset.chat;
             
-            // Don't clear messages - they accumulate from real-time listeners
-            // Just scroll to bottom when switching tabs
+            const dmList = document.getElementById('dm-list');
             const messages = document.getElementById('chat-widget-messages');
-            if (messages) {
-                messages.scrollTop = messages.scrollHeight;
+            const chatHint = document.getElementById('chat-hint');
+            
+            // Handle DMs tab specially
+            if (chatMode === 'dms') {
+                AppState.widgetChatMode = 'dms';
+                if (dmList) dmList.style.display = 'block';
+                if (messages) messages.style.display = 'none';
+                if (chatHint) chatHint.style.display = 'block';
+            } else {
+                AppState.widgetChatMode = chatMode;
+                if (dmList) dmList.style.display = 'none';
+                if (messages) messages.style.display = 'flex';
+                if (chatHint) chatHint.style.display = 'none';
+                
+                // Just scroll to bottom when switching tabs
+                if (messages) {
+                    messages.scrollTop = messages.scrollHeight;
+                }
             }
         });
     });
@@ -2701,6 +4042,10 @@ function initFloatingChat() {
             
             if (chatMode === 'game' && AppState.currentMatch) {
                 await ChatManager.sendGameMessage(AppState.currentMatch, AppState.currentUser.uid, displayName, text);
+            } else if (AppState.widgetChatMode.startsWith('dm_')) {
+                // Sending to a specific DM conversation
+                const otherUserId = AppState.widgetChatMode.replace('dm_', '');
+                await ChatManager.sendDirectMessage(AppState.currentUser.uid, otherUserId, displayName, text);
             } else {
                 await ChatManager.sendGlobalMessage(AppState.currentUser.uid, displayName, text);
             }
@@ -3357,14 +4702,24 @@ function handleRematchVoteUpdate(votes, userId, opponentId) {
         console.log('Both players want rematch!');
         startRematch();
     } else if (selfVote === false || opponentVote === false) {
-        // Someone declined
+        // Someone declined - immediately clean up and redirect both players
         const statusEl = document.getElementById('rematch-status');
-        if (opponentVote === false) {
+        if (selfVote === false) {
+            statusEl.querySelector('.rematch-text').textContent = 'You declined the rematch';
+        } else if (opponentVote === false) {
             statusEl.querySelector('.rematch-text').textContent = 'Opponent declined rematch';
         }
-        // Show back to lobby button more prominently
+        
+        // Hide voting UI
         document.getElementById('rematch-actions').style.display = 'none';
         document.getElementById('rematch-waiting').style.display = 'none';
+        
+        // Auto-redirect to lobby after 2 seconds
+        setTimeout(() => {
+            cleanupAfterMatch();
+            ViewManager.show('lobby');
+            PresenceSystem.updateActivity('In Lobby');
+        }, 2000);
     }
 }
 
@@ -3499,25 +4854,47 @@ function handleMatchUpdate(match) {
 // Auth State Handler
 // ===========================================
 onAuthStateChanged(auth, async (user) => {
+    AppState.authReady = true;
+    
     if (user) {
         AppState.currentUser = user;
         
+        // If we're in the middle of onboarding, don't redirect to lobby
+        if (AppState.onboarding.active) {
+            console.log('Onboarding active, skipping auth redirect');
+            return;
+        }
+        
+        // Check if we have a pending username from signup
+        const pendingUsername = AppState.pendingUsername;
+        AppState.pendingUsername = null;
+        
         // Create/update user profile
         const profile = await ProfileManager.createOrUpdateProfile(user.uid, {
-            displayName: user.displayName || user.email || `Player_${user.uid.substring(0, 6)}`
+            username: pendingUsername || null,
+            displayName: user.displayName || pendingUsername || `Player_${user.uid.substring(0, 6)}`,
+            email: user.email
         });
         
         const profileData = profile.data();
         
+        // Use username as display name, fall back to displayName, truncate if too long
+        const displayName = profileData?.username || profileData?.displayName || 'Player';
+        const truncatedName = displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName;
+        
         // Update UI
         document.getElementById('user-info').style.display = 'flex';
-        document.getElementById('user-name').textContent = profileData?.displayName || 'Player';
+        document.getElementById('user-name').textContent = truncatedName;
+        document.getElementById('welcome-name').textContent = displayName;
+        
+        // Store friends in state
+        AppState.friends = profileData?.friends || [];
         
         UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
         UI.updateBadges(profileData?.badges || []);
         
-        // Initialize presence
-        await PresenceSystem.init(user.uid, profileData?.displayName || 'Player');
+        // Initialize presence with proper username
+        await PresenceSystem.init(user.uid, displayName);
         
         // Listen to online players
         PresenceSystem.listenToOnlinePlayers((players) => {
