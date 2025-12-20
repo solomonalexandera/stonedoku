@@ -1,11 +1,23 @@
 {
   "hosting": {
+    "site": "stone-doku",
     "public": ".",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
       "README.md"
+    ],
+    "headers": [
+      {
+        "source": "**/*.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
     ]
   },
   "firestore": {
@@ -34,7 +46,7 @@
   ],
   "apphosting": [
     {
-      "backendId": "stonedoku",
+      "backendId": "stone-doku",
       "rootDir": "/",
       "ignore": [
         "node_modules",

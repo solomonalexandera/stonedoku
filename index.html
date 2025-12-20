@@ -2,16 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sudoku Versus - Real-Time Competitive Sudoku</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Stonedoku - Real-Time Competitive Sudoku</title>
+    <link rel="icon" type="image/svg+xml" href="/public/favicon.svg">
+    <link rel="apple-touch-icon" href="/public/favicon.svg">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="description" content="Compete in real-time 1v1 Sudoku battles with players around the world">
+    <!-- Security & Privacy -->
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <!-- Accessibility -->
+    <meta name="color-scheme" content="dark light">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=20251221A">
 </head>
-<body class="dark-theme">
-    <div id="app">
+<body>
+    <!-- Skip Links for Accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#sudoku-board" class="skip-link">Skip to game board</a>
+    
+    <div id="app" role="application" aria-label="Stonedoku Game">
         <!-- Header -->
         <header class="app-header">
-            <div class="logo">
-                <h1>Sudoku Versus</h1>
+            <div class="logo" id="logo-home">
+                <h1>Stonedoku</h1>
             </div>
             <nav class="nav-controls">
                 <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme">
@@ -29,23 +45,118 @@
         </header>
 
         <!-- Main Content -->
-        <main class="main-content">
-            <!-- Auth View -->
+        <main class="main-content" id="main-content" role="main">
+            <!-- Auth View - Modern Landing -->
             <section id="auth-view" class="view">
-                <div class="auth-container">
-                    <h2>Welcome to Sudoku Versus</h2>
-                    <p>Compete in real-time 1v1 Sudoku battles!</p>
-                    <div class="auth-buttons">
-                        <button id="anonymous-login" class="btn btn-primary btn-lg">Play as Guest</button>
-                        <div class="auth-divider"><span>or</span></div>
-                        <form id="email-auth-form" class="auth-form">
-                            <input type="email" id="auth-email" placeholder="Email" required>
-                            <input type="password" id="auth-password" placeholder="Password" required>
-                            <div class="auth-form-buttons">
-                                <button type="submit" id="email-login" class="btn btn-primary">Login</button>
-                                <button type="button" id="email-signup" class="btn btn-secondary">Sign Up</button>
+                <div class="auth-landing">
+                    <!-- Hero Section -->
+                    <div class="auth-hero">
+                        <div class="hero-content">
+                            <div class="hero-badge">
+                                <span class="badge-icon">⚡</span>
+                                <span>Real-time multiplayer</span>
                             </div>
-                        </form>
+                            <h1 class="hero-title">
+                                Master <span class="gradient-text">Sudoku</span><br>
+                                Challenge <span class="gradient-text">Friends</span>
+                            </h1>
+                            <p class="hero-subtitle">
+                                The classic puzzle game, reimagined for competitive play. 
+                                Race against friends in real-time 1v1 battles.
+                            </p>
+                            <div class="hero-features">
+                                <div class="feature-item">
+                                    <span class="feature-icon">🎯</span>
+                                    <span>Solo & Versus Modes</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">📊</span>
+                                    <span>Track Your Progress</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">🏆</span>
+                                    <span>Earn Achievements</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Decorative Grid -->
+                        <div class="hero-visual">
+                            <div class="deco-grid">
+                                <div class="deco-cell filled">5</div>
+                                <div class="deco-cell"></div>
+                                <div class="deco-cell accent">3</div>
+                                <div class="deco-cell"></div>
+                                <div class="deco-cell filled">7</div>
+                                <div class="deco-cell"></div>
+                                <div class="deco-cell"></div>
+                                <div class="deco-cell accent">9</div>
+                                <div class="deco-cell filled">1</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Auth Card -->
+                    <div class="auth-card">
+                        <div class="auth-card-header">
+                            <h2>Get Started</h2>
+                            <p>Sign in to save progress & play online</p>
+                        </div>
+                        
+                        <!-- Auth Mode Tabs -->
+                        <div class="auth-mode-tabs">
+                            <button class="auth-tab active" data-mode="signin">Sign In</button>
+                            <button class="auth-tab" data-mode="signup">Sign Up</button>
+                        </div>
+                        
+                        <!-- Sign In Panel -->
+                        <div class="auth-panel" id="signin-panel">
+                            <form id="signin-form" class="auth-form">
+                                <div class="form-group">
+                                    <label for="signin-email">Email</label>
+                                    <input type="email" id="signin-email" placeholder="you@example.com" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="signin-password">Password</label>
+                                    <input type="password" id="signin-password" placeholder="••••••••" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg btn-block">
+                                    Sign In
+                                </button>
+                            </form>
+                            
+                            <div class="auth-divider">
+                                <span>or continue with</span>
+                            </div>
+                            
+                            <button type="button" id="anonymous-login" class="btn btn-guest btn-block">
+                                <span class="guest-icon">👤</span>
+                                Play as Guest
+                            </button>
+                            <p class="guest-note">No account needed • Progress saved locally</p>
+                        </div>
+                        
+                        <!-- Sign Up Panel -->
+                        <div class="auth-panel" id="signup-panel" style="display: none;">
+                            <form id="signup-form" class="auth-form">
+                                <div class="form-group">
+                                    <label for="signup-email">Email</label>
+                                    <input type="email" id="signup-email" placeholder="you@example.com" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="signup-password">Password</label>
+                                    <input type="password" id="signup-password" placeholder="Min 6 characters" required minlength="6">
+                                </div>
+                                <div class="form-group">
+                                    <label for="signup-confirm">Confirm Password</label>
+                                    <input type="password" id="signup-confirm" placeholder="Confirm password" required minlength="6">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg btn-block">
+                                    Create Account
+                                </button>
+                            </form>
+                            <p class="auth-terms">By signing up, you agree to our <button type="button" class="link-btn-inline" id="auth-terms-link">Terms of Service</button> and <button type="button" class="link-btn-inline" id="auth-privacy-link">Privacy Policy</button></p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -53,86 +164,94 @@
             <!-- Lobby View -->
             <section id="lobby-view" class="view" style="display: none;">
                 <div class="lobby-container">
-                    <div class="lobby-header">
-                        <h2>Game Lobby</h2>
-                        <div class="online-count">
-                            <span class="status-dot online"></span>
+                    <!-- Welcome Banner -->
+                    <div class="lobby-welcome">
+                        <div class="welcome-text">
+                            <h2>Welcome back, <span class="brand-gradient" id="welcome-name">Player</span></h2>
+                            <p>What would you like to play today?</p>
+                        </div>
+                        <div class="online-badge">
+                            <span class="pulse-dot"></span>
                             <span id="online-count">0</span> players online
                         </div>
                     </div>
 
-                    <div class="lobby-grid">
-                        <!-- Game Mode Selection -->
-                        <div class="lobby-section game-modes">
-                            <h3>Game Modes</h3>
-                            <div class="mode-cards">
-                                <div class="mode-card" data-mode="single">
-                                    <div class="mode-icon">🧩</div>
-                                    <h4>Single Player</h4>
-                                    <p>Practice your skills</p>
-                                    <select id="difficulty-select" class="select-input">
-                                        <option value="easy">Easy</option>
-                                        <option value="medium" selected>Medium</option>
-                                        <option value="hard">Hard</option>
-                                    </select>
-                                    <button class="btn btn-primary" id="start-single">Start Game</button>
+                    <!-- Quick Play Section -->
+                    <div class="lobby-main">
+                        <div class="play-section">
+                            <h3 class="section-title">🎮 Choose Your Mode</h3>
+                            <div class="game-mode-grid">
+                                <!-- Single Player Card -->
+                                <div class="game-card single-card">
+                                    <div class="card-badge">Solo</div>
+                                    <div class="card-icon">🧩</div>
+                                    <div class="card-content">
+                                        <h4>Classic Sudoku</h4>
+                                        <p>Train your skills at your own pace</p>
+                                        <div class="difficulty-buttons">
+                                            <button class="diff-btn easy" data-difficulty="easy">
+                                                <span class="diff-icon">🟢</span> Easy
+                                            </button>
+                                            <button class="diff-btn medium" data-difficulty="medium">
+                                                <span class="diff-icon">🟡</span> Medium
+                                            </button>
+                                            <button class="diff-btn hard" data-difficulty="hard">
+                                                <span class="diff-icon">🔴</span> Hard
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="mode-card" data-mode="versus">
-                                    <div class="mode-icon">⚔️</div>
-                                    <h4>Bust the Board</h4>
-                                    <p>1v1 Real-time battle</p>
-                                    <button class="btn btn-primary" id="create-room">Create Room</button>
-                                    <div class="join-room-inline">
-                                        <input type="text" id="room-code-input" placeholder="Room Code" maxlength="4" pattern="[0-9]{4}">
-                                        <button class="btn btn-secondary" id="join-room">Join</button>
+
+                                <!-- Versus Card -->
+                                <div class="game-card versus-card">
+                                    <div class="card-badge accent">Live</div>
+                                    <div class="card-icon">⚔️</div>
+                                    <div class="card-content">
+                                        <h4>Bust the Board</h4>
+                                        <p>1v1 real-time Sudoku battle</p>
+                                        <div class="versus-actions">
+                                            <button class="btn btn-glow" id="create-room">
+                                                <span>🎲</span> Create Game
+                                            </button>
+                                            <div class="join-inline">
+                                                <input type="text" id="room-code-input" placeholder="CODE" maxlength="4">
+                                                <button class="btn btn-outline" id="join-room">Join</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Online Players -->
-                        <div class="lobby-section online-players">
-                            <h3>Online Players</h3>
-                            <div class="players-list" id="players-list">
-                                <!-- Player items will be dynamically added -->
+                        <!-- Side Panel -->
+                        <div class="lobby-side">
+                            <!-- Your Stats -->
+                            <div class="stats-card">
+                                <h3 class="section-title">📊 Your Stats</h3>
+                                <div class="stats-row">
+                                    <div class="stat-box">
+                                        <span class="stat-num" id="stat-wins">0</span>
+                                        <span class="stat-lbl">Wins</span>
+                                    </div>
+                                    <div class="stat-box">
+                                        <span class="stat-num" id="stat-losses">0</span>
+                                        <span class="stat-lbl">Losses</span>
+                                    </div>
+                                    <div class="stat-box accent">
+                                        <span class="stat-num" id="stat-winrate">0%</span>
+                                        <span class="stat-lbl">Win Rate</span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Chat Section -->
-                        <div class="lobby-section lobby-chat">
-                            <h3>Global Chat</h3>
-                            <div class="chat-container">
-                                <div class="chat-messages" id="global-chat-messages">
-                                    <!-- Chat messages will be added here -->
-                                </div>
-                                <form class="chat-input-form" id="global-chat-form">
-                                    <input type="text" id="global-chat-input" placeholder="Type a message..." maxlength="200">
-                                    <button type="submit" class="btn btn-primary">Send</button>
-                                </form>
-                            </div>
-                        </div>
-
-                        <!-- Player Stats -->
-                        <div class="lobby-section player-stats">
-                            <h3>Your Stats</h3>
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <span class="stat-value" id="stat-wins">0</span>
-                                    <span class="stat-label">Wins</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-value" id="stat-losses">0</span>
-                                    <span class="stat-label">Losses</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-value" id="stat-winrate">0%</span>
-                                    <span class="stat-label">Win Rate</span>
-                                </div>
-                            </div>
-                            <div class="badges-section">
-                                <h4>Badges</h4>
-                                <div class="badges-list" id="badges-list">
-                                    <!-- Badges will be added here -->
+                            <!-- Online Players -->
+                            <div class="players-card">
+                                <h3 class="section-title">👥 Players Online</h3>
+                                <div class="players-list" id="players-list">
+                                    <div class="empty-players">
+                                        <span class="empty-icon">👻</span>
+                                        <span>No players online</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -140,78 +259,287 @@
                 </div>
             </section>
 
-            <!-- Waiting Room View -->
+            <!-- Waiting Room View (Waiting for opponent to join) -->
             <section id="waiting-view" class="view" style="display: none;">
                 <div class="waiting-container">
-                    <h2>Waiting for Opponent</h2>
-                    <div class="room-code-display">
-                        <p>Share this code with your opponent:</p>
-                        <div class="code-box" id="display-room-code">----</div>
-                        <button class="btn btn-secondary" id="copy-code">Copy Code</button>
+                    <div class="waiting-card">
+                        <div class="waiting-icon">⏳</div>
+                        <h2>Waiting for Opponent</h2>
+                        <p class="waiting-subtitle">Share this code with a friend to start playing</p>
+                        
+                        <div class="room-code-display">
+                            <div class="code-box" id="display-room-code">----</div>
+                            <button class="btn btn-secondary btn-copy" id="copy-code">
+                                <span class="copy-icon">📋</span> Copy Code
+                            </button>
+                        </div>
+                        
+                        <div class="waiting-animation">
+                            <div class="waiting-dots">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                            <p>Looking for players...</p>
+                        </div>
+                        
+                        <button class="btn btn-danger btn-cancel" id="cancel-waiting">
+                            ✕ Cancel
+                        </button>
                     </div>
-                    <div class="loading-spinner"></div>
-                    <button class="btn btn-danger" id="cancel-waiting">Cancel</button>
+                </div>
+            </section>
+
+            <!-- Pre-Game Lobby (Both players ready up) -->
+            <section id="pregame-lobby-view" class="view" style="display: none;">
+                <div class="pregame-container">
+                    <div class="pregame-header">
+                        <h2>⚔️ Match Found!</h2>
+                        <p>Get ready for battle</p>
+                    </div>
+                    
+                    <div class="pregame-players">
+                        <!-- Player 1 (Self) -->
+                        <div class="pregame-player self">
+                            <div class="player-avatar">👤</div>
+                            <div class="player-name" id="pregame-player-name">You</div>
+                            <div class="player-ready-status" id="pregame-player-status">
+                                <span class="status-text">Not Ready</span>
+                            </div>
+                        </div>
+                        
+                        <div class="vs-divider">
+                            <span class="vs-text">VS</span>
+                            <div class="countdown-display" id="pregame-countdown" style="display: none;">
+                                <span class="countdown-number">3</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Player 2 (Opponent) -->
+                        <div class="pregame-player opponent">
+                            <div class="player-avatar">👤</div>
+                            <div class="player-name" id="pregame-opponent-name">Opponent</div>
+                            <div class="player-ready-status" id="pregame-opponent-status">
+                                <span class="status-text">Not Ready</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pregame-actions">
+                        <button class="btn btn-ready" id="ready-btn">
+                            <span class="ready-icon">✓</span>
+                            <span class="ready-text">Ready Up!</span>
+                        </button>
+                        <button class="btn btn-secondary" id="leave-pregame">
+                            Leave Match
+                        </button>
+                    </div>
+                    
+                    <!-- Pre-game Chat -->
+                    <div class="pregame-chat">
+                        <div class="pregame-chat-header">
+                            <span>💬 Chat</span>
+                        </div>
+                        <div class="pregame-chat-messages" id="pregame-chat-messages">
+                            <div class="chat-system-msg">Say hello to your opponent!</div>
+                        </div>
+                        <form class="pregame-chat-form" id="pregame-chat-form">
+                            <input type="text" id="pregame-chat-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
+                            <button type="submit" class="btn btn-primary btn-sm">Send</button>
+                        </form>
+                    </div>
                 </div>
             </section>
 
             <!-- Game View -->
             <section id="game-view" class="view" style="display: none;">
                 <div class="game-container">
-                    <!-- Game Header -->
-                    <div class="game-header">
+                    <!-- Versus Mode Header (hidden in single player) -->
+                    <div class="game-header-versus" id="game-header-versus" style="display: none;">
                         <div class="player-info player-self">
                             <span class="player-name" id="game-player-name">You</span>
-                            <span class="player-score" id="player-score">0</span>
+                            <div class="player-stats-row">
+                                <span class="player-score" id="player-score">0</span>
+                                <div class="player-lives" id="player-lives">
+                                    <span class="life-heart">❤️</span>
+                                    <span class="life-heart">❤️</span>
+                                    <span class="life-heart">❤️</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="game-status">
-                            <span class="game-timer" id="game-timer">00:00</span>
-                            <span class="game-mode-label" id="game-mode-label">Single Player</span>
+                            <span class="game-timer" id="game-timer-versus">00:00</span>
+                            <span class="game-mode-label">Versus Mode</span>
                         </div>
-                        <div class="player-info player-opponent" id="opponent-info" style="display: none;">
+                        <div class="player-info player-opponent">
                             <span class="player-name" id="opponent-name">Opponent</span>
-                            <span class="player-score" id="opponent-score">0</span>
+                            <div class="player-stats-row">
+                                <span class="player-score" id="opponent-score">0</span>
+                                <div class="player-lives" id="opponent-lives">
+                                    <span class="life-heart">❤️</span>
+                                    <span class="life-heart">❤️</span>
+                                    <span class="life-heart">❤️</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Sudoku Grid -->
-                    <div class="sudoku-wrapper">
-                        <div class="sudoku-grid" id="sudoku-grid">
-                            <!-- 9x9 grid will be generated by JS -->
+                    <!-- Left Panel (Single Player Only) -->
+                    <div class="game-left-panel" id="game-left-panel">
+                        <!-- New Game Card -->
+                        <div class="new-game-card">
+                            <div class="new-game-header">
+                                <h3>▶ New Game</h3>
+                                <button class="btn btn-sm btn-secondary" id="restart-btn">↻ Restart</button>
+                            </div>
+                            <div class="difficulty-grid">
+                                <button class="difficulty-btn btn-easy" data-difficulty="easy">Easy</button>
+                                <button class="difficulty-btn btn-medium" data-difficulty="medium">Medium</button>
+                                <button class="difficulty-btn btn-hard" data-difficulty="hard">Hard</button>
+                                <button class="difficulty-btn btn-daily" data-difficulty="daily">Daily</button>
+                            </div>
+                        </div>
+
+                        <!-- Settings Card -->
+                        <div class="settings-card">
+                            <h3>⚙️ Settings</h3>
+                            <div class="setting-row">
+                                <span class="setting-label">Highlight Conflicts</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="highlight-conflicts" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">Show Same Numbers</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="highlight-same" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">Auto-Check</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="auto-check" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Back to Lobby Button -->
+                        <button class="btn btn-secondary" id="quit-game" style="width: 100%;">
+                            ← Back to Lobby
+                        </button>
+                    </div>
+
+                    <!-- Center Panel - Sudoku Grid -->
+                    <div class="game-center-panel">
+                        <div class="sudoku-wrapper">
+                            <div class="sudoku-grid" id="sudoku-grid">
+                                <!-- 9x9 grid will be generated by JS -->
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Number Pad -->
-                    <div class="number-pad" id="number-pad">
-                        <button class="num-btn" data-num="1">1</button>
-                        <button class="num-btn" data-num="2">2</button>
-                        <button class="num-btn" data-num="3">3</button>
-                        <button class="num-btn" data-num="4">4</button>
-                        <button class="num-btn" data-num="5">5</button>
-                        <button class="num-btn" data-num="6">6</button>
-                        <button class="num-btn" data-num="7">7</button>
-                        <button class="num-btn" data-num="8">8</button>
-                        <button class="num-btn" data-num="9">9</button>
-                        <button class="num-btn erase-btn" data-num="0">⌫</button>
-                    </div>
+                    <!-- Right Panel -->
+                    <div class="game-right-panel">
+                        <!-- Number Pad -->
+                        <div class="number-pad-card">
+                            <div class="number-pad" id="number-pad">
+                                <button class="num-btn" data-num="1">
+                                    <span>1</span>
+                                    <span class="remaining" id="remaining-1">9 left</span>
+                                </button>
+                                <button class="num-btn" data-num="2">
+                                    <span>2</span>
+                                    <span class="remaining" id="remaining-2">9 left</span>
+                                </button>
+                                <button class="num-btn" data-num="3">
+                                    <span>3</span>
+                                    <span class="remaining" id="remaining-3">9 left</span>
+                                </button>
+                                <button class="num-btn" data-num="4">
+                                    <span>4</span>
+                                    <span class="remaining" id="remaining-4">9 left</span>
+                                </button>
+                                <button class="num-btn" data-num="5">
+                                    <span>5</span>
+                                    <span class="remaining" id="remaining-5">9 left</span>
+                                </button>
+                                <button class="num-btn" data-num="6">
+                                    <span>6</span>
+                                    <span class="remaining" id="remaining-6">9 left</span>
+                                </button>
+                                <button class="num-btn" data-num="7">
+                                    <span>7</span>
+                                    <span class="remaining" id="remaining-7">9 left</span>
+                                </button>
+                                <button class="num-btn" data-num="8">
+                                    <span>8</span>
+                                    <span class="remaining" id="remaining-8">9 left</span>
+                                </button>
+                                <button class="num-btn" data-num="9">
+                                    <span>9</span>
+                                    <span class="remaining" id="remaining-9">9 left</span>
+                                </button>
+                            </div>
+                        </div>
 
-                    <!-- Game Controls -->
-                    <div class="game-controls">
-                        <button class="btn btn-secondary" id="hint-btn">💡 Hint</button>
-                        <button class="btn btn-danger" id="quit-game">Quit Game</button>
-                    </div>
+                        <!-- Progress Card -->
+                        <div class="progress-card">
+                            <div class="progress-header">
+                                <span>Progress</span>
+                                <span class="progress-value" id="progress-percent">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                            </div>
+                            <div class="game-info-grid">
+                                <div class="game-info-item">
+                                    <span class="game-info-label">Difficulty</span>
+                                    <span class="game-info-value" id="current-difficulty">Medium</span>
+                                </div>
+                                <div class="game-info-item">
+                                    <span class="game-info-label">Mistakes</span>
+                                    <div class="mistakes-display" id="mistakes-display">
+                                        <span class="mistake-dot empty"></span>
+                                        <span class="mistake-dot empty"></span>
+                                        <span class="mistake-dot empty"></span>
+                                    </div>
+                                </div>
+                                <div class="game-info-item">
+                                    <span class="game-info-label">Time</span>
+                                    <span class="game-info-value" id="game-timer">0:00</span>
+                                </div>
+                            </div>
+                        </div>
 
-                    <!-- In-Game Chat (Versus mode) -->
-                    <div class="game-chat" id="game-chat" style="display: none;">
-                        <div class="chat-messages" id="game-chat-messages"></div>
-                        <form class="chat-input-form" id="game-chat-form">
-                            <input type="text" id="game-chat-input" placeholder="Chat..." maxlength="100">
-                            <button type="submit" class="btn btn-sm">Send</button>
-                        </form>
+                        <!-- Action Buttons -->
+                        <div class="action-buttons-card">
+                            <div class="action-buttons">
+                                <button class="action-btn" id="undo-btn">
+                                    <span class="icon">↩</span>
+                                    <span>Undo</span>
+                                </button>
+                                <button class="action-btn" id="hint-btn">
+                                    <span class="icon">💡</span>
+                                    <span>Hint</span>
+                                </button>
+                                <button class="action-btn" id="erase-btn">
+                                    <span class="icon">⌫</span>
+                                    <span>Erase</span>
+                                </button>
+                                <button class="action-btn" id="notes-btn">
+                                    <span class="icon">✏️</span>
+                                    <span>Notes</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <!-- Game Over Modal -->
+            <!-- Game Over Modal (Single Player) -->
             <div id="game-over-modal" class="modal" style="display: none;">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -227,10 +555,6 @@
                                 <span>Your Score:</span>
                                 <span id="final-score">0</span>
                             </div>
-                            <div class="stat-row" id="opponent-score-row" style="display: none;">
-                                <span>Opponent Score:</span>
-                                <span id="final-opponent-score">0</span>
-                            </div>
                             <div class="stat-row">
                                 <span>Time:</span>
                                 <span id="final-time">00:00</span>
@@ -243,6 +567,86 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Post-Match Screen (Versus Mode) -->
+            <section id="postmatch-view" class="view" style="display: none;">
+                <div class="postmatch-container">
+                    <div class="postmatch-header">
+                        <h1 id="postmatch-title">Match Complete!</h1>
+                    </div>
+                    
+                    <div class="postmatch-result">
+                        <div class="postmatch-player winner" id="postmatch-winner">
+                            <div class="trophy-icon">🏆</div>
+                            <div class="result-label">WINNER</div>
+                            <div class="player-avatar">👤</div>
+                            <div class="player-name" id="postmatch-winner-name">Player</div>
+                            <div class="player-score" id="postmatch-winner-score">0 points</div>
+                        </div>
+                        
+                        <div class="postmatch-vs">
+                            <div class="vs-badge">VS</div>
+                        </div>
+                        
+                        <div class="postmatch-player loser" id="postmatch-loser">
+                            <div class="result-label">DEFEATED</div>
+                            <div class="player-avatar">👤</div>
+                            <div class="player-name" id="postmatch-loser-name">Opponent</div>
+                            <div class="player-score" id="postmatch-loser-score">0 points</div>
+                        </div>
+                    </div>
+                    
+                    <div class="postmatch-stats">
+                        <div class="stat-card">
+                            <span class="stat-icon">⏱️</span>
+                            <span class="stat-value" id="postmatch-time">00:00</span>
+                            <span class="stat-label">Time</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-icon">📊</span>
+                            <span class="stat-value" id="postmatch-reason">Completed</span>
+                            <span class="stat-label">Result</span>
+                        </div>
+                    </div>
+                    
+                    <div class="postmatch-rematch">
+                        <div class="rematch-status" id="rematch-status">
+                            <span class="rematch-text">Want a rematch?</span>
+                        </div>
+                        
+                        <div class="rematch-votes">
+                            <div class="vote-indicator self" id="rematch-vote-self">
+                                <span class="vote-icon">❓</span>
+                                <span class="vote-label">You</span>
+                            </div>
+                            <div class="vote-indicator opponent" id="rematch-vote-opponent">
+                                <span class="vote-icon">❓</span>
+                                <span class="vote-label">Opponent</span>
+                            </div>
+                        </div>
+                        
+                        <div class="rematch-actions" id="rematch-actions">
+                            <button class="btn btn-success btn-rematch" id="rematch-yes">
+                                ✓ Rematch!
+                            </button>
+                            <button class="btn btn-danger btn-no-rematch" id="rematch-no">
+                                ✕ No Thanks
+                            </button>
+                        </div>
+                        
+                        <div class="rematch-waiting" id="rematch-waiting" style="display: none;">
+                            <div class="waiting-dots">
+                                <span></span><span></span><span></span>
+                            </div>
+                            <p>Waiting for opponent's decision...</p>
+                        </div>
+                        
+                        <button class="btn btn-secondary btn-back-lobby" id="postmatch-back-lobby">
+                            Back to Lobby
+                        </button>
+                    </div>
+                </div>
+            </section>
 
             <!-- Challenge Modal -->
             <div id="challenge-modal" class="modal" style="display: none;">
@@ -258,6 +662,29 @@
                         <button class="btn btn-secondary" id="decline-challenge">Decline</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Hover Profile Tooltip -->
+            <div id="hover-profile" class="hover-profile" style="display: none;">
+                <div class="hover-profile-header">
+                    <span class="hover-profile-status"></span>
+                    <span class="hover-profile-name">Player</span>
+                </div>
+                <div class="hover-profile-stats">
+                    <div class="hover-stat">
+                        <span class="hover-stat-value" id="hover-wins">0</span>
+                        <span class="hover-stat-label">W</span>
+                    </div>
+                    <div class="hover-stat">
+                        <span class="hover-stat-value" id="hover-losses">0</span>
+                        <span class="hover-stat-label">L</span>
+                    </div>
+                    <div class="hover-stat accent">
+                        <span class="hover-stat-value" id="hover-winrate">0%</span>
+                        <span class="hover-stat-label">Rate</span>
+                    </div>
+                </div>
+                <div class="hover-profile-activity" id="hover-activity">Playing</div>
             </div>
 
             <!-- Profile Modal -->
@@ -291,13 +718,495 @@
             </div>
         </main>
 
+        <!-- Floating Chat Widget -->
+        <div id="chat-widget" class="chat-widget minimized">
+            <div class="chat-widget-header" id="chat-widget-header">
+                <div class="chat-widget-tabs">
+                    <button class="widget-tab active" data-chat="global">🌐 Global</button>
+                    <button class="widget-tab" data-chat="game" id="widget-game-tab" style="display: none;">👥 Game</button>
+                </div>
+                <div class="chat-widget-controls">
+                    <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
+                    <button class="widget-btn" id="chat-minimize" title="Minimize">−</button>
+                    <button class="widget-btn" id="chat-maximize" title="Maximize">□</button>
+                </div>
+            </div>
+            <div class="chat-widget-body">
+                <div class="chat-widget-messages" id="chat-widget-messages"></div>
+                <div class="emoji-picker-widget" id="emoji-picker-widget" style="display: none;">
+                    <div class="emoji-grid">
+                        <button type="button" class="emoji-btn">😀</button>
+                        <button type="button" class="emoji-btn">😊</button>
+                        <button type="button" class="emoji-btn">😎</button>
+                        <button type="button" class="emoji-btn">🤔</button>
+                        <button type="button" class="emoji-btn">😅</button>
+                        <button type="button" class="emoji-btn">🎉</button>
+                        <button type="button" class="emoji-btn">👍</button>
+                        <button type="button" class="emoji-btn">👏</button>
+                        <button type="button" class="emoji-btn">🔥</button>
+                        <button type="button" class="emoji-btn">💪</button>
+                        <button type="button" class="emoji-btn">😤</button>
+                        <button type="button" class="emoji-btn">🤯</button>
+                        <button type="button" class="emoji-btn">👀</button>
+                        <button type="button" class="emoji-btn">💡</button>
+                        <button type="button" class="emoji-btn">⚡</button>
+                        <button type="button" class="emoji-btn">✨</button>
+                        <button type="button" class="emoji-btn">🏆</button>
+                        <button type="button" class="emoji-btn">🎯</button>
+                        <button type="button" class="emoji-btn">🧩</button>
+                        <button type="button" class="emoji-btn">💀</button>
+                        <button type="button" class="emoji-btn">❤️</button>
+                        <button type="button" class="emoji-btn">😂</button>
+                        <button type="button" class="emoji-btn">🙌</button>
+                        <button type="button" class="emoji-btn">🤝</button>
+                    </div>
+                </div>
+                <form class="chat-widget-form" id="chat-widget-form">
+                    <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle">😊</button>
+                    <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
+                    <button type="submit" class="send-btn">➤</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Chat Toggle Button (when minimized) -->
+        <button id="chat-fab" class="chat-fab">
+            <span class="fab-icon">💬</span>
+            <span class="fab-unread" id="fab-unread" style="display: none;">0</span>
+        </button>
+
         <!-- Footer -->
-        <footer class="app-footer">
-            <p>&copy; 2024 Sudoku Versus. Real-time competitive Sudoku.</p>
+        <footer class="app-footer" role="contentinfo">
+            <div class="footer-content">
+                <p>&copy; 2024 Stonedoku. Real-time competitive Sudoku.</p>
+                <nav class="footer-links" aria-label="Legal links">
+                    <button type="button" class="link-btn" id="privacy-link">Privacy Policy</button>
+                    <span class="footer-separator">•</span>
+                    <button type="button" class="link-btn" id="terms-link">Terms of Service</button>
+                    <span class="footer-separator">•</span>
+                    <button type="button" class="link-btn" id="cookies-link">Cookie Policy</button>
+                    <span class="footer-separator">•</span>
+                    <button type="button" class="link-btn" id="accessibility-link">Accessibility</button>
+                </nav>
+                <p class="footer-legal">Made in the UK 🇬🇧</p>
+            </div>
         </footer>
     </div>
 
+    <!-- Cookie Consent Banner (UK PECR Compliant) -->
+    <div id="cookie-consent" class="cookie-banner" role="dialog" aria-labelledby="cookie-title" aria-describedby="cookie-desc" style="display: none;">
+        <div class="cookie-content">
+            <div class="cookie-header">
+                <span class="cookie-icon">🍪</span>
+                <h2 id="cookie-title">Cookie Preferences</h2>
+            </div>
+            <p id="cookie-desc">We use cookies to enhance your experience. Under UK law (PECR), we need your consent for non-essential cookies.</p>
+            <div class="cookie-options">
+                <label class="cookie-option">
+                    <input type="checkbox" id="cookie-essential" checked disabled>
+                    <span class="option-content">
+                        <strong>Essential</strong>
+                        <small>Required for the app to function</small>
+                    </span>
+                </label>
+                <label class="cookie-option">
+                    <input type="checkbox" id="cookie-analytics">
+                    <span class="option-content">
+                        <strong>Analytics</strong>
+                        <small>Help us improve by tracking usage</small>
+                    </span>
+                </label>
+                <label class="cookie-option">
+                    <input type="checkbox" id="cookie-preferences">
+                    <span class="option-content">
+                        <strong>Preferences</strong>
+                        <small>Remember your settings</small>
+                    </span>
+                </label>
+            </div>
+            <div class="cookie-actions">
+                <button type="button" id="cookie-accept-all" class="btn btn-primary">Accept All</button>
+                <button type="button" id="cookie-accept-selected" class="btn btn-secondary">Accept Selected</button>
+                <button type="button" id="cookie-reject" class="btn btn-ghost">Essential Only</button>
+            </div>
+            <p class="cookie-more">
+                <button type="button" class="link-btn" id="cookie-learn-more">Learn more about our cookies</button>
+            </p>
+        </div>
+    </div>
+
+    <!-- Privacy Policy Modal -->
+    <div id="privacy-modal" class="legal-modal" role="dialog" aria-labelledby="privacy-title" aria-modal="true" style="display: none;">
+        <div class="legal-modal-content">
+            <div class="legal-modal-header">
+                <h1 id="privacy-title">Privacy Policy</h1>
+                <button type="button" class="modal-close" aria-label="Close privacy policy">&times;</button>
+            </div>
+            <div class="legal-modal-body">
+                <p class="legal-updated">Last updated: 20 December 2024</p>
+                
+                <section>
+                    <h2>1. Introduction</h2>
+                    <p>Stonedoku ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your personal data in compliance with the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.</p>
+                    <p><strong>Data Controller:</strong> Stonedoku<br>
+                    <strong>Contact:</strong> privacy@stonedoku.com</p>
+                </section>
+
+                <section>
+                    <h2>2. Data We Collect</h2>
+                    <h3>2.1 Information You Provide</h3>
+                    <ul>
+                        <li><strong>Account Information:</strong> Email address and password when you create an account</li>
+                        <li><strong>Profile Data:</strong> Display name you choose</li>
+                        <li><strong>Communications:</strong> Chat messages sent during gameplay</li>
+                    </ul>
+                    
+                    <h3>2.2 Automatically Collected Data</h3>
+                    <ul>
+                        <li><strong>Usage Data:</strong> Game statistics (wins, losses, scores)</li>
+                        <li><strong>Technical Data:</strong> Browser type, device information, IP address</li>
+                        <li><strong>Online Status:</strong> Presence information for multiplayer features</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>3. How We Use Your Data</h2>
+                    <p>We process your data under the following legal bases:</p>
+                    <ul>
+                        <li><strong>Contract Performance:</strong> To provide the gaming service you've requested</li>
+                        <li><strong>Legitimate Interests:</strong> To improve our service and prevent abuse</li>
+                        <li><strong>Consent:</strong> For optional analytics and marketing (where applicable)</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>4. Data Sharing</h2>
+                    <p>We use Firebase (Google) for authentication and data storage. Data may be processed in:</p>
+                    <ul>
+                        <li>European Economic Area (EEA)</li>
+                        <li>United States (under Standard Contractual Clauses)</li>
+                    </ul>
+                    <p>We do not sell your personal data to third parties.</p>
+                </section>
+
+                <section>
+                    <h2>5. Your Rights (UK GDPR)</h2>
+                    <p>You have the right to:</p>
+                    <ul>
+                        <li><strong>Access:</strong> Request a copy of your personal data</li>
+                        <li><strong>Rectification:</strong> Correct inaccurate data</li>
+                        <li><strong>Erasure:</strong> Request deletion of your data ("right to be forgotten")</li>
+                        <li><strong>Portability:</strong> Receive your data in a portable format</li>
+                        <li><strong>Object:</strong> Object to processing based on legitimate interests</li>
+                        <li><strong>Withdraw Consent:</strong> Where processing is based on consent</li>
+                    </ul>
+                    <p>To exercise these rights, contact us at privacy@stonedoku.com</p>
+                </section>
+
+                <section>
+                    <h2>6. Data Retention</h2>
+                    <ul>
+                        <li>Account data: Retained until you delete your account</li>
+                        <li>Chat messages: 30 days</li>
+                        <li>Game statistics: Retained until account deletion</li>
+                        <li>Anonymous analytics: 26 months</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>7. Security</h2>
+                    <p>We implement appropriate security measures including:</p>
+                    <ul>
+                        <li>Encryption in transit (HTTPS/TLS)</li>
+                        <li>Secure authentication via Firebase</li>
+                        <li>Database access controls</li>
+                        <li>Regular security reviews</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>8. Children's Privacy</h2>
+                    <p>Our service is not directed at children under 13. We do not knowingly collect data from children under 13. If you believe we have collected such data, please contact us immediately.</p>
+                </section>
+
+                <section>
+                    <h2>9. Changes to This Policy</h2>
+                    <p>We may update this policy periodically. Significant changes will be notified via the app or email.</p>
+                </section>
+
+                <section>
+                    <h2>10. Contact & Complaints</h2>
+                    <p>For privacy enquiries: privacy@stonedoku.com</p>
+                    <p>You have the right to lodge a complaint with the Information Commissioner's Office (ICO):<br>
+                    Website: <a href="https://ico.org.uk" target="_blank" rel="noopener">ico.org.uk</a><br>
+                    Helpline: 0303 123 1113</p>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms of Service Modal -->
+    <div id="terms-modal" class="legal-modal" role="dialog" aria-labelledby="terms-title" aria-modal="true" style="display: none;">
+        <div class="legal-modal-content">
+            <div class="legal-modal-header">
+                <h1 id="terms-title">Terms of Service</h1>
+                <button type="button" class="modal-close" aria-label="Close terms of service">&times;</button>
+            </div>
+            <div class="legal-modal-body">
+                <p class="legal-updated">Last updated: 20 December 2024</p>
+                
+                <section>
+                    <h2>1. Agreement to Terms</h2>
+                    <p>By accessing or using Stonedoku, you agree to be bound by these Terms of Service. If you disagree with any part, you may not access the service.</p>
+                </section>
+
+                <section>
+                    <h2>2. Description of Service</h2>
+                    <p>Stonedoku provides an online Sudoku game with single-player and multiplayer functionality. The service is provided "as is" and may be modified at any time.</p>
+                </section>
+
+                <section>
+                    <h2>3. User Accounts</h2>
+                    <ul>
+                        <li>You must provide accurate information when creating an account</li>
+                        <li>You are responsible for maintaining account security</li>
+                        <li>You must not share your account credentials</li>
+                        <li>You must be at least 13 years old to use the service</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>4. Acceptable Use</h2>
+                    <p>You agree NOT to:</p>
+                    <ul>
+                        <li>Use the service for any unlawful purpose</li>
+                        <li>Harass, abuse, or harm other users</li>
+                        <li>Use cheats, exploits, or automation tools</li>
+                        <li>Impersonate others or provide false information</li>
+                        <li>Attempt to gain unauthorized access to systems</li>
+                        <li>Post offensive, hateful, or inappropriate content in chat</li>
+                        <li>Spam or send unsolicited messages</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>5. Intellectual Property</h2>
+                    <p>The Stonedoku name, logo, and all content are owned by us or our licensors. The Sudoku puzzles are generated algorithmically. You may not:</p>
+                    <ul>
+                        <li>Copy, modify, or distribute our content</li>
+                        <li>Use our trademarks without permission</li>
+                        <li>Reverse engineer the application</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>6. User Content</h2>
+                    <p>You retain rights to content you submit (e.g., chat messages). By posting, you grant us a license to display this content. We may remove content that violates these terms.</p>
+                </section>
+
+                <section>
+                    <h2>7. Termination</h2>
+                    <p>We may terminate or suspend your account at any time for violations of these terms, without prior notice. You may delete your account at any time.</p>
+                </section>
+
+                <section>
+                    <h2>8. Disclaimers</h2>
+                    <p>THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND. We do not guarantee:</p>
+                    <ul>
+                        <li>Continuous, uninterrupted service</li>
+                        <li>Error-free operation</li>
+                        <li>Availability in all regions</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>9. Limitation of Liability</h2>
+                    <p>To the fullest extent permitted by UK law, we shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of the service.</p>
+                </section>
+
+                <section>
+                    <h2>10. Governing Law</h2>
+                    <p>These terms are governed by the laws of England and Wales. Any disputes shall be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
+                </section>
+
+                <section>
+                    <h2>11. Changes to Terms</h2>
+                    <p>We may modify these terms at any time. Continued use after changes constitutes acceptance of the new terms.</p>
+                </section>
+
+                <section>
+                    <h2>12. Contact</h2>
+                    <p>For questions about these terms: legal@stonedoku.com</p>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cookie Policy Modal -->
+    <div id="cookies-modal" class="legal-modal" role="dialog" aria-labelledby="cookies-title" aria-modal="true" style="display: none;">
+        <div class="legal-modal-content">
+            <div class="legal-modal-header">
+                <h1 id="cookies-title">Cookie Policy</h1>
+                <button type="button" class="modal-close" aria-label="Close cookie policy">&times;</button>
+            </div>
+            <div class="legal-modal-body">
+                <p class="legal-updated">Last updated: 20 December 2024</p>
+                
+                <section>
+                    <h2>1. What Are Cookies?</h2>
+                    <p>Cookies are small text files stored on your device when you visit a website. They help websites remember your preferences and improve your experience.</p>
+                </section>
+
+                <section>
+                    <h2>2. UK Law (PECR)</h2>
+                    <p>Under the Privacy and Electronic Communications Regulations (PECR), we must obtain your consent before placing non-essential cookies on your device.</p>
+                </section>
+
+                <section>
+                    <h2>3. Cookies We Use</h2>
+                    
+                    <h3>3.1 Essential Cookies (Required)</h3>
+                    <table class="cookie-table">
+                        <thead>
+                            <tr><th>Name</th><th>Purpose</th><th>Duration</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>firebase-auth</td><td>Authentication state</td><td>Session</td></tr>
+                            <tr><td>cookie-consent</td><td>Your cookie preferences</td><td>1 year</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3>3.2 Preference Cookies (Optional)</h3>
+                    <table class="cookie-table">
+                        <thead>
+                            <tr><th>Name</th><th>Purpose</th><th>Duration</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>theme</td><td>Light/dark mode preference</td><td>1 year</td></tr>
+                            <tr><td>sound-enabled</td><td>Sound settings</td><td>1 year</td></tr>
+                            <tr><td>game-settings</td><td>Game preferences</td><td>1 year</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3>3.3 Analytics Cookies (Optional)</h3>
+                    <p>We may use analytics cookies to understand how visitors use our site. Currently, we use Firebase Analytics which may set cookies to track:</p>
+                    <ul>
+                        <li>Pages visited</li>
+                        <li>Time spent on site</li>
+                        <li>Actions taken</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>4. Local Storage</h2>
+                    <p>We also use browser local storage for:</p>
+                    <ul>
+                        <li>Guest account game progress</li>
+                        <li>UI preferences</li>
+                        <li>Offline functionality</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>5. Managing Cookies</h2>
+                    <p>You can manage cookies through:</p>
+                    <ul>
+                        <li>Our cookie preference banner (appears on first visit)</li>
+                        <li>Your browser settings</li>
+                        <li>The footer link to update preferences</li>
+                    </ul>
+                    <p>Note: Disabling essential cookies may affect functionality.</p>
+                </section>
+
+                <section>
+                    <h2>6. Third-Party Cookies</h2>
+                    <p>Our service uses Firebase (Google). Google may set their own cookies. See <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a> for details.</p>
+                </section>
+
+                <section>
+                    <h2>7. Updates</h2>
+                    <p>We may update this policy. Check this page for the latest version.</p>
+                </section>
+
+                <section>
+                    <h2>8. Contact</h2>
+                    <p>Questions about cookies: privacy@stonedoku.com</p>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accessibility Statement Modal -->
+    <div id="accessibility-modal" class="legal-modal" role="dialog" aria-labelledby="accessibility-title" aria-modal="true" style="display: none;">
+        <div class="legal-modal-content">
+            <div class="legal-modal-header">
+                <h1 id="accessibility-title">Accessibility Statement</h1>
+                <button type="button" class="modal-close" aria-label="Close accessibility statement">&times;</button>
+            </div>
+            <div class="legal-modal-body">
+                <p class="legal-updated">Last updated: 20 December 2024</p>
+                
+                <section>
+                    <h2>1. Our Commitment</h2>
+                    <p>Stonedoku is committed to ensuring digital accessibility for people with disabilities. We continually improve the user experience for everyone and apply relevant accessibility standards.</p>
+                </section>
+
+                <section>
+                    <h2>2. Standards</h2>
+                    <p>We aim to conform to the Web Content Accessibility Guidelines (WCAG) 2.1 Level AA. These guidelines explain how to make web content more accessible to people with disabilities.</p>
+                </section>
+
+                <section>
+                    <h2>3. Accessibility Features</h2>
+                    <ul>
+                        <li><strong>Keyboard Navigation:</strong> All interactive elements are keyboard accessible</li>
+                        <li><strong>Screen Reader Support:</strong> ARIA labels and landmarks for assistive technology</li>
+                        <li><strong>Focus Indicators:</strong> Visible focus states for keyboard users</li>
+                        <li><strong>Color Contrast:</strong> Text meets WCAG AA contrast requirements</li>
+                        <li><strong>Reduced Motion:</strong> Respects system preferences for reduced animation</li>
+                        <li><strong>Scalable Text:</strong> Content remains usable when text is enlarged</li>
+                        <li><strong>Skip Links:</strong> Quickly navigate to main content</li>
+                        <li><strong>Alt Text:</strong> Descriptive text for visual elements</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>4. Known Limitations</h2>
+                    <p>While we strive for full accessibility, some features may have limitations:</p>
+                    <ul>
+                        <li>Real-time multiplayer may be challenging for screen reader users due to rapid updates</li>
+                        <li>Some game animations may be distracting for users with cognitive disabilities</li>
+                    </ul>
+                    <p>We are actively working to improve these areas.</p>
+                </section>
+
+                <section>
+                    <h2>5. Assistive Technology</h2>
+                    <p>This website has been tested with:</p>
+                    <ul>
+                        <li>VoiceOver (macOS/iOS)</li>
+                        <li>NVDA (Windows)</li>
+                        <li>Keyboard-only navigation</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>6. Feedback</h2>
+                    <p>We welcome your feedback on accessibility. If you encounter barriers or have suggestions:</p>
+                    <p><strong>Email:</strong> accessibility@stonedoku.com</p>
+                    <p>We aim to respond within 5 business days.</p>
+                </section>
+
+                <section>
+                    <h2>7. Enforcement</h2>
+                    <p>If you're not satisfied with our response, you can contact the Equality Advisory Support Service (EASS):</p>
+                    <p>Website: <a href="https://www.equalityadvisoryservice.com" target="_blank" rel="noopener">equalityadvisoryservice.com</a></p>
+                </section>
+            </div>
+        </div>
+    </div>
+
     <!-- Firebase SDK -->
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=20251221A"></script>
 </body>
 </html>

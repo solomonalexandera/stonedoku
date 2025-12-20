@@ -1,6 +1,7 @@
 {
   "rules": {
     "presence": {
+      ".read": "auth != null",
       "$userId": {
         ".read": true,
         ".write": "$userId === auth.uid"
@@ -19,14 +20,19 @@
     },
     "matches": {
       "$matchId": {
-        ".read": "auth != null && data.child('playerIds').hasChild(auth.uid)",
+        ".read": "auth != null",
         ".write": "auth != null && (data.child('playerIds').hasChild(auth.uid) || !data.exists())",
         "board": {
           "$cellId": {
-            ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid) && (data.child('filledBy').val() === null || !data.child('given').val())"
+            ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid)"
           }
         },
         "scores": {
+          "$playerId": {
+            ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid)"
+          }
+        },
+        "activity": {
           "$playerId": {
             ".write": "auth != null && data.parent().parent().child('playerIds').hasChild(auth.uid)"
           }

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stonedoku 1v1 Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }
+        .log { margin: 5px 0; padding: 5px; background: #16213e; border-radius: 4px; }
+        .error { color: #ff6b6b; }
+        .success { color: #6bff6b; }
+        button { margin: 5px; padding: 10px 20px; cursor: pointer; }
+        #output { max-height: 500px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>Stonedoku 1v1 Debug Test</h1>
+    <div>
+        <button onclick="testAuth()">1. Test Auth</button>
+        <button onclick="testPresence()">2. Test Presence</button>
+        <button onclick="testCreateMatch()">3. Create Test Match</button>
+        <button onclick="testMakeMove()">4. Test Make Move</button>
+        <button onclick="testListenMatch()">5. Listen to Match</button>
+    </div>
+    <div id="output"></div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getDatabase, ref, set, get, update, onValue, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCp7BkBGFmgjSL_28iexOAO7X4RoY_7tQ4",
+            authDomain: "stonedoku-c0898.firebaseapp.com",
+            projectId: "stonedoku-c0898",
+            storageBucket: "stonedoku-c0898.firebasestorage.app",
+            messagingSenderId: "755062989426",
+            appId: "1:755062989426:web:446a5be32bf4d6b66198eb",
+            databaseURL: "https://stonedoku-c0898-default-rtdb.europe-west1.firebasedatabase.app"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const rtdb = getDatabase(app);
+        
+        let currentUser = null;
+        let testMatchId = null;
+
+        function log(msg, type = '') {
+            const output = document.getElementById('output');
+            const div = document.createElement('div');
+            div.className = 'log ' + type;
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + msg;
+            output.insertBefore(div, output.firstChild);
+        }
+
+        window.testAuth = async () => {
+            log('Testing authentication...');
+            try {
+                const result = await signInAnonymously(auth);
+                currentUser = result.user;
+                log('Auth successful! User ID: ' + currentUser.uid, 'success');
+            } catch (e) {
+                log('Auth error: ' + e.message, 'error');
+            }
+        };
+
+        window.testPresence = async () => {
+            if (!currentUser) { log('Please authenticate first', 'error'); return; }
+            log('Testing presence write...');
+            try {
+                await set(ref(rtdb, `presence/${currentUser.uid}`), {
+                    status: 'online',
+                    displayName: 'TestPlayer',
+                    last_changed: serverTimestamp(),
+                    current_activity: 'Testing'
+                });
+                log('Presence write successful!', 'success');
+                
+                // Read it back
+                const snap = await get(ref(rtdb, 'presence'));
+                log('All presence data: ' + JSON.stringify(snap.val()));
+            } catch (e) {
+                log('Presence error: ' + e.message, 'error');
+            }
+        };
+
+        window.testCreateMatch = async () => {
+            if (!currentUser) { log('Please authenticate first', 'error'); return; }
+            log('Creating test match...');
+            
+            testMatchId = `test_match_${Date.now()}`;
+            const playerIds = { [currentUser.uid]: true, 'test_opponent_123': true };
+            
+            const boardState = {};
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const cellId = `${row}_${col}`;
+                    boardState[cellId] = {
+                        value: (row === 0 && col === 0) ? 5 : 0,  // One given number
+                        given: (row === 0 && col === 0),
+                        filledBy: null
+                    };
+                }
+            }
+
+            const matchData = {
+                id: testMatchId,
+                playerIds: playerIds,
+                players: { 
+                    [currentUser.uid]: { name: 'You' },
+                    'test_opponent_123': { name: 'Opponent' }
+                },
+                scores: { [currentUser.uid]: 0, 'test_opponent_123': 0 },
+                board: boardState,
+                solution: Array(81).fill(1), // Dummy solution
+                status: 'active',
+                startedAt: serverTimestamp()
+            };
+
+            try {
+                await set(ref(rtdb, `matches/${testMatchId}`), matchData);
+                log('Match created: ' + testMatchId, 'success');
+            } catch (e) {
+                log('Create match error: ' + e.message, 'error');
+            }
+        };
+
+        window.testMakeMove = async () => {
+            if (!currentUser || !testMatchId) { 
+                log('Please auth and create match first', 'error'); 
+                return; 
+            }
+            log('Testing make move at (0,1)...');
+            
+            try {
+                // First read the cell
+                const cellRef = ref(rtdb, `matches/${testMatchId}/board/0_1`);
+                const snap = await get(cellRef);
+                log('Current cell data: ' + JSON.stringify(snap.val()));
+                
+                // Try to update it
+                await update(cellRef, {
+                    value: 7,
+                    filledBy: currentUser.uid
+                });
+                log('Move successful!', 'success');
+                
+                // Read it back
+                const newSnap = await get(cellRef);
+                log('New cell data: ' + JSON.stringify(newSnap.val()), 'success');
+            } catch (e) {
+                log('Move error: ' + e.message, 'error');
+            }
+        };
+
+        window.testListenMatch = async () => {
+            if (!testMatchId) { log('Create match first', 'error'); return; }
+            log('Setting up match listener...');
+            
+            try {
+                const matchRef = ref(rtdb, `matches/${testMatchId}`);
+                onValue(matchRef, (snap) => {
+                    const data = snap.val();
+                    if (data) {
+                        log('Match update - Status: ' + data.status + ', Board cells: ' + Object.keys(data.board).length, 'success');
+                    } else {
+                        log('Match data is null', 'error');
+                    }
+                }, (error) => {
+                    log('Listener error: ' + error.message, 'error');
+                });
+                log('Listener set up successfully', 'success');
+            } catch (e) {
+                log('Listen error: ' + e.message, 'error');
+            }
+        };
+
+        // Auto-init auth listener
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                log('Already signed in: ' + user.uid);
+            }
+        });
+
+        log('Test page loaded. Click buttons in order to test.');
+    </script>
+</body>
+</html>
