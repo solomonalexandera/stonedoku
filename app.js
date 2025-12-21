@@ -40,6 +40,7 @@ import {
     getDocs,
     orderBy,
     limit,
+    documentId,
     arrayUnion,
     arrayRemove,
     Timestamp
@@ -73,6 +74,137 @@ const auth = getAuth(firebaseApp);
 const rtdb = getDatabase(firebaseApp);
 const firestore = getFirestore(firebaseApp);
 const storage = getStorage(firebaseApp);
+
+// ==========================
+// App version + cache management
+// Fetches ` /version.txt ` at startup. If it differs from the stored
+// `stonedoku_app_version`, clear caches, cookies, indexedDB and service
+// workers to ensure clients pick up new assets after a deploy.
+// To activate, update `public/version.txt` during your deploys.
+// ==========================
+async function clearAllCachesAndServiceWorkers() {
+    try {
+        // Clear the CacheStorage entries
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+        }
+
+        // Unregister service workers
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.unregister()));
+        }
+
+        // Clear indexedDB databases (best-effort)
+        if ('indexedDB' in window && indexedDB.databases) {
+            try {
+                const dbs = await indexedDB.databases();
+                await Promise.all(dbs.map(d => new Promise((res) => { indexedDB.deleteDatabase(d.name).onsuccess = res; })));
+            } catch (e) {
+                // Some browsers restrict indexedDB.databases(); ignore if unavailable
+            }
+        }
+    } catch (e) {
+        console.error('Cache clearing failed', e);
+    }
+}
+
+function clearAllCookies() {
+    try {
+        const cookies = document.cookie ? document.cookie.split(';') : [];
+        for (const cookie of cookies) {
+            const eqPos = cookie.indexOf('=');
+            const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+            // Expire cookie for root path
+            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+            // Also try without path
+            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+    } catch (e) {
+        console.error('Cookie clearing failed', e);
+    }
+}
+
+async function ensureAppVersionFresh() {
+    try {
+        const res = await fetch('/version.txt', { cache: 'no-store' });
+        if (!res.ok) return; // no version file
+        const remote = (await res.text()).trim();
+        if (!remote) return;
+        const local = localStorage.getItem('stonedoku_app_version');
+        if (local && local === remote) return; // same version
+
+        // New version detected — clear caches/cookies/indexedDB and reload once
+        console.info('New app version detected', { from: local, to: remote });
+        await clearAllCachesAndServiceWorkers();
+        clearAllCookies();
+        localStorage.setItem('stonedoku_app_version', remote);
+        // Use setTimeout so any in-flight operations can complete
+        setTimeout(() => location.reload(true), 200);
+    } catch (e) {
+        console.error('ensureAppVersionFresh failed', e);
+    }
+}
+
+// Kick off version check early
+ensureAppVersionFresh();
+
+// ==========================
+// Client-side Log Manager
+// Writes debug/info/error logs to Firestore `clientLogs` collection.
+// Overrides console methods so logs are persisted and removed from console output.
+// ==========================
+const LogManager = (function(){
+    const orig = {
+        log: console.log.bind(console),
+        info: console.info.bind(console),
+        warn: console.warn.bind(console),
+        error: console.error.bind(console)
+    };
+
+    let disabled = false;
+    async function writeToFirestore(level, args) {
+        if (disabled) return;
+        try {
+            // Build a compact message and optional meta payload
+            const message = args.map(a => {
+                try { return typeof a === 'string' ? a : JSON.stringify(a); } catch(e) { return String(a); }
+            }).join(' ');
+
+            const meta = { src: 'client', href: window.location.href };
+
+            await addDoc(collection(firestore, 'clientLogs'), {
+                level: level,
+                message: message,
+                meta: meta,
+                createdAt: Timestamp.now()
+            });
+        } catch (e) {
+            // If permission errors occur, disable future writes to avoid spamming
+            try {
+                orig.error('LogManager write failed:', e);
+            } catch (_) {}
+            if (e && (e.code === 'permission-denied' || String(e).includes('Missing or insufficient permissions'))) {
+                disabled = true;
+            }
+        }
+    }
+
+    // Override console methods to route logs to Firestore only (no noisy console output).
+    console.log = (...args) => { writeToFirestore('debug', args); };
+    console.info = (...args) => { writeToFirestore('info', args); };
+    console.warn = (...args) => { writeToFirestore('warn', args); };
+    console.error = (...args) => { writeToFirestore('error', args); };
+
+    return {
+        _orig: orig,
+        log: (...args) => writeToFirestore('debug', args),
+        info: (...args) => writeToFirestore('info', args),
+        warn: (...args) => writeToFirestore('warn', args),
+        error: (...args) => writeToFirestore('error', args)
+    };
+})();
 
 // ===========================================
 // Application State
@@ -635,7 +767,8 @@ const ProfileManager = {
             throw new Error('Image must be under 2MB');
         }
         
-        const fileRef = storageRef(storage, `avatars/${userId}`);
+        const safeName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const fileRef = storageRef(storage, `avatars/${userId}/${safeName}`);
         await uploadBytes(fileRef, file);
         const downloadURL = await getDownloadURL(fileRef);
         
@@ -3010,7 +3143,21 @@ const GameUI = {
                         return; // Exit early since we handle cleanup above
                     }
                 } else {
+                    // Even when auto-check is disabled, track mistakes so
+                    // the player can lose after exceeding max mistakes.
                     cell.classList.add('player-fill');
+
+                    if (!isCorrect) {
+                        AppState.mistakes++;
+                        GameHelpers.updateMistakesDisplay();
+
+                        if (AppState.mistakes >= AppState.maxMistakes) {
+                            setTimeout(() => {
+                                this.endSinglePlayerGame(false);
+                            }, 600);
+                            return;
+                        }
+                    }
                 }
                 
                 setTimeout(() => {
@@ -3074,7 +3221,10 @@ const GameUI = {
         document.getElementById('result-message').textContent = won ? 'You solved the puzzle!' : 'Better luck next time!';
         document.getElementById('final-score').textContent = AppState.playerScore;
         document.getElementById('final-time').textContent = UI.formatTime(AppState.gameSeconds);
-        document.getElementById('opponent-score-row').style.display = 'none';
+        const oppRow = document.getElementById('opponent-score-row');
+        if (oppRow) {
+            oppRow.style.display = 'none';
+        }
         
         if (won) {
             AudioManager.playVictory();
@@ -4026,15 +4176,15 @@ function shareToSocial(platform) {
 // Vanity URL Handler
 // ===========================================
 async function handleVanityUrl() {
-    // Check URL hash for profile path
-    const hash = window.location.hash;
-    if (hash.startsWith('#profile/')) {
-        const username = hash.replace('#profile/', '');
-        if (username) {
-            try {
+    // Support hash-based and pathname-based vanity URLs.
+    try {
+        // Hash-based: #profile/username
+        const hash = window.location.hash;
+        if (hash.startsWith('#profile/')) {
+            const username = hash.replace('#profile/', '');
+            if (username) {
                 const profile = await ProfileManager.getProfileByUsername(username);
                 if (profile) {
-                    // Wait for auth to be ready
                     const checkAuth = () => {
                         if (AppState.authReady) {
                             UI.showProfilePage(profile.id);
@@ -4043,11 +4193,31 @@ async function handleVanityUrl() {
                         }
                     };
                     checkAuth();
+                    return;
                 }
-            } catch (error) {
-                console.error('Error loading profile from URL:', error);
             }
         }
+
+        // Pathname-based: /profile/username or /user/username
+        const pathname = window.location.pathname || '';
+        const pathMatch = pathname.match(/^\/(?:profile|user)\/(.+)$/i);
+        if (pathMatch && pathMatch[1]) {
+            const username = decodeURIComponent(pathMatch[1]);
+            const profile = await ProfileManager.getProfileByUsername(username);
+            if (profile) {
+                const checkAuth2 = () => {
+                    if (AppState.authReady) {
+                        UI.showProfilePage(profile.id);
+                    } else {
+                        setTimeout(checkAuth2, 100);
+                    }
+                };
+                checkAuth2();
+                return;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading profile from URL:', error);
     }
 }
 
@@ -4065,6 +4235,159 @@ function initFloatingChat() {
     const maximizeBtn = document.getElementById('chat-maximize');
     const form = document.getElementById('chat-widget-form');
     const input = document.getElementById('chat-widget-input');
+    // Suggestion popup for @whisper username autocomplete
+    const suggestionBox = document.createElement('div');
+    suggestionBox.id = 'chat-suggestion-box';
+    suggestionBox.style.position = 'absolute';
+    suggestionBox.style.zIndex = '9999';
+    suggestionBox.style.background = '#fff';
+    suggestionBox.style.border = '1px solid rgba(0,0,0,0.12)';
+    suggestionBox.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+    suggestionBox.style.display = 'none';
+    suggestionBox.style.minWidth = '180px';
+    suggestionBox.style.maxHeight = '240px';
+    suggestionBox.style.overflow = 'auto';
+    suggestionBox.style.borderRadius = '6px';
+    suggestionBox.style.padding = '6px 0';
+    suggestionBox.style.fontSize = '14px';
+    widget.appendChild(suggestionBox);
+
+    let suggestions = [];
+    let selectedIndex = -1;
+
+    async function fetchUsernameSuggestions(prefix) {
+        if (!prefix) return [];
+        const p = prefix.toLowerCase();
+        try {
+            // Fetch matching username documents (usernameLower -> { userId })
+            const q = query(collection(firestore, 'usernames'), where(documentId(), '>=', p), where(documentId(), '<=', p + '\\uf8ff'), limit(32));
+            const snap = await getDocs(q);
+            const candidates = snap.docs.map(d => ({ username: d.id, userId: d.data().userId }));
+
+            // Try to read presence snapshot and prefer online users
+            try {
+                const presRef = ref(rtdb, 'presence');
+                const presSnap = await get(presRef);
+                const onlineSet = new Set();
+                presSnap.forEach(child => {
+                    const val = child.val() || {};
+                    const last = val.last_changed || 0;
+                    const now = Date.now();
+                    const recent = typeof last === 'number' ? (now - last) < 45000 : true;
+                    if (val.status === 'online' && recent) onlineSet.add(child.key);
+                });
+
+                // Split candidates into online first, then offline
+                const online = [];
+                const offline = [];
+                for (const c of candidates) {
+                    if (onlineSet.has(c.userId)) online.push(c.username);
+                    else offline.push(c.username);
+                }
+                const merged = online.concat(offline).slice(0, 8);
+                return merged;
+            } catch (e) {
+                // If presence read fails, fall back to username list
+                console.warn('Presence read failed for suggestions, falling back:', e);
+                return candidates.slice(0, 8).map(c => c.username);
+            }
+        } catch (e) {
+            console.error('Username suggestion fetch failed', e);
+            return [];
+        }
+    }
+
+    function positionSuggestionBox() {
+        if (!input) return;
+        const rect = input.getBoundingClientRect();
+        suggestionBox.style.left = `${rect.left + window.scrollX}px`;
+        suggestionBox.style.top = `${rect.bottom + window.scrollY + 6}px`;
+        suggestionBox.style.width = `${rect.width}px`;
+    }
+
+    function renderSuggestions(list) {
+        suggestions = list || [];
+        selectedIndex = -1;
+        suggestionBox.innerHTML = '';
+        if (!suggestions || suggestions.length === 0) {
+            suggestionBox.style.display = 'none';
+            return;
+        }
+        suggestionBox.style.display = 'block';
+        suggestions.forEach((s, i) => {
+            const item = document.createElement('div');
+            item.className = 'chat-suggestion-item';
+            item.style.padding = '6px 10px';
+            item.style.cursor = 'pointer';
+            item.style.whiteSpace = 'nowrap';
+            item.textContent = s;
+            item.addEventListener('mousedown', (ev) => {
+                ev.preventDefault();
+                applySuggestion(s);
+            });
+            suggestionBox.appendChild(item);
+        });
+        positionSuggestionBox();
+    }
+
+    function applySuggestion(username) {
+        if (!input) return;
+        input.value = `@whisper ${username} `;
+        input.focus();
+        suggestionBox.style.display = 'none';
+    }
+
+    // Handle keyboard navigation
+    input?.addEventListener('keydown', (e) => {
+        if (suggestionBox.style.display === 'none') return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedIndex = Math.min(suggestions.length - 1, selectedIndex + 1);
+            updateSelection();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = Math.max(0, selectedIndex - 1);
+            updateSelection();
+        } else if (e.key === 'Enter') {
+            if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+                e.preventDefault();
+                applySuggestion(suggestions[selectedIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            suggestionBox.style.display = 'none';
+        }
+    });
+
+    function updateSelection() {
+        const items = suggestionBox.querySelectorAll('.chat-suggestion-item');
+        items.forEach((it, idx) => {
+            it.style.background = idx === selectedIndex ? 'rgba(0,0,0,0.06)' : 'transparent';
+        });
+        if (selectedIndex >= 0 && items[selectedIndex]) {
+            const el = items[selectedIndex];
+            el.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    let suggestionHideTimer = null;
+    input?.addEventListener('input', async (e) => {
+        const val = e.target.value;
+        // match @w or @whisper followed by space and a fragment
+        const m = val.match(/^@w(?:hisper)?\s+([A-Za-z0-9_\-]{1,})$/i);
+        if (!m) {
+            // also handle when user types @username right after @whisper
+            suggestionHideTimer = setTimeout(() => { suggestionBox.style.display = 'none'; }, 200);
+            return;
+        }
+        const fragment = m[1];
+        const list = await fetchUsernameSuggestions(fragment);
+        renderSuggestions(list);
+    });
+
+    input?.addEventListener('blur', () => {
+        // Delay hide to allow click handler to run
+        suggestionHideTimer = setTimeout(() => { suggestionBox.style.display = 'none'; }, 150);
+    });
     const emojiToggle = document.getElementById('widget-emoji-toggle');
     const emojiPicker = document.getElementById('emoji-picker-widget');
     

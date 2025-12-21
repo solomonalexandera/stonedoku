@@ -20,6 +20,18 @@ This document provides an index of the "manager" objects found in `app.js`. Thes
 - **Purpose:** Controls the visibility of different UI sections (views).
 - **Functionality:** Manages the single-page application (SPA) flow by showing and hiding different views like `auth`, `lobby`, and `game`.
 
+### `LogManager`
+- **Purpose:** Centralized client-side logging to Firestore.
+- **Functionality:** Persists client `debug`, `info`, `warn`, and `error` messages into the `clientLogs` collection in Firestore and suppresses verbose console output in production-like environments.
+
+### `OnboardingSystem`
+- **Purpose:** Multi-step user signup/onboarding flow.
+- **Functionality:** Controls the onboarding UI steps for username, email/password, and profile picture; validates inputs and creates the user profile.
+
+### `CreativeFeatures`
+- **Purpose:** Cosmetic UI enhancements for gameplay.
+- **Functionality:** Confetti, streak indicators, and micro-animations for completed rows/columns/boxes.
+
 ### `PresenceSystem`
 - **Purpose:** Manages user online status and activity.
 - **Functionality:** Uses Firebase Realtime Database's `.info/connected` feature to track a user's online status. It updates a user's presence in the `presence/` path of the RTDB, indicating their current activity (e.g., "In Lobby").

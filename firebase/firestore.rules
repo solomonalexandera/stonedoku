@@ -56,5 +56,14 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow update, delete: if false;
     }
+
+    // Client logs written by the web client for debugging/telemetry
+    match /clientLogs/{logId} {
+      // Allow clients to create logs while signed in (anonymous or registered)
+      allow create: if isSignedIn();
+      // Do not expose logs publicly by default
+      allow read: if false;
+      allow update, delete: if false;
+    }
   }
 }

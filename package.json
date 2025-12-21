@@ -1,11 +1,17 @@
 {
   "dependencies": {
-    "firebase": "^12.7.0"
+    "@google-cloud/storage": "^7.18.0",
+    "firebase": "^12.7.0",
+    "firebase-admin": "^13.6.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.35.1"
   },
   "scripts": {
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "migrate:avatars:dry": "node scripts/migrate-avatars.js --dry",
+    "migrate:avatars": "RUN_MIGRATION=1 node scripts/migrate-avatars.js",
+    "auth:delete:dry": "node scripts/delete-all-users.js",
+    "auth:delete": "RUN_DELETE=1 node scripts/delete-all-users.js"
   }
 }

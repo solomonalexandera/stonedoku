@@ -170,22 +170,27 @@ window.e2e = {
     ,
     // Presence helpers for tests
     writePresence: async (uid, displayName) => {
-      await set(ref(rtdb, `presence/${uid}`), {
-        status: 'online',
-        displayName: displayName || 'TestUser',
-        last_changed: serverTimestamp(),
-        current_activity: 'Testing'
-      });
-      return true;
+      try {
+        const currentUid = auth.currentUser ? auth.currentUser.uid : uid;
+        await set(ref(rtdb, `presence/${currentUid}`), {
+          status: 'online',
+          displayName: displayName || 'TestUser',
+          last_changed: serverTimestamp(),
+          current_activity: 'Testing'
+        });
+        return { success: true, uid: currentUid };
+      } catch (e) {
+        return { success: false, error: e.message, code: e.code };
+      }
     },
     clearPresence: async (uid) => {
-      await set(ref(rtdb, `presence/${uid}`), {
-        status: 'offline',
-        displayName: null,
-        last_changed: serverTimestamp(),
-        current_activity: null
-      });
-      return true;
+      try {
+        const currentUid = auth.currentUser ? auth.currentUser.uid : uid;
+        await remove(ref(rtdb, `presence/${currentUid}`));
+        return { success: true, uid: currentUid };
+      } catch (e) {
+        return { success: false, error: e.message, code: e.code };
+      }
     }
 };
 
