@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Asset generation orchestrator.
- * - Reads prompts from ../asset_prompts.json
+ * - Reads prompts from ./asset_prompts.json
  * - Backs up existing assets to /public/assets/_backup/<timestamp>
  * - Generates images via OpenAI Responses API (image_generation tool)
  * - Upscales with realesrgan-ncnn-vulkan / Upscayl / sharp fallback
@@ -19,11 +19,12 @@ const path = require("path");
 const { generateImage } = require("./lib/openai_images");
 const { upscaleImage } = require("./lib/upscale");
 const { convertToWebp, ensureDir, backupAssets, summarizeFiles } = require("./lib/convert");
+const sharp = require("sharp");
 const { vectorizeOverlay } = require("./lib/vectorize");
 
 const ROOT = path.resolve(__dirname, "..");
 const ASSETS_DIR = path.join(ROOT, "public", "assets");
-const PROMPTS_PATH = path.join(ROOT, "asset_prompts.json");
+const PROMPTS_PATH = path.join(ROOT, "scripts", "asset_prompts.json");
 const TMP_DIR = path.join(ROOT, "tmp_assets");
 
 function parseArgs() {
@@ -35,6 +36,13 @@ function parseArgs() {
     if (arg === "--no-bg-02") opts.noBg02 = true;
   });
   return opts;
+}
+
+function parseSize(sizeStr) {
+  if (!sizeStr) return null;
+  const m = /^([0-9]+)x([0-9]+)$/.exec(sizeStr.trim());
+  if (!m) return null;
+  return { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
 }
 
 async function main() {
@@ -75,6 +83,16 @@ async function main() {
       console.log(`[upscale] ${asset.name}`);
       workBuf = await upscaleImage(tmpPng, { isOverlay });
       fs.writeFileSync(tmpPng, workBuf);
+    }
+
+    // Resize to exact final spec (if provided) to ensure output matches asset.size
+    const target = parseSize(asset.size);
+    if (target) {
+      try {
+        await sharp(tmpPng).resize(target.w, target.h, { fit: "cover" }).png().toFile(tmpPng);
+      } catch (e) {
+        console.warn(`Failed to resize ${asset.name} to ${asset.size}:`, e && e.message ? e.message : e);
+      }
     }
 
     const dest = path.join(ASSETS_DIR, asset.filename);

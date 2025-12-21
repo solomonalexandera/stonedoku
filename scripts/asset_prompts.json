@@ -1,0 +1,57 @@
+{
+  "backgrounds": [
+    {
+      "name": "bg-stone-01",
+      "filename": "bg-stone-01.webp",
+      "aspect_ratio": "2:3",
+      "size": "2048x3072",
+      "prompt": "A high-resolution, photorealistic stone wall background inspired by the Houses of Parliament in London, blending restrained Gothic Revival civic architecture with post-war British brutalism.\n\nThe surface is composed of large limestone and concrete panels with subtle expansion joints and structural seams. Fine stone grain, gentle pitting, faint stains, and light soot accumulation are visible.\n\nLighting is calm and diffuse, as if under an overcast London sky. No hard shadows, no dramatic highlights, no directional spotlighting.\n\nArchitectural presence is implied through soft tonal shifts only, with no literal arches, carvings, or interior cathedral features.\n\nColor palette is neutral limestone, ash gray, and muted warm stone tones. No strong color cast.\n\nContrast is restrained and even, with approximately 8–12% tonal variance across the frame to avoid banding.\n\nThe image should feel cinematic, dignified, and monumental, suitable as a UI environment background.\n\nNo text, no people, no props, no fantasy elements.\n\nHigh spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later.\n\nNegative: no neon or saturated colors, no dramatic lighting, no cathedral interiors, no fantasy, no text or symbols, no people.\n\nReduce visual drama. Flatten lighting. Remove theatrical mood. This is civic and restrained, not religious or cinematic fantasy."
+    },
+    {
+      "name": "bg-stone-02",
+      "filename": "bg-stone-02.webp",
+      "aspect_ratio": "2:3",
+      "size": "2048x3072",
+      "prompt": "A high-resolution stone and concrete wall background inspired by British parliamentary architecture, combining subdued Gothic Revival proportions with mid-20th-century brutalist materiality.\n\nThe stone appears slightly darker and more weathered than the primary background, with faint vertical streaks from age and rain. Structural panel seams remain visible but understated.\n\nLighting remains soft and diffuse, with marginally deeper shadow pooling toward the edges of the frame.\n\nNeutral ash, limestone, and charcoal tones only. Avoid cool blue or warm yellow casts.\n\nGentle contrast, smooth tonal transitions, no banding, no sharp highlights.\n\nCalm, civic, and architectural rather than dramatic.\n\nHigh spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later.\n\nNegative: no neon or saturated colors, no dramatic lighting, no cathedral interiors, no fantasy, no text or symbols, no people.\n\nReduce visual drama. Flatten lighting. Remove theatrical mood. This is civic and restrained, not religious or cinematic fantasy."
+    }
+  ],
+  "overlays": [
+    {
+      "name": "overlay-vignette",
+      "filename": "overlay-vignette.svg",
+      "aspect_ratio": "1:1",
+      "size": "2048x2048",
+      "prompt": "A subtle grayscale vignette overlay designed for modern interface composition.\n\nSoft darkening around the edges of the frame, fading smoothly toward a neutral center.\n\nTexture suggests faint soot and atmospheric haze rather than blur.\n\nNo visible hard edges, no obvious circular gradient, no banding.\n\nMonochrome only.\n\nMinimal, restrained, and architectural.\n\nHigh spatial detail, realistic texture, no painterly smoothing, designed to be exported as an SVG overlay.\n\nReduce visual drama. Flatten lighting. Remove theatrical mood. This is civic and restrained, not religious or cinematic fantasy."
+    },
+    {
+      "name": "overlay-vault-ribs",
+      "filename": "overlay-vault-ribs.svg",
+      "aspect_ratio": "2:3",
+      "size": "2048x3072",
+      "prompt": "A subtle architectural shadow overlay inspired by the Gothic Revival interiors of the Palace of Westminster.\n\nSoft, implied rib and arch shadows are cast across a flat surface, suggesting parliamentary vaulting without depicting a literal interior.\n\nShadows are diffuse, low-contrast, and incomplete, as if filtered through distance and time.\n\nNo ornate detailing, no cathedral drama, no sharp rib lines.\n\nGrayscale only, very low opacity intent.\n\nDesigned as a scalable SVG overlay with smooth gradients and no hard edges.\n\nReduce visual drama. Flatten lighting. Remove theatrical mood. This is civic and restrained, not religious or cinematic fantasy."
+    },
+    {
+      "name": "overlay-tracery-corners",
+      "filename": "overlay-tracery-corners.svg",
+      "aspect_ratio": "1:1",
+      "size": "2048x2048",
+      "prompt": "A very subtle Gothic Revival tracery motif designed for use in the corners of a modern user interface.\n\nInspired by British parliamentary stonework, abstracted to near-geometry.\n\nLines are thin, broken, and fade rapidly into transparency.\n\nNo floral ornamentation, no medieval flourish.\n\nGrayscale only.\n\nDesigned as an SVG overlay with extremely low visual dominance.\n\nReduce visual drama. Flatten lighting. Remove theatrical mood. This is civic and restrained, not religious or cinematic fantasy."
+    },
+    {
+      "name": "overlay-cracks",
+      "filename": "overlay-cracks.svg",
+      "aspect_ratio": "1:1",
+      "size": "2048x2048",
+      "prompt": "A minimal hairline crack pattern inspired by stressed concrete and aged civic stone.\n\nCracks are thin, irregular, and sparse, with natural branching.\n\nNo dramatic fractures, no shattered stone, no rubble.\n\nGrayscale only.\n\nDesigned as a seamless overlay intended to fade in gradually to suggest structural strain rather than destruction.\n\nReduce visual drama. Flatten lighting. Remove theatrical mood. This is civic and restrained, not religious or cinematic fantasy."
+    },
+    {
+      "name": "overlay-dust",
+      "filename": "overlay-dust.svg",
+      "aspect_ratio": "1:1",
+      "size": "2048x2048",
+      "prompt": "A sparse dust and debris speck overlay designed for subtle animation.\n\nTiny irregular particles of varying size, lightly and naturally distributed.\n\nNo smoke, no fog, no heavy clouds.\n\nGrayscale only, very low density.\n\nDesigned as an overlay suitable for slow upward animation to suggest dust motes in still air.\n\nReduce visual drama. Flatten lighting. Remove theatrical mood. This is civic and restrained, not religious or cinematic fantasy."
+    }
+  ]
+}
+
+
