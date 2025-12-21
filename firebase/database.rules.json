@@ -15,12 +15,18 @@
       // Lobbies are publicly readable to be listed, but writing requires authentication
       ".read": "auth != null",
       "$roomCode": {
-        ".write": "auth != null",
+        // Full updates/parent-level writes only by the lobby host. Creation
+        // of a lobby is allowed when the creating user sets themselves as
+        // the host. Individual players may still write their own player
+        // child (see `players/$playerId` rule).
+        ".write": "auth != null && ( !data.exists() ? newData.child('host').val() == auth.uid : root.child('lobbies').child($roomCode).child('host').val() == auth.uid )",
         // Host can delete, players can join/leave
           ".validate": "!data.exists() || (data.exists() && (newData.child('host').val() == auth.uid || newData.child('players').hasChild(auth.uid) || data.child('players').hasChild(auth.uid)))",
           "players": {
             "$playerId": {
               ".read": "auth != null",
+              // Players may write/remove their own child entry; host may
+              // write any player child.
               ".write": "auth != null && (auth.uid == $playerId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid)"
             }
           },

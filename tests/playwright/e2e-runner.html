@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>E2E Runner</title></head>
+<body>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, signInAnonymously, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { getDatabase, ref, set, get, update, remove, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+const firebaseConfig = {
+    apiKey: "AIzaSyCp7BkBGFmgjSL_28iexOAO7X4RoY_7tQ4",
+    authDomain: "stonedoku-c0898.firebaseapp.com",
+    projectId: "stonedoku-c0898",
+    storageBucket: "stonedoku-c0898.firebasestorage.app",
+    messagingSenderId: "755062989426",
+    appId: "1:755062989426:web:446a5be32bf4d6b66198eb",
+    databaseURL: "https://stonedoku-c0898-default-rtdb.europe-west1.firebasedatabase.app"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const rtdb = getDatabase(app);
+
+window.e2e = {
+  signIn: async () => {
+    const res = await signInAnonymously(auth);
+    return res.user.uid;
+  },
+  signOut: async () => {
+    await signOut(auth);
+    return true;
+  },
+  createLobby: async (roomCode, hostUid, otherUid) => {
+    const lobbyRef = ref(rtdb, `lobbies/${roomCode}`);
+    const data = {
+      host: hostUid,
+      playerCount: 2,
+      status: 'lobby',
+      players: {
+        [hostUid]: { name: 'Host' },
+        [otherUid]: { name: 'Guest' }
+      }
+    };
+    await set(lobbyRef, data);
+    return true;
+  },
+  readLobby: async (roomCode) => {
+    const snap = await get(ref(rtdb, `lobbies/${roomCode}`));
+    return snap.exists() ? snap.val() : null;
+  },
+  createMatch: async (matchId, roomCode, uids) => {
+    const playerIdsObj = {};
+    const playersObj = {};
+    uids.forEach(u => { playerIdsObj[u] = true; playersObj[u] = { name: 'P' }; });
+    const boardState = {};
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) boardState[`${r}_${c}`] = { value: 0, given:false, filledBy: null };
+    const matchData = {
+      id: matchId,
+      roomCode,
+      players: playersObj,
+      playerIds: playerIdsObj,
+      scores: Object.fromEntries(uids.map(u=>[u,0])),
+      mistakes: Object.fromEntries(uids.map(u=>[u,0])),
+      maxMistakes: 3,
+      board: boardState,
+      solution: Array(81).fill(0),
+      status: 'active',
+      startedAt: serverTimestamp()
+    };
+    await set(ref(rtdb, `matches/${matchId}`), matchData);
+    // update lobby
+    await update(ref(rtdb, `lobbies/${roomCode}`), { status: 'playing', matchId });
+    return true;
+  },
+  makeMove: async (matchId, uid, row, col, value) => {
+    const cellRef = ref(rtdb, `matches/${matchId}/board/${row}_${col}`);
+    await update(cellRef, { value, filledBy: uid });
+    return true;
+  },
+  readCell: async (matchId, row, col) => {
+    const snap = await get(ref(rtdb, `matches/${matchId}/board/${row}_${col}`));
+    return snap.exists() ? snap.val() : null;
+  },
+  finishMatch: async (matchId) => {
+    await update(ref(rtdb, `matches/${matchId}`), { status: 'finished' });
+    return true;
+  },
+  removePlayerFromLobby: async (roomCode, uid) => {
+    try {
+      await remove(ref(rtdb, `lobbies/${roomCode}/players/${uid}`));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message, code: e.code };
+    }
+  }
+  ,
+  // Score and rematch helpers
+  updateScore: async (matchId, uid, delta) => {
+    const scoreRef = ref(rtdb, `matches/${matchId}/scores/${uid}`);
+    const snap = await get(scoreRef);
+    const current = snap.exists() ? snap.val() : 0;
+    await set(scoreRef, current + delta);
+    return true;
+  },
+  voteRematch: async (roomCode, uid, vote) => {
+    await set(ref(rtdb, `lobbies/${roomCode}/rematchVotes/${uid}`), { vote });
+    return true;
+  }
+};
+
+console.log('E2E runner loaded');
+</script>
+E2E runner loaded
+</body>
+</html>
