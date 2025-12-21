@@ -1,0 +1,55 @@
+{
+  "backgrounds": [
+    {
+      "name": "bg-stone-01",
+      "filename": "bg-stone-01.webp",
+      "aspect_ratio": "2:3",
+      "size": "1024x1536",
+      "prompt": "Photorealistic stone wall background inspired by the Houses of Parliament and Big Ben, blending restrained Gothic Revival civic architecture with post-war London Brutalism. Large limestone and concrete panels with subtle expansion joints. Gentle weathering, faint soot haze, diffuse overcast lighting. No cathedral interior, no ornamentation. Neutral limestone, ash, and charcoal tones. Gentle contrast, no color cast. Extremely fine surface detail, realistic material texture, designed to be upscaled later. high spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later. Negative: no neon or saturated colors, no dramatic lighting, no fantasy, no text or symbols, no people."
+    },
+    {
+      "name": "bg-stone-02",
+      "filename": "bg-stone-02.webp",
+      "aspect_ratio": "2:3",
+      "size": "1024x1536",
+      "prompt": "Variation: Photorealistic stone wall background inspired by the Houses of Parliament and Big Ben, blending restrained Gothic Revival civic architecture with post-war London Brutalism. Large limestone and concrete panels with subtle expansion joints. Gentle weathering, faint soot haze, diffuse overcast lighting. No cathedral interior, no ornamentation. Neutral limestone, ash, and charcoal tones. Gentle contrast, no color cast. Extremely fine surface detail, realistic material texture, designed to be upscaled later. high spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later. Negative: no neon or saturated colors, no dramatic lighting, no fantasy, no text or symbols, no people."
+    }
+  ],
+  "overlays": [
+    {
+      "name": "overlay-vignette",
+      "filename": "overlay-vignette.svg",
+      "aspect_ratio": "1:1",
+      "size": "1024x1024",
+      "prompt": "Extremely subtle grayscale overlay designed for UI layering. Soft edge darkening and soot haze vignette. No hard edges, no text. Designed for low-opacity use. high spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later. Negative: no neon, no saturated colors, no dramatic lighting, no fantasy, no people, no symbols."
+    },
+    {
+      "name": "overlay-vault-ribs",
+      "filename": "overlay-vault-ribs.svg",
+      "aspect_ratio": "1:1",
+      "size": "1024x1024",
+      "prompt": "Extremely subtle grayscale overlay of implied Parliament-style ribs as shadow geometry (civic Gothic revival, not cathedral). Soft gradients, abstracted ribs only, no ornament. Designed for low-opacity UI use. high spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later. Negative: no neon, no saturated colors, no dramatic lighting, no fantasy, no people, no symbols."
+    },
+    {
+      "name": "overlay-tracery-corners",
+      "filename": "overlay-tracery-corners.svg",
+      "aspect_ratio": "1:1",
+      "size": "1024x1024",
+      "prompt": "Extremely subtle grayscale corner tracery overlay, abstracted Gothic civic motif. Very faint, minimal linework. Designed for low-opacity UI use. high spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later. Negative: no neon, no saturated colors, no dramatic lighting, no fantasy, no people, no symbols."
+    },
+    {
+      "name": "overlay-cracks",
+      "filename": "overlay-cracks.svg",
+      "aspect_ratio": "1:1",
+      "size": "1024x1024",
+      "prompt": "Sparse hairline structural cracks overlay in grayscale, transparent background. Subtle, not dense. Designed for low-opacity UI use. high spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later. Negative: no neon, no saturated colors, no dramatic lighting, no fantasy, no people, no symbols."
+    },
+    {
+      "name": "overlay-dust",
+      "filename": "overlay-dust.svg",
+      "aspect_ratio": "1:1",
+      "size": "1024x1024",
+      "prompt": "Sparse dust motes and debris specks overlay in grayscale on transparent background. Very subtle, irregular sizing. Designed for low-opacity UI use. high spatial detail, realistic material texture, no painterly smoothing, designed to be upscaled later. Negative: no neon, no saturated colors, no dramatic lighting, no fantasy, no people, no symbols."
+    }
+  ]
+}

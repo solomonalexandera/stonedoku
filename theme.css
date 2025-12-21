@@ -1,0 +1,101 @@
+:root {
+  /* Palette */
+  --stone-ash: #e4dfd4;
+  --stone-limestone: #d1c8b8;
+  --stone-charcoal: #0f1114;
+  --stone-ink: #17191d;
+  --stone-veil: rgba(0, 0, 0, 0.25);
+  --stone-muted: #7c776c;
+  --accent-brass: #c4a15e;
+  --accent-brass-strong: #b48b46;
+  --accent-oxblood: #6a1f27;
+  --accent-oxblood-soft: rgba(106, 31, 39, 0.28);
+  --accent-green: #385341;
+  --accent-green-soft: rgba(56, 83, 65, 0.24);
+
+  /* Typography */
+  --font-heading: ui-serif, Georgia, "Times New Roman", serif;
+  --font-body: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-number: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+
+  /* Shadows (recessed masonry) */
+  --shadow-recessed: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-slab: 0 16px 36px rgba(0, 0, 0, 0.55);
+  --shadow-soft: 0 8px 18px rgba(0, 0, 0, 0.38);
+
+  /* Borders / joints */
+  --joint-hairline: 1px solid rgba(0, 0, 0, 0.35);
+  --joint-thick: 2px solid rgba(0, 0, 0, 0.5);
+
+  /* Motion */
+  --ease-weighty: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --dur-fast: 140ms;
+  --dur-mid: 260ms;
+  --dur-slow: 520ms;
+
+  /* Semantic surfaces */
+  --color-text: var(--stone-ash);
+  --color-text-secondary: #cfc7ba;
+  --color-text-muted: var(--stone-muted);
+  --color-card-bg: rgba(23, 25, 29, 0.94);
+  --color-card-bg-solid: rgba(23, 25, 29, 0.98);
+  --color-primary: var(--accent-brass);
+  --color-primary-hover: var(--accent-brass-strong);
+  --color-success: var(--accent-green);
+  --color-success-light: var(--accent-green-soft);
+  --color-warning: #a55d3f;
+  --color-danger: var(--accent-oxblood);
+  --color-danger-light: var(--accent-oxblood-soft);
+  --color-grid-border: rgba(0, 0, 0, 0.6);
+  --color-grid-line: rgba(0, 0, 0, 0.45);
+  --color-grid-thick: rgba(0, 0, 0, 0.7);
+  --color-cell-bg: var(--stone-ash);
+  --color-cell-given: #cfc5b3;
+  --color-cell-selected: rgba(196, 161, 94, 0.26);
+  --color-cell-highlight: rgba(80, 82, 88, 0.18);
+}
+
+body {
+  background: var(--asset-bg-stone-hd-def), var(--asset-soot-vignette-def);
+  background-size: cover;
+  background-attachment: fixed;
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+#app {
+  color: inherit;
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  letter-spacing: 0.045em;
+}
+
+.scene__bg {
+  background: var(--asset-bg-stone-hd-def);
+}
+
+.scene__arches {
+  background: var(--asset-vault-ribs-def), var(--asset-tracery-corners-def);
+}
+
+.scene__vignette {
+  background: var(--asset-soot-vignette-def);
+}
+
+.scene__dust {
+  background: var(--asset-dust-motes-def);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-brass);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px rgba(196, 161, 94, 0.35);
+}
+
+button, input, select, textarea {
+  font-family: var(--font-body);
+  color: var(--color-text);
+}
