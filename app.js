@@ -395,10 +395,16 @@ const PresenceSystem = {
         const presenceListRef = ref(rtdb, 'presence');
         const listener = onValue(presenceListRef, (snapshot) => {
             const players = {};
+            const now = Date.now();
+            const graceMs = 45000; // consider online only if last_changed within this window
             snapshot.forEach((child) => {
-                if (child.key !== AppState.currentUser?.uid) {
-                    players[child.key] = child.val();
-                }
+                if (child.key === AppState.currentUser?.uid) return;
+                const val = child.val() || {};
+                // Normalize serverTimestamp values (may be number)
+                const lastChanged = val.last_changed || 0;
+                const isRecentlyActive = typeof lastChanged === 'number' ? (now - lastChanged) < graceMs : true;
+                const effectiveStatus = (val.status === 'online' && isRecentlyActive) ? 'online' : 'offline';
+                players[child.key] = Object.assign({}, val, { status: effectiveStatus });
             });
             callback(players);
         });
@@ -4414,6 +4420,11 @@ async function startVersusGame(roomData) {
     AppState.playerScore = 0;
     AppState.opponentScore = 0;
     AppState.selectedCell = null;
+    // Reset UI/game helper state for a fresh versus match
+    GameHelpers.resetGameState();
+    AppState.isGameOver = false;
+    // Ensure lives display is clean
+    GameUI.resetLivesDisplay();
     
     // Reset countdown display for next time
     const countdownEl = document.getElementById('pregame-countdown');

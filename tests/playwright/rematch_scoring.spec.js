@@ -24,10 +24,7 @@ test('rematch voting and scoring flow', async ({ browser }) => {
   // Verify scores
   const s1 = await page1.evaluate(async (m,u) => { const snap = await window.e2e.readCell ? null : null; return (await window.e2e.readLobby) ? null : null; }, null);
   // We will read directly from RTDB via readCell workaround: read scores from match path
-  const scores = await page1.evaluate(async (args) => {
-    const snap = await window.fetch(`https://stonedoku-c0898-default-rtdb.europe-west1.firebasedatabase.app/matches/${args.matchId}/scores.json`);
-    return await snap.json();
-  }, { matchId });
+  const scores = await page1.evaluate(async (args) => await window.e2e.readScores(args.matchId), { matchId });
   expect(scores[uid1]).toBe(5);
   expect(scores[uid2]).toBe(3);
 
@@ -35,11 +32,7 @@ test('rematch voting and scoring flow', async ({ browser }) => {
   await page1.evaluate(async (args) => await window.e2e.voteRematch(args.roomCode, args.uid, true), { roomCode, uid: uid1 });
   await page2.evaluate(async (args) => await window.e2e.voteRematch(args.roomCode, args.uid, false), { roomCode, uid: uid2 });
 
-  const votes = await page1.evaluate(async (args) => {
-    const snap = await window.fetch(`https://stonedoku-c0898-default-rtdb.europe-west1.firebasedatabase.app/lobbies/${args.roomCode}/rematchVotes.json`);
-    return await snap.json();
-  }, { roomCode });
-
+  const votes = await page1.evaluate(async (args) => await window.e2e.readRematchVotes(args.roomCode), { roomCode });
   expect(votes[uid1].vote).toBe(true);
   expect(votes[uid2].vote).toBe(false);
 

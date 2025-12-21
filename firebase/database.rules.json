@@ -8,7 +8,7 @@
         // Users can read presence status of others, but only write their own
         ".read": "auth != null",
         ".write": "auth != null && auth.uid == $userId",
-        ".validate": "newData.hasChildren(['status', 'displayName', 'last_changed'])"
+        ".validate": "newData.hasChildren(['status', 'displayName', 'last_changed']) && (newData.child('status').val() == 'online' || newData.child('status').val() == 'offline') && newData.child('last_changed').isNumber() && newData.child('last_changed').val() <= (now + 1000) && newData.child('last_changed').val() >= (now - 120000)"
       }
     },
     "lobbies": {
@@ -28,6 +28,13 @@
               // Players may write/remove their own child entry; host may
               // write any player child.
               ".write": "auth != null && (auth.uid == $playerId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid)"
+            }
+          },
+          "rematchVotes": {
+            "$voterId": {
+              ".read": "auth != null",
+              ".write": "auth != null && (auth.uid == $voterId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid || root.child('lobbies').child($roomCode).child('players').child(auth.uid).exists())",
+              ".validate": "newData.hasChildren(['vote']) && (newData.child('vote').val() === true || newData.child('vote').val() === false)"
             }
           },
           // Host can delete, players can join/leave (parent-level validation retained for full updates)
