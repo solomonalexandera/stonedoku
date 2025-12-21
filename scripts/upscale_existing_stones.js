@@ -6,7 +6,7 @@ const { ensureDir, convertToWebp } = require("./lib/convert");
 
 const ROOT = path.resolve(__dirname, "..");
 const TMP = path.join(ROOT, "tmp_assets");
-const OUT = path.join(ROOT, "public", "assets");
+const OUT = path.join(ROOT, "assets");
 
 const stones = ["bg-stone-01", "bg-stone-02"];
 

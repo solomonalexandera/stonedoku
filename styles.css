@@ -6123,6 +6123,21 @@ body.state--collapse .sudoku-cell,
     animation: slabDrift 2.8s cubic-bezier(0.35, 0.02, 0.15, 1) forwards, dustRise 2.8s linear forwards;
 }
 
+body.state--collapse .sudoku-cell:nth-child(2n),
+#app.state--collapse .sudoku-cell:nth-child(2n) {
+    animation-delay: 0.05s;
+}
+
+body.state--collapse .sudoku-cell:nth-child(3n),
+#app.state--collapse .sudoku-cell:nth-child(3n) {
+    animation-delay: 0.12s;
+}
+
+body.state--collapse .sudoku-cell:nth-child(5n),
+#app.state--collapse .sudoku-cell:nth-child(5n) {
+    animation-delay: 0.18s;
+}
+
 body.state--collapse .scene__dust {
     opacity: 0.6;
     animation: dustDrift 3s ease-out forwards;
@@ -6184,9 +6199,29 @@ body.state--restore .sudoku-cell,
 }
 
 @media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
+    body.state--strain .sudoku-grid,
+    #app.state--strain .sudoku-grid,
+    body.state--strain .sudoku-cell,
+    #app.state--strain .sudoku-cell,
+    body.state--collapse .sudoku-grid,
+    #app.state--collapse .sudoku-grid,
+    body.state--collapse .sudoku-cell,
+    #app.state--collapse .sudoku-cell,
+    body.state--restore .sudoku-cell,
+    #app.state--restore .sudoku-cell,
+    body.state--collapse .scene__dust,
+    body.state--strain .scene__dust,
+    body.state--restore .scene__dust {
+        animation: none !important;
+        transition: none !important;
+    }
+    body.state--strain .sudoku-wrapper::after,
+    #app.state--strain .sudoku-wrapper::after {
+        opacity: 0.4;
+    }
+    body.state--collapse .scene__dust,
+    body.state--strain .scene__dust,
+    body.state--restore .scene__dust {
+        opacity: 0.35;
     }
 }

@@ -2,10 +2,20 @@
 const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
-const { execSync } = require("child_process");
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
+}
+
+function atomicReplace(tmpPath, destPath) {
+  ensureDir(path.dirname(destPath));
+  try {
+    fs.renameSync(tmpPath, destPath);
+  } catch (err) {
+    // Cross-device rename fallback
+    fs.copyFileSync(tmpPath, destPath);
+    fs.unlinkSync(tmpPath);
+  }
 }
 
 function backupAssets(assetsDir) {
@@ -26,7 +36,9 @@ function backupAssets(assetsDir) {
 async function convertToWebp(inputPath, destPath, quality = 85) {
   const dir = path.dirname(destPath);
   ensureDir(dir);
-  await sharp(inputPath).webp({ quality, effort: 5 }).toFile(destPath);
+  const tmpPath = path.join(dir, `.${path.basename(destPath)}.tmp`);
+  await sharp(inputPath).webp({ quality, effort: 5 }).toFile(tmpPath);
+  atomicReplace(tmpPath, destPath);
 }
 
 function summarizeFiles(files) {
@@ -36,4 +48,4 @@ function summarizeFiles(files) {
   });
 }
 
-module.exports = { ensureDir, backupAssets, convertToWebp, summarizeFiles };
+module.exports = { ensureDir, backupAssets, convertToWebp, summarizeFiles, atomicReplace };

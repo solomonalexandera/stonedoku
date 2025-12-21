@@ -75,6 +75,7 @@ async function main() {
       size: asset.size,
       aspectRatio: asset.aspect_ratio,
       isOverlay,
+      background: isOverlay ? "transparent" : "opaque",
     });
     fs.writeFileSync(tmpPng, pngBuf);
 

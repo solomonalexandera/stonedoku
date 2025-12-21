@@ -2,6 +2,8 @@
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const sharp = require("sharp");
+const { atomicReplace } = require("./convert");
 let potrace;
 try {
   potrace = require("potrace");
@@ -21,6 +23,7 @@ function hasBinary(bin) {
 async function vectorizeOverlay(pngPath, destSvg) {
   const dir = path.dirname(destSvg);
   fs.mkdirSync(dir, { recursive: true });
+  const tmpSvg = path.join(dir, `.${path.basename(destSvg)}.tmp`);
 
   if (potrace) {
     return new Promise((resolve, reject) => {
@@ -30,7 +33,8 @@ async function vectorizeOverlay(pngPath, destSvg) {
         if (err) return reject(err);
         trace.getSVG((err2, svg) => {
           if (err2) return reject(err2);
-          fs.writeFileSync(destSvg, svg);
+          fs.writeFileSync(tmpSvg, svg);
+          atomicReplace(tmpSvg, destSvg);
           resolve();
         });
       });
@@ -38,17 +42,22 @@ async function vectorizeOverlay(pngPath, destSvg) {
   }
 
   if (hasBinary("potrace")) {
-    const tmpSvg = path.join(path.dirname(pngPath), `${path.basename(pngPath, ".png")}.svg`);
-    execFileSync("potrace", ["-s", "-o", tmpSvg, pngPath], { stdio: "inherit" });
-    fs.copyFileSync(tmpSvg, destSvg);
-    fs.unlinkSync(tmpSvg);
+    const cliSvg = path.join(path.dirname(pngPath), `${path.basename(pngPath, ".png")}.svg`);
+    execFileSync("potrace", ["-s", "-o", cliSvg, pngPath], { stdio: "inherit" });
+    fs.copyFileSync(cliSvg, tmpSvg);
+    fs.unlinkSync(cliSvg);
+    atomicReplace(tmpSvg, destSvg);
     return;
   }
 
   // Fallback: embed PNG in simple SVG (still works as overlay, but not vector traced)
+  const meta = await sharp(pngPath).metadata();
+  const width = meta.width || 1024;
+  const height = meta.height || 1024;
   const b64 = fs.readFileSync(pngPath).toString("base64");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><image href="data:image/png;base64,${b64}" x="0" y="0" width="1024" height="1024" /></svg>`;
-  fs.writeFileSync(destSvg, svg);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><image href="data:image/png;base64,${b64}" x="0" y="0" width="${width}" height="${height}" /></svg>`;
+  fs.writeFileSync(tmpSvg, svg);
+  atomicReplace(tmpSvg, destSvg);
 }
 
 module.exports = { vectorizeOverlay };

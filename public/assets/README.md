@@ -9,6 +9,10 @@ These are placeholder assets for the cinematic stone environment. Replace with y
 - `cracks.svg`: hairline crack overlay for strain/collapse states.
 - `dust.svg`: dust motes/specks overlay.
 
+## Serve path
+- Firebase hosting `public` root is `.`, and assets are served from `/assets/`.
+- Keep generated art in the repo `assets/` directory so URLs like `/assets/bg-stone-01.webp` resolve correctly. The generator backs up old files into `assets/_backup/<timestamp>`.
+
 ## Swap instructions
 1) Place your production art in this folder with the same filenames or update CSS variables in `assets.css`:
    - `--asset-bg-stone-hd-def` (stone wall base)

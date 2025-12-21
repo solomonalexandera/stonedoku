@@ -1,0 +1,12 @@
+<svg width="800" height="800" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="rgba(255,255,255,0.18)">
+  <g stroke-width="4" opacity="0.5">
+    <path d="M20 240 Q240 20 420 20"/>
+    <path d="M20 320 Q220 80 420 60"/>
+    <path d="M780 240 Q560 20 380 20"/>
+    <path d="M780 320 Q580 80 380 60"/>
+    <path d="M20 560 Q240 780 420 780"/>
+    <path d="M20 480 Q220 720 420 740"/>
+    <path d="M780 560 Q560 780 380 780"/>
+    <path d="M780 480 Q580 720 380 740"/>
+  </g>
+</svg>
