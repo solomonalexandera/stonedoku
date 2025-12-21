@@ -167,6 +167,26 @@ window.e2e = {
       const snap = await get(ref(rtdb, `globalChat`));
       return snap.exists() ? snap.val() : null;
     }
+    ,
+    // Presence helpers for tests
+    writePresence: async (uid, displayName) => {
+      await set(ref(rtdb, `presence/${uid}`), {
+        status: 'online',
+        displayName: displayName || 'TestUser',
+        last_changed: Date.now(),
+        current_activity: 'Testing'
+      });
+      return true;
+    },
+    clearPresence: async (uid) => {
+      await set(ref(rtdb, `presence/${uid}`), {
+        status: 'offline',
+        displayName: null,
+        last_changed: Date.now(),
+        current_activity: null
+      });
+      return true;
+    }
 };
 
 console.log('E2E runner loaded');
