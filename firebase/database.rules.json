@@ -17,7 +17,14 @@
       "$roomCode": {
         ".write": "auth != null",
         // Host can delete, players can join/leave
-        ".validate": "!data.exists() || (data.exists() && (newData.child('host').val() == auth.uid || newData.child('players').hasChild(auth.uid)))"
+          ".validate": "!data.exists() || (data.exists() && (newData.child('host').val() == auth.uid || newData.child('players').hasChild(auth.uid)))",
+          "players": {
+            "$playerId": {
+              ".read": "auth != null",
+              ".write": "auth != null && (auth.uid == $playerId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid)"
+            }
+          },
+          // Host can delete, players can join/leave (parent-level validation retained for full updates)
       }
     },
     "matches": {
