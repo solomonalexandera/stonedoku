@@ -605,6 +605,71 @@ body::after {
     color: var(--color-text-muted);
 }
 
+/* Password Reset */
+.reset-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    align-items: center;
+    padding: 1rem;
+}
+
+.reset-hero {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(34, 197, 94, 0.12));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--border-radius-xl);
+    padding: 1.75rem;
+    color: var(--color-text);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.18);
+}
+
+.reset-hero h2 {
+    margin: 0.25rem 0;
+    font-size: 1.6rem;
+}
+
+.reset-hero p {
+    color: var(--color-text-muted);
+    margin: 0;
+}
+
+.reset-card {
+    max-width: 480px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.reset-summary {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--border-radius-lg);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.reset-email {
+    font-weight: 700;
+    color: var(--color-text);
+    word-break: break-all;
+}
+
+.reset-success {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.reset-success-icon {
+    font-size: 2.5rem;
+}
+
+.reset-footer {
+    margin-top: 1rem;
+    text-align: center;
+}
+
 /* Auth Mode Tabs */
 .auth-mode-tabs {
     display: flex;

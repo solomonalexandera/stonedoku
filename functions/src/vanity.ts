@@ -1,7 +1,7 @@
 import {onRequest} from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
+import {getAdmin} from "./firebaseAdmin";
 
-admin.initializeApp();
+const admin = getAdmin();
 
 /**
  * Vanity lookup function
@@ -20,6 +20,7 @@ export const vanityLookup = onRequest(async (req, res) => {
       res.status(400).send("Bad request");
       return;
     }
+    handle = handle.toLowerCase();
 
     const db = admin.firestore();
     const doc = await db.collection("vanityLinks").doc(handle).get();
@@ -44,9 +45,27 @@ export const vanityLookup = onRequest(async (req, res) => {
       return;
     }
 
-    // Redirect to canonical SPA route — client will render profile for uid
-    const target = `/profile/${uid}`;
-    res.set("Cache-Control", "public, max-age=60");
+    // If the vanity record is deprecated, try to use the user's current username
+    let redirectHandle = handle;
+    try {
+      if (data.deprecated && uid) {
+        const userSnap = await db.collection("users").doc(uid).get();
+        const current = userSnap.data();
+        if (current?.usernameLower) {
+          redirectHandle = current.usernameLower;
+        }
+      }
+    } catch (err) {
+      console.warn("vanityLookup: failed to resolve latest handle", err);
+    }
+
+    // Redirect to hashed SPA route to avoid rewrite loops
+    const base =
+      process.env.PUBLIC_SITE_URL ||
+      process.env.SITE_URL ||
+      "https://stone-doku.web.app";
+    const target = `${base}#/profile/${encodeURIComponent(redirectHandle)}`;
+    res.set("Cache-Control", "public, max-age=300, s-maxage=300");
     res.redirect(302, target);
   } catch (e: any) {
     console.error("vanityLookup error", e);

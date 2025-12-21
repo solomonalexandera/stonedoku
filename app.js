@@ -9,7 +9,9 @@ import {
     createUserWithEmailAndPassword,
     updateProfile,
     signOut,
-    onAuthStateChanged 
+    onAuthStateChanged,
+    verifyPasswordResetCode,
+    confirmPasswordReset
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { 
     getDatabase, 
@@ -26,7 +28,9 @@ import {
     onChildRemoved,
     onDisconnect,
     serverTimestamp,
-    runTransaction
+    runTransaction,
+    goOffline,
+    goOnline
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 import {
     getFirestore,
@@ -43,7 +47,9 @@ import {
     documentId,
     arrayUnion,
     arrayRemove,
-    Timestamp
+    Timestamp,
+    enableNetwork,
+    disableNetwork
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import {
@@ -95,16 +101,6 @@ async function clearAllCachesAndServiceWorkers() {
             const regs = await navigator.serviceWorker.getRegistrations();
             await Promise.all(regs.map(r => r.unregister()));
         }
-
-        // Clear indexedDB databases (best-effort)
-        if ('indexedDB' in window && indexedDB.databases) {
-            try {
-                const dbs = await indexedDB.databases();
-                await Promise.all(dbs.map(d => new Promise((res) => { indexedDB.deleteDatabase(d.name).onsuccess = res; })));
-            } catch (e) {
-                // Some browsers restrict indexedDB.databases(); ignore if unavailable
-            }
-        }
     } catch (e) {
         console.error('Cache clearing failed', e);
     }
@@ -133,9 +129,14 @@ async function ensureAppVersionFresh() {
         const remote = (await res.text()).trim();
         if (!remote) return;
         const local = localStorage.getItem('stonedoku_app_version');
-        if (local && local === remote) return; // same version
+        if (!local) {
+            // First run: record version without clearing persistence/auth data
+            localStorage.setItem('stonedoku_app_version', remote);
+            return;
+        }
+        if (local === remote) return; // same version
 
-        // New version detected — clear caches/cookies/indexedDB and reload once
+        // New version detected — clear caches/cookies and reload once
         console.info('New app version detected', { from: local, to: remote });
         await clearAllCachesAndServiceWorkers();
         clearAllCookies();
@@ -166,6 +167,7 @@ const LogManager = (function(){
     let disabled = false;
     async function writeToFirestore(level, args) {
         if (disabled) return;
+        if (!window.AppState || !window.AppState.currentUser) return;
         try {
             // Build a compact message and optional meta payload
             const message = args.map(a => {
@@ -187,15 +189,17 @@ const LogManager = (function(){
             } catch (_) {}
             if (e && (e.code === 'permission-denied' || String(e).includes('Missing or insufficient permissions'))) {
                 disabled = true;
+            } else {
+                disabled = true;
             }
         }
     }
 
-    // Override console methods to route logs to Firestore only (no noisy console output).
-    console.log = (...args) => { writeToFirestore('debug', args); };
-    console.info = (...args) => { writeToFirestore('info', args); };
-    console.warn = (...args) => { writeToFirestore('warn', args); };
-    console.error = (...args) => { writeToFirestore('error', args); };
+    // Override console methods to mirror logs locally and (when signed-in) to Firestore.
+    console.log = (...args) => { orig.log(...args); writeToFirestore('debug', args); };
+    console.info = (...args) => { orig.info(...args); writeToFirestore('info', args); };
+    console.warn = (...args) => { orig.warn(...args); writeToFirestore('warn', args); };
+    console.error = (...args) => { orig.error(...args); writeToFirestore('error', args); };
 
     return {
         _orig: orig,
@@ -241,6 +245,12 @@ const AppState = {
             avatarUrl: null
         }
     },
+    passwordReset: {
+        active: false,
+        oobCode: null,
+        email: null
+    },
+    profile: null,
     // Tour state
     tour: {
         active: false,
@@ -423,6 +433,15 @@ const SudokuGenerator = {
     }
 };
 
+const isAutomationEnv = () => {
+    if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+    return navigator.webdriver ||
+        navigator.userAgent.toLowerCase().includes('headless') ||
+        window.location.hostname === '127.0.0.1';
+};
+
+const automationMode = isAutomationEnv();
+
 // ===========================================
 // Profanity Filter (Basic)
 // ===========================================
@@ -449,7 +468,7 @@ const ProfanityFilter = {
 // View Manager
 // ===========================================
 const ViewManager = {
-    views: ['auth', 'onboarding', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch', 'profile'],
+    views: ['auth', 'onboarding', 'reset', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch', 'profile'],
     
     show(viewName) {
         this.views.forEach(view => {
@@ -562,6 +581,7 @@ const ProfileManager = {
             // Create new profile with username
             const username = data.username || data.displayName || `Player_${userId.substring(0, 6)}`;
             const usernameLower = username.toLowerCase();
+            const hasEmail = !!data.email;
             
             // Reserve the username in a separate collection
             if (data.username) {
@@ -594,21 +614,49 @@ const ProfileManager = {
                 isPublic: true
             });
             // Create a vanity link mapping for registered users
-            try {
-                const vanityRef = doc(firestore, 'vanityLinks', usernameLower);
-                await setDoc(vanityRef, {
-                    userId: userId,
-                    username: username,
-                    path: `/profile/${usernameLower}`,
-                    createdAt: Timestamp.now()
-                });
-            } catch (e) {
-                console.warn('Failed to create vanity link:', e);
+            if (hasEmail) {
+                try {
+                    const vanityRef = doc(firestore, 'vanityLinks', usernameLower);
+                    await setDoc(vanityRef, {
+                        userId: userId,
+                        username: username,
+                        path: `/u/${usernameLower}`,
+                        createdAt: Timestamp.now()
+                    });
+                } catch (e) {
+                    console.warn('Failed to create vanity link:', e);
+                }
             }
         } else {
             // Update existing profile if username is provided and different
             const existingData = existing.data();
-            if (data.username && (!existingData.username || existingData.usernameLower !== data.username.toLowerCase())) {
+            const existingLower = existingData.usernameLower || (existingData.username ? existingData.username.toLowerCase() : null);
+            const hasEmail = !!(existingData.email || data.email);
+
+            // If no usernameLower stored yet, backfill from existing username
+            if (!existingLower && existingData.username) {
+                const lower = existingData.username.toLowerCase();
+                try {
+                    await setDoc(doc(firestore, 'usernames', lower), {
+                        userId: userId,
+                        createdAt: Timestamp.now()
+                    }, { merge: true });
+
+                    const vanityRef = doc(firestore, 'vanityLinks', lower);
+                    await setDoc(vanityRef, {
+                        userId: userId,
+                        username: existingData.username,
+                        path: `/u/${lower}`,
+                        updatedAt: Timestamp.now()
+                    }, { merge: true });
+
+                    await updateDoc(profileRef, { usernameLower: lower });
+                } catch (e) {
+                    console.warn('Failed to backfill usernameLower/vanity:', e);
+                }
+            }
+
+            if (data.username && (!existingData.username || existingLower !== data.username.toLowerCase())) {
                 const newLower = data.username.toLowerCase();
                 const usernameRef = doc(firestore, 'usernames', newLower);
                 await setDoc(usernameRef, {
@@ -631,17 +679,19 @@ const ProfileManager = {
                     usernameLower: newLower
                 });
 
-                // Ensure vanity link exists/updated
-                try {
-                    const vanityRef = doc(firestore, 'vanityLinks', newLower);
-                    await setDoc(vanityRef, {
-                        userId: userId,
-                        username: data.username,
-                        path: `/profile/${newLower}`,
-                        updatedAt: Timestamp.now()
-                    }, { merge: true });
-                } catch (e) {
-                    console.warn('Failed to set vanity link on update:', e);
+                // Ensure vanity link exists/updated for registered users
+                if (hasEmail) {
+                    try {
+                        const vanityRef = doc(firestore, 'vanityLinks', newLower);
+                        await setDoc(vanityRef, {
+                            userId: userId,
+                            username: data.username,
+                            path: `/u/${newLower}`,
+                            updatedAt: Timestamp.now()
+                        }, { merge: true });
+                    } catch (e) {
+                        console.warn('Failed to set vanity link on update:', e);
+                    }
                 }
             }
         }
@@ -673,6 +723,7 @@ const ProfileManager = {
         const profileRef = doc(firestore, 'users', userId);
         const existingSnap = await getDoc(profileRef);
         const existing = existingSnap.exists() ? existingSnap.data() : {};
+        const hasEmail = !!(existing.email || data.email);
 
         // If username is changing, update username reservation and vanity mapping
         if (data.username && data.username.toLowerCase() !== existing.usernameLower) {
@@ -684,19 +735,21 @@ const ProfileManager = {
                 });
 
                 // Deprecate old vanity link if present
-                if (existing.usernameLower && existing.usernameLower !== newLower) {
+                if (hasEmail && existing.usernameLower && existing.usernameLower !== newLower) {
                     const oldVanityRef = doc(firestore, 'vanityLinks', existing.usernameLower);
                     await setDoc(oldVanityRef, { deprecated: true }, { merge: true });
                 }
 
                 // Create/merge new vanity link
-                const vanityRef = doc(firestore, 'vanityLinks', newLower);
-                await setDoc(vanityRef, {
-                    userId: userId,
-                    username: data.username,
-                    path: `/profile/${newLower}`,
-                    updatedAt: Timestamp.now()
-                }, { merge: true });
+                if (hasEmail) {
+                    const vanityRef = doc(firestore, 'vanityLinks', newLower);
+                    await setDoc(vanityRef, {
+                        userId: userId,
+                        username: data.username,
+                        path: `/u/${newLower}`,
+                        updatedAt: Timestamp.now()
+                    }, { merge: true });
+                }
             } catch (e) {
                 console.warn('Error updating username/vanity mapping:', e);
             }
@@ -1754,7 +1807,7 @@ const OnboardingSystem = {
                 await setDoc(doc(firestore, 'vanityLinks', username.toLowerCase()), {
                     userId: user.uid,
                     username: username,
-                    path: `/profile/${username.toLowerCase()}`,
+                    path: `/u/${username.toLowerCase()}`,
                     createdAt: serverTimestamp()
                 });
             } catch (e) {
@@ -1906,6 +1959,180 @@ const OnboardingSystem = {
         } catch (error) {
             console.error('Error completing onboarding:', error);
             ViewManager.show('lobby');
+        }
+    }
+};
+
+// ===========================================
+// Password Reset Flow
+// ===========================================
+const PasswordReset = {
+    state: { oobCode: null, email: null },
+
+    togglePanels(mode = 'request') {
+        const request = document.getElementById('reset-request-panel');
+        const confirm = document.getElementById('reset-confirm-panel');
+        const success = document.getElementById('reset-success-panel');
+        if (request) request.style.display = mode === 'request' ? 'block' : 'none';
+        if (confirm) confirm.style.display = mode === 'confirm' ? 'block' : 'none';
+        if (success) success.style.display = mode === 'success' ? 'block' : 'none';
+    },
+
+    setStatus(id, message, isError = true) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = message || '';
+        el.style.color = isError ? 'var(--color-danger)' : 'var(--color-success)';
+    },
+
+    clearUrlParams() {
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+    },
+
+    showRequest(prefillEmail = '') {
+        AppState.passwordReset.active = true;
+        this.state = { oobCode: null, email: prefillEmail || null };
+        ViewManager.show('reset');
+        this.togglePanels('request');
+        this.setStatus('reset-request-status', '');
+        this.setStatus('reset-confirm-status', '');
+        const input = document.getElementById('reset-request-email');
+        if (input) {
+            input.value = prefillEmail || input.value || '';
+            input.focus();
+        }
+    },
+
+    extractFromHash() {
+        const hash = window.location.hash || '';
+        if (!hash.startsWith('#/reset')) return null;
+        const queryIndex = hash.indexOf('?');
+        const query = queryIndex !== -1 ? hash.substring(queryIndex + 1) : '';
+        const params = new URLSearchParams(query);
+        return {
+            mode: params.get('mode'),
+            oobCode: params.get('oobCode'),
+            apiKey: params.get('apiKey')
+        };
+    },
+
+    extractFromSearch() {
+        const params = new URLSearchParams(window.location.search || '');
+        const mode = params.get('mode');
+        if (mode !== 'resetPassword') return null;
+        return {
+            mode,
+            oobCode: params.get('oobCode'),
+            apiKey: params.get('apiKey')
+        };
+    },
+
+    async hydrateFromUrl() {
+        try {
+            const params = this.extractFromHash() || this.extractFromSearch();
+            if (params && params.mode === 'resetPassword' && params.oobCode) {
+                await this.loadCode(params.oobCode);
+            }
+        } catch (e) {
+            console.error('Failed to hydrate reset link', e);
+        }
+    },
+
+    async loadCode(oobCode) {
+        try {
+            const email = await verifyPasswordResetCode(auth, oobCode);
+            this.state = { oobCode, email };
+            AppState.passwordReset.active = true;
+            ViewManager.show('reset');
+            this.togglePanels('confirm');
+            this.setStatus('reset-request-status', '');
+            this.setStatus('reset-confirm-status', '');
+            const display = document.getElementById('reset-email-display');
+            if (display) display.textContent = email;
+            const newPass = document.getElementById('reset-new-password');
+            if (newPass) newPass.focus();
+            this.clearUrlParams();
+        } catch (error) {
+            console.error('Reset code invalid or expired:', error);
+            this.showRequest();
+            this.setStatus('reset-request-status', 'Reset link is invalid or expired. Please request a new one.', true);
+        }
+    },
+
+    async sendResetRequest(email) {
+        const btn = document.querySelector('#reset-request-form button[type=\"submit\"]');
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Sending...';
+            }
+            this.setStatus('reset-request-status', '');
+            const resp = await fetch('/api/auth/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const payload = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                throw new Error(payload.error || 'Unable to send reset email.');
+            }
+            this.setStatus('reset-request-status', 'If that email exists, a reset link is on its way.', false);
+        } catch (e) {
+            console.error('Reset request failed', e);
+            this.setStatus('reset-request-status', e.message || 'Failed to send reset email.', true);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Send reset link';
+            }
+        }
+    },
+
+    async submitNewPassword(password, confirm) {
+        if (!this.state.oobCode) {
+            this.setStatus('reset-confirm-status', 'Missing reset code. Please request a new link.', true);
+            this.togglePanels('request');
+            return;
+        }
+        if (!password || password.length < 6) {
+            this.setStatus('reset-confirm-status', 'Password must be at least 6 characters.', true);
+            return;
+        }
+        if (password !== confirm) {
+            this.setStatus('reset-confirm-status', 'Passwords do not match.', true);
+            return;
+        }
+
+        const btn = document.querySelector('#reset-confirm-form button[type=\"submit\"]');
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Updating...';
+            }
+            await confirmPasswordReset(auth, this.state.oobCode, password);
+            this.togglePanels('success');
+            this.setStatus('reset-confirm-status', '');
+            this.state = { oobCode: null, email: this.state.email };
+            const newPass = document.getElementById('reset-new-password');
+            const confirmPass = document.getElementById('reset-confirm-password');
+            if (newPass) newPass.value = '';
+            if (confirmPass) confirmPass.value = '';
+            const emailInput = document.getElementById('signin-email');
+            if (emailInput && this.state.email) {
+                emailInput.value = this.state.email;
+            }
+        } catch (error) {
+            console.error('Failed to complete password reset', error);
+            this.setStatus('reset-confirm-status', '');
+            this.setStatus('reset-request-status', 'Unable to update password. Please request a new link.', true);
+            this.togglePanels('request');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Update password';
+            }
+            this.clearUrlParams();
         }
     }
 };
@@ -2450,14 +2677,15 @@ const UI = {
         // Vanity URL - show only for registered users (not anonymous guest accounts)
         const vanityEl = document.getElementById('profile-vanity-url');
         const vanityLinkEl = document.getElementById('profile-vanity-link');
-        const vanityUrl = `stone-doku.web.app/profile/${encodeURIComponent(username.toLowerCase())}`;
+        const hostBase = window.location.origin || 'https://stone-doku.web.app';
+        const vanityUrl = `${hostBase}/u/${encodeURIComponent(username.toLowerCase())}`;
         // Consider a user 'registered' if they have an email on their profile
         const isRegistered = !!data.email;
-        if (isRegistered) {
-            vanityLinkEl.href = `/profile/${encodeURIComponent(username.toLowerCase())}`;
+        if (isRegistered && vanityEl && vanityLinkEl) {
+            vanityLinkEl.href = `/u/${encodeURIComponent(username.toLowerCase())}`;
             vanityLinkEl.textContent = vanityUrl;
             vanityEl.style.display = 'flex';
-        } else {
+        } else if (vanityEl) {
             // Hide vanity URL for anonymous/guest profiles
             vanityEl.style.display = 'none';
         }
@@ -3243,8 +3471,9 @@ const GameUI = {
         } else {
             AudioManager.playDefeat();
         }
-        
-        ViewManager.show('lobby');
+
+        ViewManager.showModal('game-over-modal');
+        AppState.gameMode = 'lobby';
     },
     
     endVersusGame(match) {
@@ -3437,26 +3666,43 @@ function setupEventListeners() {
         }
     });
 
-    // Forgot password handler (calls backend to queue reset email)
-    document.getElementById('forgot-password')?.addEventListener('click', async () => {
-        try {
-            const email = prompt('Enter the email address for your account:');
-            if (!email) return;
-            const resp = await fetch('/api/auth/reset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-            const j = await resp.json();
-            if (resp.ok) {
-                alert('If that email exists, a password reset link has been sent.');
-            } else {
-                alert('Error sending reset: ' + (j.error || resp.statusText));
-            }
-        } catch (e) {
-            console.error('Forgot password error', e);
-            alert('Failed to request password reset.');
+    // Forgot password flow
+    document.getElementById('forgot-password')?.addEventListener('click', () => {
+        const emailPrefill = document.getElementById('signin-email')?.value || '';
+        PasswordReset.showRequest(emailPrefill);
+    });
+
+    document.getElementById('reset-request-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('reset-request-email')?.value.trim();
+        if (!email) {
+            PasswordReset.setStatus('reset-request-status', 'Please enter your email address.', true);
+            return;
         }
+        await PasswordReset.sendResetRequest(email);
+    });
+
+    document.getElementById('reset-confirm-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const password = document.getElementById('reset-new-password')?.value || '';
+        const confirm = document.getElementById('reset-confirm-password')?.value || '';
+        await PasswordReset.submitNewPassword(password, confirm);
+    });
+
+    document.getElementById('reset-back-to-login')?.addEventListener('click', () => {
+        PasswordReset.togglePanels('request');
+        PasswordReset.setStatus('reset-request-status', '');
+        PasswordReset.setStatus('reset-confirm-status', '');
+        AppState.passwordReset.active = false;
+        ViewManager.show('auth');
+    });
+
+    document.getElementById('reset-return-login')?.addEventListener('click', () => {
+        PasswordReset.togglePanels('request');
+        PasswordReset.setStatus('reset-request-status', '');
+        PasswordReset.setStatus('reset-confirm-status', '');
+        AppState.passwordReset.active = false;
+        ViewManager.show('auth');
     });
     
     // Sign Up form
@@ -3967,8 +4213,23 @@ function initProfilePage() {
     
     // Edit profile button
     document.getElementById('edit-profile-btn')?.addEventListener('click', () => {
-        document.querySelector('.profile-view-mode')?.classList.add('hidden');
-        document.querySelector('.profile-edit-mode')?.classList.remove('hidden');
+        const profileData = AppState.profile || {};
+        const bioDisplay = document.getElementById('profile-page-bio');
+        const bioInput = document.getElementById('profile-bio-input');
+        const editFields = document.getElementById('profile-edit-fields');
+        if (bioDisplay) bioDisplay.style.display = 'none';
+        if (bioInput) {
+            bioInput.style.display = 'block';
+            bioInput.value = profileData.bio || '';
+        }
+        if (editFields) editFields.style.display = 'block';
+        const twitterInput = document.getElementById('profile-twitter');
+        const discordInput = document.getElementById('profile-discord');
+        if (twitterInput) twitterInput.value = profileData.socialLinks?.twitter || '';
+        if (discordInput) discordInput.value = profileData.socialLinks?.discord || '';
+        document.getElementById('save-profile-btn').style.display = 'inline-block';
+        document.getElementById('cancel-edit-btn').style.display = 'inline-block';
+        document.getElementById('edit-profile-btn').style.display = 'none';
     });
     
     // Save profile changes
@@ -3986,10 +4247,21 @@ function initProfilePage() {
             // Update display
             const bioDisplay = document.getElementById('profile-bio');
             if (bioDisplay) bioDisplay.textContent = bio || 'No bio yet';
+            AppState.profile = Object.assign({}, AppState.profile || {}, {
+                bio: bio,
+                socialLinks: { twitter, discord }
+            });
             
             // Switch back to view mode
-            document.querySelector('.profile-edit-mode')?.classList.add('hidden');
-            document.querySelector('.profile-view-mode')?.classList.remove('hidden');
+            const bioDisplayEl = document.getElementById('profile-page-bio');
+            const bioInputEl = document.getElementById('profile-bio-input');
+            const editFields = document.getElementById('profile-edit-fields');
+            if (bioDisplayEl) bioDisplayEl.style.display = 'block';
+            if (bioInputEl) bioInputEl.style.display = 'none';
+            if (editFields) editFields.style.display = 'none';
+            document.getElementById('save-profile-btn').style.display = 'none';
+            document.getElementById('cancel-edit-btn').style.display = 'none';
+            document.getElementById('edit-profile-btn').style.display = 'inline-block';
             
             alert('Profile updated!');
         } catch (error) {
@@ -4000,8 +4272,15 @@ function initProfilePage() {
     
     // Cancel edit
     document.getElementById('cancel-edit-btn')?.addEventListener('click', () => {
-        document.querySelector('.profile-edit-mode')?.classList.add('hidden');
-        document.querySelector('.profile-view-mode')?.classList.remove('hidden');
+        const bioDisplay = document.getElementById('profile-page-bio');
+        const bioInput = document.getElementById('profile-bio-input');
+        const editFields = document.getElementById('profile-edit-fields');
+        if (bioDisplay) bioDisplay.style.display = 'block';
+        if (bioInput) bioInput.style.display = 'none';
+        if (editFields) editFields.style.display = 'none';
+        document.getElementById('save-profile-btn').style.display = 'none';
+        document.getElementById('cancel-edit-btn').style.display = 'none';
+        document.getElementById('edit-profile-btn').style.display = 'inline-block';
     });
     
     // Profile picture upload
@@ -4173,10 +4452,10 @@ function initProfilePage() {
 // Social Sharing Functions
 // ===========================================
 function generateShareText() {
-    const profile = AppState.currentUser ? ProfileManager.cache.get(AppState.currentUser.uid) : null;
-    const wins = profile?.wins || 0;
-    const losses = profile?.losses || 0;
-    const badges = profile?.badges?.length || 0;
+    const profile = AppState.profile || {};
+    const wins = profile.stats?.wins || profile.wins || 0;
+    const losses = profile.stats?.losses || profile.losses || 0;
+    const badges = Array.isArray(profile.badges) ? profile.badges.length : 0;
     
     return `🎮 My Stonedoku Stats!\n` +
            `🏆 Wins: ${wins}\n` +
@@ -4211,10 +4490,11 @@ function shareToSocial(platform) {
 async function handleVanityUrl() {
     // Support hash-based and pathname-based vanity URLs.
     try {
-        // Hash-based: #profile/username
+        // Hash-based: #/profile/username or #profile/username
         const hash = window.location.hash;
-        if (hash.startsWith('#profile/')) {
-            const username = hash.replace('#profile/', '');
+        const hashMatch = hash.match(/^#\/?(?:profile|user|u)\/(.+)$/i);
+        if (hashMatch && hashMatch[1]) {
+            const username = decodeURIComponent(hashMatch[1]);
             if (username) {
                 const profile = await ProfileManager.getProfileByUsername(username);
                 if (profile) {
@@ -4231,9 +4511,9 @@ async function handleVanityUrl() {
             }
         }
 
-        // Pathname-based: /profile/username or /user/username
+        // Pathname-based: /profile/username, /user/username, or /u/username
         const pathname = window.location.pathname || '';
-        const pathMatch = pathname.match(/^\/(?:profile|user)\/(.+)$/i);
+        const pathMatch = pathname.match(/^\/(?:profile|user|u)\/(.+)$/i);
         if (pathMatch && pathMatch[1]) {
             const username = decodeURIComponent(pathMatch[1]);
             const profile = await ProfileManager.getProfileByUsername(username);
@@ -4256,6 +4536,7 @@ async function handleVanityUrl() {
 
 // Listen for hash changes
 window.addEventListener('hashchange', handleVanityUrl);
+window.addEventListener('hashchange', () => PasswordReset.hydrateFromUrl());
 
 // ===========================================
 // Floating Chat Widget
@@ -4291,6 +4572,8 @@ function initFloatingChat() {
     async function fetchUsernameSuggestions(prefix) {
         if (!prefix) return [];
         const p = prefix.toLowerCase();
+        const selfUsername = (AppState.profile?.usernameLower || AppState.profile?.username || '').toLowerCase();
+        const seed = (selfUsername && selfUsername.startsWith(p)) ? [selfUsername] : [];
         try {
             // Fetch matching username documents (usernameLower -> { userId })
             const q = query(collection(firestore, 'usernames'), where(documentId(), '>=', p), where(documentId(), '<=', p + '\\uf8ff'), limit(32));
@@ -4317,16 +4600,44 @@ function initFloatingChat() {
                     if (onlineSet.has(c.userId)) online.push(c.username);
                     else offline.push(c.username);
                 }
-                const merged = online.concat(offline).slice(0, 8);
-                return merged;
+                const merged = seed.concat(online, offline).slice(0, 8);
+                if (merged.length > 0) return merged;
             } catch (e) {
                 // If presence read fails, fall back to username list
                 console.warn('Presence read failed for suggestions, falling back:', e);
-                return candidates.slice(0, 8).map(c => c.username);
             }
+
+            if (candidates.length > 0) {
+                return seed.concat(candidates.slice(0, 8).map(c => c.username));
+            }
+
+            // Fallback: query users collection by usernameLower prefix
+            const usersQ = query(
+                collection(firestore, 'users'),
+                orderBy('usernameLower'),
+                where('usernameLower', '>=', p),
+                where('usernameLower', '<=', p + '\uf8ff'),
+                limit(8)
+            );
+            const userSnap = await getDocs(usersQ);
+            const fromUsers = userSnap.docs.map(d => d.data()?.usernameLower || d.data()?.username).filter(Boolean);
+            const deduped = Array.from(new Set(seed.concat(fromUsers))).slice(0, 8);
+            return deduped;
         } catch (e) {
             console.error('Username suggestion fetch failed', e);
-            return [];
+            // Final fallback: read a small slice of users and filter locally
+            try {
+                const slice = await getDocs(query(collection(firestore, 'users'), limit(32)));
+                const local = [];
+                slice.forEach((d) => {
+                    const data = d.data() || {};
+                    const uname = (data.usernameLower || data.username || '').toLowerCase();
+                    if (uname && uname.startsWith(p)) local.push(uname);
+                });
+                return Array.from(new Set(seed.concat(local))).slice(0, 8);
+            } catch (_e) {
+                return seed;
+            }
         }
     }
 
@@ -4341,6 +4652,10 @@ function initFloatingChat() {
     function renderSuggestions(list) {
         suggestions = list || [];
         selectedIndex = -1;
+        if (suggestionHideTimer) {
+            clearTimeout(suggestionHideTimer);
+            suggestionHideTimer = null;
+        }
         suggestionBox.innerHTML = '';
         if (!suggestions || suggestions.length === 0) {
             suggestionBox.style.display = 'none';
@@ -5376,103 +5691,115 @@ function handleMatchUpdate(match) {
 // ===========================================
 // Auth State Handler
 // ===========================================
-onAuthStateChanged(auth, async (user) => {
-    AppState.authReady = true;
-    
-    if (user) {
-        AppState.currentUser = user;
-        
-        // If we're in the middle of onboarding, don't redirect to lobby
-        if (AppState.onboarding.active) {
-            console.log('Onboarding active, skipping auth redirect');
-            return;
+let authListenerRegistered = false;
+function registerAuthListener() {
+    if (authListenerRegistered) return;
+    authListenerRegistered = true;
+    onAuthStateChanged(auth, async (user) => {
+        AppState.authReady = true;
+        try {
+            if (user) {
+                AppState.currentUser = user;
+                AppState.passwordReset.active = false;
+                
+                // If we're in the middle of onboarding, don't redirect to lobby
+                if (AppState.onboarding.active) {
+                    console.log('Onboarding active, skipping auth redirect');
+                    return;
+                }
+                
+                // Check if we have a pending username from signup
+                const pendingUsername = AppState.pendingUsername;
+                AppState.pendingUsername = null;
+                
+                // Create/update user profile
+                const profile = await ProfileManager.createOrUpdateProfile(user.uid, {
+                    username: pendingUsername || null,
+                    displayName: user.displayName || pendingUsername || `Player_${user.uid.substring(0, 6)}`,
+                    email: user.email
+                });
+                
+                const profileData = profile.data();
+                AppState.profile = profileData || null;
+                
+                // Use username as display name, fall back to displayName, truncate if too long
+                const displayName = profileData?.username || profileData?.displayName || 'Player';
+                const truncatedName = displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName;
+                
+                // Update UI
+                document.getElementById('user-info').style.display = 'flex';
+                document.getElementById('user-name').textContent = truncatedName;
+                document.getElementById('welcome-name').textContent = displayName;
+                
+                // Store friends in state
+                AppState.friends = profileData?.friends || [];
+                
+                UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
+                UI.updateBadges(profileData?.badges || []);
+                
+                // Initialize presence with proper username
+                await PresenceSystem.init(user.uid, displayName);
+                
+                // Listen to online players
+                PresenceSystem.listenToOnlinePlayers((players) => {
+                    AppState.onlinePlayers = players;
+                    UI.updatePlayersList(players);
+                });
+                
+                // Listen to global chat
+                ChatManager.listenToGlobalChat((message) => {
+                    // Add to floating chat widget (global mode)
+                    const widgetMessages = document.getElementById('chat-widget-messages');
+                    const activeTab = document.querySelector('.widget-tab.active');
+                    const widgetMode = activeTab?.dataset.chat || 'global';
+                    
+                    if (widgetMessages && widgetMode === 'global') {
+                        UI.addChatMessage('chat-widget-messages', message.displayName, message.text, message.timestamp, message.userId);
+                    }
+                    
+                    // Show unread notification if widget is minimized
+                    if (typeof window.incrementUnread === 'function') {
+                        window.incrementUnread();
+                    }
+                });
+                
+                // Listen for challenges
+                ChallengeSystem.listenToNotifications(user.uid, (challengerId, notification) => {
+                    if (notification.status === 'pending') {
+                        document.getElementById('challenger-name').textContent = notification.fromName;
+                        ViewManager.showModal('challenge-modal');
+                    }
+                });
+                
+                // Show chat widget for logged in users
+                const chatWidget = document.getElementById('chat-widget');
+                const chatFab = document.getElementById('chat-fab');
+                if (chatWidget) chatWidget.style.display = 'flex';
+                if (chatFab) chatFab.style.display = 'flex';
+                
+                ViewManager.show('lobby');
+            } else {
+                AppState.currentUser = null;
+                document.getElementById('user-info').style.display = 'none';
+                
+                // Hide chat widget and FAB for logged out users
+                const chatWidget = document.getElementById('chat-widget');
+                const chatFab = document.getElementById('chat-fab');
+                if (chatWidget) chatWidget.style.display = 'none';
+                if (chatFab) chatFab.style.display = 'none';
+                
+                // Cleanup listeners
+            AppState.listeners = [];
+
+            if (!AppState.passwordReset.active && AppState.gameMode !== 'single') {
+                ViewManager.show('auth');
+            }
         }
-        
-        // Check if we have a pending username from signup
-        const pendingUsername = AppState.pendingUsername;
-        AppState.pendingUsername = null;
-        
-        // Create/update user profile
-        const profile = await ProfileManager.createOrUpdateProfile(user.uid, {
-            username: pendingUsername || null,
-            displayName: user.displayName || pendingUsername || `Player_${user.uid.substring(0, 6)}`,
-            email: user.email
-        });
-        
-        const profileData = profile.data();
-        
-        // Use username as display name, fall back to displayName, truncate if too long
-        const displayName = profileData?.username || profileData?.displayName || 'Player';
-        const truncatedName = displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName;
-        
-        // Update UI
-        document.getElementById('user-info').style.display = 'flex';
-        document.getElementById('user-name').textContent = truncatedName;
-        document.getElementById('welcome-name').textContent = displayName;
-        
-        // Store friends in state
-        AppState.friends = profileData?.friends || [];
-        
-        UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
-        UI.updateBadges(profileData?.badges || []);
-        
-        // Initialize presence with proper username
-        await PresenceSystem.init(user.uid, displayName);
-        
-        // Listen to online players
-        PresenceSystem.listenToOnlinePlayers((players) => {
-            AppState.onlinePlayers = players;
-            UI.updatePlayersList(players);
-        });
-        
-        // Listen to global chat
-        ChatManager.listenToGlobalChat((message) => {
-            // Add to floating chat widget (global mode)
-            const widgetMessages = document.getElementById('chat-widget-messages');
-            const activeTab = document.querySelector('.widget-tab.active');
-            const widgetMode = activeTab?.dataset.chat || 'global';
-            
-            if (widgetMessages && widgetMode === 'global') {
-                UI.addChatMessage('chat-widget-messages', message.displayName, message.text, message.timestamp, message.userId);
-            }
-            
-            // Show unread notification if widget is minimized
-            if (typeof window.incrementUnread === 'function') {
-                window.incrementUnread();
-            }
-        });
-        
-        // Listen for challenges
-        ChallengeSystem.listenToNotifications(user.uid, (challengerId, notification) => {
-            if (notification.status === 'pending') {
-                document.getElementById('challenger-name').textContent = notification.fromName;
-                ViewManager.showModal('challenge-modal');
-            }
-        });
-        
-        // Show chat widget for logged in users
-        const chatWidget = document.getElementById('chat-widget');
-        const chatFab = document.getElementById('chat-fab');
-        if (chatWidget) chatWidget.style.display = 'flex';
-        if (chatFab) chatFab.style.display = 'flex';
-        
-        ViewManager.show('lobby');
-    } else {
-        AppState.currentUser = null;
-        document.getElementById('user-info').style.display = 'none';
-        
-        // Hide chat widget and FAB for logged out users
-        const chatWidget = document.getElementById('chat-widget');
-        const chatFab = document.getElementById('chat-fab');
-        if (chatWidget) chatWidget.style.display = 'none';
-        if (chatFab) chatFab.style.display = 'none';
-        
-        // Cleanup listeners
-        AppState.listeners = [];
-        
-        ViewManager.show('auth');
-    }
-});
+        } catch (err) {
+            console.error('Auth state handling failed', err);
+        }
+    });
+}
 
 // ===========================================
 // ===========================================
@@ -5582,6 +5909,10 @@ window.StonedokuDebug = {
         console.log('No empty cells found');
     }
 };
+
+// Expose a few helpers for E2E and integration tests
+window.startSinglePlayerGame = startSinglePlayerGame;
+window.AppState = AppState;
 
 // ===========================================
 // Cookie Consent Manager (UK PECR Compliant)
@@ -5882,10 +6213,12 @@ const AccessibilityManager = {
 // ===========================================
 // Initialize App
 // ===========================================
-document.addEventListener('DOMContentLoaded', () => {
+async function bootstrapApp() {
     console.log('Stonedoku initialized - v2.1 (Europe DB, WCAG 2.1 AA)');
     console.log('Database URL:', firebaseConfig.databaseURL);
     console.log('Debug tools available at window.StonedokuDebug');
+
+    registerAuthListener();
     
     // Initialize audio
     AudioManager.init();
@@ -5901,6 +6234,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Set up event listeners
     setupEventListeners();
+    PasswordReset.hydrateFromUrl();
 
     // Run QA diagnostics if requested via ?qa=1
     if (location.search.includes('qa=1')) {
@@ -5943,4 +6277,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Create initial grid structure
     GameUI.createGrid();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    bootstrapApp();
 });

@@ -5,8 +5,8 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getAuth, signInAnonymously, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { getDatabase, ref, set, get, update, remove, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
-import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getDatabase, ref, set, get, update, remove, serverTimestamp, goOffline, goOnline } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { getFirestore, doc, setDoc, getDoc, enableNetwork, disableNetwork } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCp7BkBGFmgjSL_28iexOAO7X4RoY_7tQ4",
@@ -23,6 +23,18 @@ const auth = getAuth(app);
 const rtdb = getDatabase(app);
 const firestore = getFirestore(app);
 
+async function quietConnections() {
+  try { goOffline(rtdb); } catch (e) { /* ignore */ }
+  try { await disableNetwork(firestore); } catch (e) { /* ignore */ }
+}
+
+window.addEventListener('beforeunload', quietConnections);
+
+async function ensureOnline() {
+  try { goOnline(rtdb); } catch (e) { /* ignore */ }
+  try { await enableNetwork(firestore); } catch (e) { /* ignore */ }
+}
+
 window.e2e = {
   signIn: async () => {
     const res = await signInAnonymously(auth);
@@ -33,6 +45,7 @@ window.e2e = {
     return true;
   },
   createLobby: async (roomCode, hostUid, otherUid) => {
+    await ensureOnline();
     const lobbyRef = ref(rtdb, `lobbies/${roomCode}`);
     const data = {
       host: hostUid,
@@ -51,6 +64,7 @@ window.e2e = {
     return snap.exists() ? snap.val() : null;
   },
   createMatch: async (matchId, roomCode, uids) => {
+    await ensureOnline();
     const playerIdsObj = {};
     const playersObj = {};
     uids.forEach(u => { playerIdsObj[u] = true; playersObj[u] = { name: 'P' }; });
@@ -75,6 +89,7 @@ window.e2e = {
     return true;
   },
     createSinglePlayerMatch: async (matchId, roomCode, uid) => {
+      await ensureOnline();
       const playerIdsObj = { [uid]: true };
       const playersObj = { [uid]: { name: 'Solo' } };
       const boardState = {};
@@ -97,15 +112,18 @@ window.e2e = {
       return true;
     },
   makeMove: async (matchId, uid, row, col, value) => {
+    await ensureOnline();
     const cellRef = ref(rtdb, `matches/${matchId}/board/${row}_${col}`);
     await update(cellRef, { value, filledBy: uid });
     return true;
   },
   readCell: async (matchId, row, col) => {
+    await ensureOnline();
     const snap = await get(ref(rtdb, `matches/${matchId}/board/${row}_${col}`));
     return snap.exists() ? snap.val() : null;
   },
   finishMatch: async (matchId) => {
+    await ensureOnline();
     await update(ref(rtdb, `matches/${matchId}`), { status: 'finished' });
     return true;
   },
@@ -120,6 +138,7 @@ window.e2e = {
   ,
   // Score and rematch helpers
   updateScore: async (matchId, uid, delta) => {
+    await ensureOnline();
     const scoreRef = ref(rtdb, `matches/${matchId}/scores/${uid}`);
     const snap = await get(scoreRef);
     const current = snap.exists() ? snap.val() : 0;
@@ -127,30 +146,39 @@ window.e2e = {
     return true;
   },
   voteRematch: async (roomCode, uid, vote) => {
+    await ensureOnline();
     await set(ref(rtdb, `lobbies/${roomCode}/rematchVotes/${uid}`), { vote });
     return true;
   }
   ,
   readScores: async (matchId) => {
+    await ensureOnline();
     const snap = await get(ref(rtdb, `matches/${matchId}/scores`));
     return snap.exists() ? snap.val() : null;
   },
   readRematchVotes: async (roomCode) => {
+    await ensureOnline();
     const snap = await get(ref(rtdb, `lobbies/${roomCode}/rematchVotes`));
     return snap.exists() ? snap.val() : null;
   }
     ,
     // Firestore profile helpers
-    createProfile: async (uid, data) => {
-      try {
-        await setDoc(doc(firestore, 'users', uid), data);
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message, code: e.code };
-      }
+  createProfile: async (uid, data) => {
+    try {
+      await ensureOnline();
+      // Mark profiles created by tests so cleanup can identify them
+      const payload = Object.assign({}, data || {}, { _e2e: true });
+      await setDoc(doc(firestore, 'users', uid), payload);
+      // Quiet connections so later navigations using networkidle aren't held open
+      await quietConnections();
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message, code: e.code };
+    }
     },
     getProfile: async (uid) => {
       try {
+        await ensureOnline();
         const snap = await getDoc(doc(firestore, 'users', uid));
         return snap.exists() ? snap.data() : null;
       } catch (e) {
@@ -158,18 +186,21 @@ window.e2e = {
       }
     },
     // Global chat (Realtime DB)
-    sendGlobalChat: async (uid, displayName, text) => {
+  sendGlobalChat: async (uid, displayName, text) => {
+      await ensureOnline();
       const id = 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
       await set(ref(rtdb, `globalChat/${id}`), { userId: uid, displayName, text, timestamp: Date.now() });
       return true;
     },
-    readGlobalChat: async () => {
+  readGlobalChat: async () => {
+      await ensureOnline();
       const snap = await get(ref(rtdb, `globalChat`));
       return snap.exists() ? snap.val() : null;
     }
     ,
     // Presence helpers for tests
-    writePresence: async (uid, displayName) => {
+  writePresence: async (uid, displayName) => {
+      await ensureOnline();
       try {
         const currentUid = auth.currentUser ? auth.currentUser.uid : uid;
         await set(ref(rtdb, `presence/${currentUid}`), {
@@ -183,7 +214,8 @@ window.e2e = {
         return { success: false, error: e.message, code: e.code };
       }
     },
-    clearPresence: async (uid) => {
+  clearPresence: async (uid) => {
+      await ensureOnline();
       try {
         const currentUid = auth.currentUser ? auth.currentUser.uid : uid;
         await remove(ref(rtdb, `presence/${currentUid}`));

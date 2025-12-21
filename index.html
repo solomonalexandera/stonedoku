@@ -335,6 +335,66 @@
                 </div>
             </div>
 
+            <!-- Password Reset View -->
+            <section id="reset-view" class="view" style="display: none;">
+                <div class="reset-container">
+                    <div class="reset-hero">
+                        <div class="hero-badge">
+                            <span class="badge-icon">🔐</span>
+                            <span>Account recovery</span>
+                        </div>
+                        <h2>Reset your password</h2>
+                        <p>Enter your email to get a reset link, then set a new password.</p>
+                    </div>
+                    <div class="auth-card reset-card">
+                        <div class="auth-card-header">
+                            <h2>Password help</h2>
+                            <p>We'll send secure instructions to your inbox.</p>
+                        </div>
+                        <div id="reset-request-panel" class="reset-panel">
+                            <form id="reset-request-form" class="auth-form">
+                                <div class="form-group">
+                                    <label for="reset-request-email">Email address</label>
+                                    <input type="email" id="reset-request-email" placeholder="you@example.com" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-block">Send reset link</button>
+                                <p class="form-hint">We'll send a link that works for 30 minutes.</p>
+                                <div class="form-error" id="reset-request-status"></div>
+                            </form>
+                        </div>
+                        <div id="reset-confirm-panel" class="reset-panel" style="display: none;">
+                            <div class="reset-summary">
+                                <p>Resetting password for</p>
+                                <p class="reset-email" id="reset-email-display"></p>
+                            </div>
+                            <form id="reset-confirm-form" class="auth-form">
+                                <div class="form-group">
+                                    <label for="reset-new-password">New password</label>
+                                    <input type="password" id="reset-new-password" placeholder="At least 6 characters" minlength="6" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="reset-confirm-password">Confirm password</label>
+                                    <input type="password" id="reset-confirm-password" placeholder="Repeat password" minlength="6" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-block">Update password</button>
+                                <div class="form-error" id="reset-confirm-status"></div>
+                            </form>
+                        </div>
+                        <div id="reset-success-panel" class="reset-panel" style="display: none;">
+                            <div class="reset-success">
+                                <div class="reset-success-icon">✅</div>
+                                <h3>Password updated</h3>
+                                <p>You can now sign in with your new password.</p>
+                                <button type="button" class="btn btn-primary btn-block" id="reset-return-login">Return to sign in</button>
+                            </div>
+                        </div>
+                        <div class="reset-footer">
+                            <button type="button" class="link-btn-inline" id="reset-back-to-login">← Back to sign in</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Lobby View -->
             <section id="lobby-view" class="view" style="display: none;">
                 <div class="lobby-container">
@@ -846,11 +906,21 @@
                             <div class="profile-details">
                                 <h2 id="profile-page-username">Username</h2>
                                 <p class="profile-bio" id="profile-page-bio">No bio yet...</p>
-                                <textarea class="profile-bio-edit" id="profile-bio-edit" placeholder="Write something about yourself..." maxlength="200" style="display: none;"></textarea>
+                                <textarea class="profile-bio-edit" id="profile-bio-input" placeholder="Write something about yourself..." maxlength="200" style="display: none;"></textarea>
+                                <div class="profile-edit-fields" id="profile-edit-fields" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="profile-twitter">Twitter</label>
+                                        <input type="url" id="profile-twitter" placeholder="https://twitter.com/yourhandle">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="profile-discord">Discord</label>
+                                        <input type="text" id="profile-discord" placeholder="username#1234">
+                                    </div>
+                                </div>
                                 <p class="profile-member-date">Member since <span id="profile-page-member-since">---</span></p>
                                 <div class="profile-vanity-url" id="profile-vanity-url">
                                     <span class="vanity-label">Profile URL:</span>
-                                    <a href="#" id="profile-vanity-link">stone-doku.web.app/profile/username</a>
+                                    <a href="#" id="profile-vanity-link">stone-doku.web.app/u/username</a>
                                     <button class="btn btn-icon btn-copy-url" id="copy-profile-url" title="Copy URL">📋</button>
                                 </div>
                             </div>

@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions/v2/firestore";
-import * as admin from "firebase-admin";
+import {getAdmin} from "./firebaseAdmin";
 
-admin.initializeApp();
+const admin = getAdmin();
 
 /**
  * Mailer: processes `mailQueue` documents and sends mail via SendGrid.
@@ -33,17 +33,18 @@ export const mailer = functions.onDocumentCreated(
       const subject = data.subject || "";
       const payload = data.data || {};
 
-      // Basic templates handling: password_reset and welcome_onboard
+      // Basic templates handling: password_reset and email_verification
       let text = "";
       let html = "";
       if (template === "password_reset") {
         const link = payload.link || "";
         text = `Reset your Stonedoku password: ${link}`;
         html = `<p>Reset your Stonedoku password by clicking <a href="${link}">here</a>.</p>`;
-      } else if (template === "welcome_onboard") {
+      } else if (template === "email_verification") {
         const link = payload.link || "";
-        text = `Welcome to Stonedoku! Verify your email: ${link}`;
-        html = `<p>Welcome to Stonedoku!</p><p>Verify your email by clicking <a href="${link}">this link</a>.</p>`;
+        const name = payload.displayName || "";
+        text = `Welcome to Stonedoku${name ? ", " + name : ""}! Verify your email: ${link}`;
+        html = `<p>Welcome to Stonedoku${name ? ", " + name : ""}!</p><p>Verify your email by clicking <a href="${link}">this link</a>.</p>`;
       } else {
         // Generic fallback
         text = payload.text || (subject + "\n");
