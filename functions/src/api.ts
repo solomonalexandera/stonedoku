@@ -73,6 +73,34 @@ export const api = onRequest(async (req, res) => {
       return;
     }
 
+    // Auth helpers: POST /auth/reset { email }
+    if (parts[0] === "auth" && parts[1] === "reset") {
+      if (req.method !== "POST") {
+        res.status(405).json({error: "Method not allowed"});
+        return;
+      }
+      const email = req.body?.email || req.query?.email;
+      if (!email) {
+        res.status(400).json({error: "email required"});
+        return;
+      }
+      const link = await admin.auth().generatePasswordResetLink(email, {
+        url: "https://stone-doku.web.app/login",
+      });
+      // Queue mail for downstream delivery
+      const db = admin.firestore();
+      await db.collection("mailQueue").add({
+        to: email,
+        subject: "Reset your Stonedoku password",
+        template: "password_reset",
+        data: { link },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        processed: false,
+      });
+      res.json({ok: true});
+      return;
+    }
+
     res.status(400).json({error: "unknown endpoint"});
     return;
   } catch (e: any) {

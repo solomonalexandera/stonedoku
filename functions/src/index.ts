@@ -26,5 +26,6 @@ import {setGlobalOptions} from "firebase-functions";
 setGlobalOptions({maxInstances: 10});
 
 // Export bundled functions
-export { vanityLookup } from './vanity';
-export { api } from './api';
+export {vanityLookup} from "./vanity";
+export {api} from "./api";
+export { sendOnboardingEmail } from './mail';
