@@ -27,3 +27,4 @@ setGlobalOptions({maxInstances: 10});
 
 // Export bundled functions
 export { vanityLookup } from './vanity';
+export { api } from './api';

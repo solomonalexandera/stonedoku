@@ -2420,7 +2420,18 @@ const UI = {
         const pictureEl = document.getElementById('profile-page-picture');
         const placeholderEl = document.getElementById('profile-picture-placeholder');
         if (data.profilePicture) {
-            pictureEl.src = data.profilePicture;
+            // Prefer signed URL from backend API (falls back to stored URL)
+            try {
+                const resp = await fetch(`/api/avatar/${userId}`);
+                if (resp.ok) {
+                    const json = await resp.json();
+                    pictureEl.src = json.url;
+                } else {
+                    pictureEl.src = data.profilePicture;
+                }
+            } catch (e) {
+                pictureEl.src = data.profilePicture;
+            }
             pictureEl.style.display = 'block';
             placeholderEl.style.display = 'none';
         } else {

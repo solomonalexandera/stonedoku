@@ -29,6 +29,11 @@
         "source": "/u/**",
         "function": "vanityLookup"
       }
+      ,
+      {
+        "source": "/api/**",
+        "function": "api"
+      }
     ]
   },
   "firestore": {
