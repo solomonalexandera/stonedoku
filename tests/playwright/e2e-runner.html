@@ -173,7 +173,7 @@ window.e2e = {
       await set(ref(rtdb, `presence/${uid}`), {
         status: 'online',
         displayName: displayName || 'TestUser',
-        last_changed: Date.now(),
+        last_changed: serverTimestamp(),
         current_activity: 'Testing'
       });
       return true;
@@ -182,7 +182,7 @@ window.e2e = {
       await set(ref(rtdb, `presence/${uid}`), {
         status: 'offline',
         displayName: null,
-        last_changed: Date.now(),
+        last_changed: serverTimestamp(),
         current_activity: null
       });
       return true;
