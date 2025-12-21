@@ -3436,6 +3436,28 @@ function setupEventListeners() {
             btn.textContent = 'Sign In';
         }
     });
+
+    // Forgot password handler (calls backend to queue reset email)
+    document.getElementById('forgot-password')?.addEventListener('click', async () => {
+        try {
+            const email = prompt('Enter the email address for your account:');
+            if (!email) return;
+            const resp = await fetch('/api/auth/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const j = await resp.json();
+            if (resp.ok) {
+                alert('If that email exists, a password reset link has been sent.');
+            } else {
+                alert('Error sending reset: ' + (j.error || resp.statusText));
+            }
+        } catch (e) {
+            console.error('Forgot password error', e);
+            alert('Failed to request password reset.');
+        }
+    });
     
     // Sign Up form
     document.getElementById('signup-form')?.addEventListener('submit', async (e) => {
