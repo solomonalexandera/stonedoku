@@ -28,4 +28,4 @@ setGlobalOptions({maxInstances: 10});
 // Export bundled functions
 export {vanityLookup} from "./vanity";
 export {api} from "./api";
-export { sendOnboardingEmail } from './mail';
+export {sendOnboardingEmail} from "./mail";

@@ -93,7 +93,7 @@ export const api = onRequest(async (req, res) => {
         to: email,
         subject: "Reset your Stonedoku password",
         template: "password_reset",
-        data: { link },
+        data: {link},
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         processed: false,
       });
