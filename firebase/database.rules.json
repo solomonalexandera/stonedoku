@@ -30,6 +30,13 @@
               ".write": "auth != null && (auth.uid == $playerId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid)"
             }
           },
+          "rematchVotes": {
+            "$voterId": {
+              ".read": "auth != null",
+              ".write": "auth != null && (auth.uid == $voterId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid || root.child('lobbies').child($roomCode).child('players').child(auth.uid).exists())",
+              ".validate": "newData.hasChildren(['vote']) && (newData.child('vote').val() === true || newData.child('vote').val() === false)"
+            }
+          },
           // Host can delete, players can join/leave (parent-level validation retained for full updates)
       }
     },
