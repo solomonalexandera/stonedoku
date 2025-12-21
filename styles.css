@@ -435,10 +435,11 @@ body::after {
    =========================================== */
 .main-content {
     flex: 1;
-    padding: 2rem;
-    max-width: 1400px;
+    padding: 1.5rem;
+    max-width: 1200px;
     margin: 0 auto;
     width: 100%;
+    min-height: calc(100vh - 80px);
 }
 
 .view {
@@ -1422,11 +1423,12 @@ body::after {
    =========================================== */
 .game-container {
     display: grid;
-    grid-template-columns: 280px 1fr 280px;
-    gap: 2rem;
-    max-width: 1200px;
+    grid-template-columns: 240px 1fr 240px;
+    gap: 1rem;
+    max-width: 1100px;
     margin: 0 auto;
     align-items: start;
+    align-content: start;
 }
 
 /* Left Column */
