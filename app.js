@@ -4723,7 +4723,10 @@ function startSinglePlayerGame(difficulty) {
     // Update UI elements
     const difficultyLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
     document.getElementById('current-difficulty').textContent = difficultyLabel;
-    document.getElementById('game-header-versus').style.display = 'none';
+    const vsHeader = document.getElementById('game-header-versus');
+    if (vsHeader) vsHeader.style.display = 'none';
+    const singleHeader = document.getElementById('game-header-single');
+    if (singleHeader) singleHeader.style.display = 'flex';
     
     // Hide game chat tab in widget (single player = global only)
     const widgetGameTab = document.getElementById('widget-game-tab');
@@ -4758,6 +4761,9 @@ async function startVersusGame(roomData) {
     // Generate puzzle (host generates)
     const isHost = roomData.host === AppState.currentUser?.uid;
     let matchId;
+    // Hide single-player header in versus
+    const singleHeader = document.getElementById('game-header-single');
+    if (singleHeader) singleHeader.style.display = 'none';
     
     if (isHost) {
         const { puzzle, solution } = SudokuGenerator.createPuzzle('medium');

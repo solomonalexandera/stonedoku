@@ -538,6 +538,14 @@
                                 </div>
                             </div>
                         </div>
+
+                    <!-- Single-player header (timer placement for solo) -->
+                    <div class="game-header-single" id="game-header-single" style="display: none;">
+                        <div class="game-status">
+                            <span class="game-timer" id="game-timer">0:00</span>
+                            <span class="game-mode-label">Solo Mode</span>
+                        </div>
+                    </div>
                         <div class="game-status">
                             <span class="game-timer" id="game-timer-versus">00:00</span>
                             <span class="game-mode-label">Versus Mode</span>
@@ -658,13 +666,6 @@
 
                         <!-- Progress Card -->
                         <div class="progress-card">
-                            <div class="progress-header">
-                                <span>Progress</span>
-                                <span class="progress-value" id="progress-percent">0%</span>
-                            </div>
-                            <div class="progress-bar">
-                                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
-                            </div>
                             <div class="game-info-grid">
                                 <div class="game-info-item">
                                     <span class="game-info-label">Difficulty</span>
@@ -680,7 +681,7 @@
                                 </div>
                                 <div class="game-info-item">
                                     <span class="game-info-label">Time</span>
-                                    <span class="game-info-value" id="game-timer">0:00</span>
+                                    <span class="game-info-value">—</span>
                                 </div>
                             </div>
                         </div>
