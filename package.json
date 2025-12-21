@@ -12,6 +12,8 @@
     "migrate:avatars:dry": "node scripts/migrate-avatars.js --dry",
     "migrate:avatars": "RUN_MIGRATION=1 node scripts/migrate-avatars.js",
     "auth:delete:dry": "node scripts/delete-all-users.js",
-    "auth:delete": "RUN_DELETE=1 node scripts/delete-all-users.js"
+    "auth:delete": "RUN_DELETE=1 node scripts/delete-all-users.js",
+    "preview": "python3 -m http.server 8080 --directory public",
+    "preview:open": "(python3 -m http.server 8080 --directory public)"
   }
 }
