@@ -19,6 +19,17 @@
         ]
       }
     ]
+    ,
+    "rewrites": [
+      {
+        "source": "/profile/**",
+        "function": "vanityLookup"
+      },
+      {
+        "source": "/u/**",
+        "function": "vanityLookup"
+      }
+    ]
   },
   "firestore": {
     "database": "(default)",
