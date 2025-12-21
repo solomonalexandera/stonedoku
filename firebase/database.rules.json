@@ -8,7 +8,7 @@
         // Users can read presence status of others, but only write their own
         ".read": "auth != null",
         ".write": "auth != null && auth.uid == $userId",
-        ".validate": "newData.hasChildren(['status', 'displayName', 'last_changed'])"
+        ".validate": "newData.hasChildren(['status', 'displayName', 'last_changed']) && (newData.child('status').val() == 'online' || newData.child('status').val() == 'offline') && newData.child('last_changed').isNumber() && newData.child('last_changed').val() <= (now + 1000) && newData.child('last_changed').val() >= (now - 120000)"
       }
     },
     "lobbies": {
