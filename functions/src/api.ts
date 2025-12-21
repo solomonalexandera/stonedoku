@@ -11,12 +11,16 @@ export const api = onRequest(async (req, res) => {
       const uid = parts[1];
       const db = admin.firestore();
       const userDoc = await db.collection('users').doc(uid).get();
-      if (!userDoc.exists) return res.status(404).json({ error: 'user not found' });
+      if (!userDoc.exists) {
+        res.status(404).json({ error: 'user not found' });
+        return;
+      }
       const data = userDoc.data() || {};
       const profilePicture = data.profilePicture;
       // If profilePicture is already an https URL, just return it
       if (typeof profilePicture === 'string' && profilePicture.startsWith('http')) {
-        return res.json({ url: profilePicture });
+        res.json({ url: profilePicture });
+        return;
       }
 
       // Otherwise attempt to find a storage file under avatars/{uid}/
@@ -29,7 +33,10 @@ export const api = onRequest(async (req, res) => {
       // Fallback: list files under avatars/{uid}/ and pick the latest
       if (!filePath) {
         const [files] = await bucket.getFiles({ prefix: `avatars/${uid}/` });
-        if (!files || files.length === 0) return res.status(404).json({ error: 'no avatar' });
+        if (!files || files.length === 0) {
+          res.status(404).json({ error: 'no avatar' });
+          return;
+        }
         // pick most recently updated
         files.sort((a: any, b: any) => (b.metadata.updated || 0) - (a.metadata.updated || 0));
         filePath = files[0].name;
@@ -37,16 +44,22 @@ export const api = onRequest(async (req, res) => {
 
       const file = bucket.file(filePath);
       const [exists] = await file.exists();
-      if (!exists) return res.status(404).json({ error: 'avatar not found' });
+      if (!exists) {
+        res.status(404).json({ error: 'avatar not found' });
+        return;
+      }
 
       const expires = Date.now() + 1000 * 60 * 15; // 15 minutes
       const [url] = await file.getSignedUrl({ action: 'read', expires });
-      return res.json({ url });
+      res.json({ url });
+      return;
     }
 
     res.status(400).json({ error: 'unknown endpoint' });
+    return;
   } catch (e: any) {
     console.error('api error', e);
     res.status(500).json({ error: 'server error' });
+    return;
   }
 });
