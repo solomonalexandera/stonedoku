@@ -23,8 +23,11 @@
     "matches": {
       "$matchId": {
         // Players in the match can read/write to it
-        ".read": "auth != null && data.child('players').hasChild(auth.uid)",
-        ".write": "auth != null && data.child('players').hasChild(auth.uid)",
+        ".read": "auth != null && data.child('playerIds').hasChild(auth.uid)",
+        // Allow writes by participants for existing matches, and allow
+        // creation when the new match being written contains the auth
+        // uid in `playerIds`.
+        ".write": "auth != null && (data.exists() ? data.child('playerIds').hasChild(auth.uid) : newData.child('playerIds').hasChild(auth.uid))",
         ".validate": "newData.hasChildren(['id', 'players', 'board', 'solution'])"
       }
     },
