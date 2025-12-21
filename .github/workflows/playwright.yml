@@ -11,6 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Google Cloud SDK (optional)
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: stonedoku-c0898
+        if: ${{ secrets.GCP_SA_KEY != '' }}
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -24,4 +30,11 @@ jobs:
           npx http-server -p 8000 &
           sleep 1
       - name: Run Playwright tests
-        run: npx playwright test --reporter=list
+        env:
+          RUN_DELETE: ${{ github.ref == 'refs/heads/main' && '1' || '' }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/stonedoku-e2e-cleaner-key.json
+        run: |
+          if [ -n "${{ secrets.GCP_SA_KEY }}" ]; then
+            gcloud secrets versions access latest --secret=e2e-cleaner-key --project=stonedoku-c0898 > /tmp/stonedoku-e2e-cleaner-key.json
+          fi
+          npx playwright test --reporter=list
