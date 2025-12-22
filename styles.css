@@ -157,6 +157,18 @@ h1, h2, h3, h4 {
     text-transform: uppercase;
 }
 
+.logo .site-title-image {
+    height: 44px;
+    display: block;
+    width: auto;
+}
+
+@media (min-width: 900px) {
+    .logo .site-title-image {
+        height: 56px;
+    }
+}
+
 .nav-controls {
     display: flex;
     align-items: center;
