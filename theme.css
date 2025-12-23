@@ -56,8 +56,7 @@
 }
 
 body {
-  background: var(--asset-bg-stone-hd-def), var(--asset-soot-vignette-def);
-  background-size: cover;
+  background: linear-gradient(135deg, #1d1f23, #0c0d10);
   background-attachment: fixed;
   color: var(--color-text);
   font-family: var(--font-body);
@@ -74,19 +73,19 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .scene__bg {
-  background: var(--asset-bg-stone-hd-def);
+  background: none;
 }
 
 .scene__arches {
-  background: var(--asset-vault-ribs-def), var(--asset-tracery-corners-def);
+  background: none;
 }
 
 .scene__vignette {
-  background: var(--asset-soot-vignette-def);
+  background: none;
 }
 
 .scene__dust {
-  background: var(--asset-dust-motes-def);
+  background: none;
 }
 
 :focus-visible {

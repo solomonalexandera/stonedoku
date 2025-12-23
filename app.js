@@ -86,7 +86,7 @@ const storage = getStorage(firebaseApp);
 // Fetches ` /version.txt ` at startup. If it differs from the stored
 // `stonedoku_app_version`, clear caches, cookies, indexedDB and service
 // workers to ensure clients pick up new assets after a deploy.
-// To activate, update `public/version.txt` during your deploys.
+// To activate, update `version.txt` during your deploys.
 // ==========================
 async function clearAllCachesAndServiceWorkers() {
     try {
@@ -467,27 +467,97 @@ const ProfanityFilter = {
 // ===========================================
 // View Manager
 // ===========================================
+const MotionSystem = {
+    prefersReducedMotion() {
+        try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+    },
+    animateIn(el, type = 'view') {
+        if (!el || this.prefersReducedMotion() || !el.animate) return;
+        const keyframesByType = {
+            view: [
+                { opacity: 0, transform: 'translateY(8px)' },
+                { opacity: 1, transform: 'translateY(0)' }
+            ],
+            modal: [
+                { opacity: 0, transform: 'translateY(10px) scale(0.98)' },
+                { opacity: 1, transform: 'translateY(0) scale(1)' }
+            ]
+        };
+        const frames = keyframesByType[type] || keyframesByType.view;
+        el.animate(frames, { duration: 220, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'both' });
+    },
+    animateOut(el, type = 'view') {
+        if (!el || this.prefersReducedMotion() || !el.animate) return Promise.resolve();
+        const keyframesByType = {
+            view: [
+                { opacity: 1, transform: 'translateY(0)' },
+                { opacity: 0, transform: 'translateY(6px)' }
+            ],
+            modal: [
+                { opacity: 1, transform: 'translateY(0) scale(1)' },
+                { opacity: 0, transform: 'translateY(10px) scale(0.98)' }
+            ]
+        };
+        const frames = keyframesByType[type] || keyframesByType.view;
+        const anim = el.animate(frames, { duration: 160, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'both' });
+        return anim.finished.catch(() => {});
+    }
+};
+
 const ViewManager = {
     views: ['auth', 'onboarding', 'reset', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch', 'profile'],
     
     show(viewName) {
-        this.views.forEach(view => {
-            const element = document.getElementById(`${view}-view`);
-            if (element) {
-                element.style.display = view === viewName ? 'block' : 'none';
+        const prev = AppState.currentView;
+        if (prev === viewName) return;
+
+        const nextEl = document.getElementById(`${viewName}-view`);
+        const prevEl = prev ? document.getElementById(`${prev}-view`) : null;
+
+        // Show next immediately so state stays synchronous
+        if (nextEl) {
+            nextEl.style.display = 'block';
+            nextEl.setAttribute('aria-hidden', 'false');
+            MotionSystem.animateIn(nextEl, 'view');
+        }
+
+        // Animate out previous, then hide it
+        if (prevEl && prevEl !== nextEl) {
+            MotionSystem.animateOut(prevEl, 'view').then(() => {
+                prevEl.style.display = 'none';
+                prevEl.setAttribute('aria-hidden', 'true');
+            });
+        }
+
+        // Hide all other non-target views
+        this.views.forEach((view) => {
+            if (view === viewName) return;
+            if (prev && view === prev) return;
+            const el = document.getElementById(`${view}-view`);
+            if (el) {
+                el.style.display = 'none';
+                el.setAttribute('aria-hidden', 'true');
             }
         });
+
         AppState.currentView = viewName;
     },
     
     showModal(modalId) {
         const modal = document.getElementById(modalId);
-        if (modal) modal.style.display = 'flex';
+        if (!modal) return;
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+        MotionSystem.animateIn(modal, 'modal');
     },
     
     hideModal(modalId) {
         const modal = document.getElementById(modalId);
-        if (modal) modal.style.display = 'none';
+        if (!modal) return;
+        MotionSystem.animateOut(modal, 'modal').then(() => {
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        });
     }
 };
 
@@ -1935,7 +2005,7 @@ const OnboardingSystem = {
                 }
                 
                 if (typeof window.incrementUnread === 'function') {
-                    window.incrementUnread();
+                    window.incrementUnread('global', message.userId);
                 }
             });
             
@@ -2144,31 +2214,31 @@ const TourSystem = {
     steps: [
         {
             target: '.single-card',
-            title: '🧩 Solo Practice',
+            title: 'Solo Practice',
             description: 'Play classic Sudoku at your own pace. Choose from Easy, Medium, or Hard difficulty to sharpen your skills.',
             position: 'right'
         },
         {
             target: '.versus-card',
-            title: '⚔️ Challenge Friends',
+            title: 'Challenge Friends',
             description: 'Create a game room or join with a code to compete in real-time 1v1 battles. Race to fill the most cells correctly!',
             position: 'left'
         },
         {
             target: '.stats-card',
-            title: '📊 Track Progress',
+            title: 'Track Progress',
             description: 'Your wins, losses, and win rate are tracked here. Watch yourself improve over time!',
             position: 'left'
         },
         {
             target: '.players-card',
-            title: '👥 See Who\'s Online',
+            title: 'See Who\'s Online',
             description: 'View other players currently online. Click their name to see their profile or challenge them to a game.',
             position: 'left'
         },
         {
             target: '#chat-fab',
-            title: '💬 Chat & Connect',
+            title: 'Chat & Connect',
             description: 'Use the chat to talk with other players, send whispers (@whisper username), or start direct messages.',
             position: 'top'
         }
@@ -2732,12 +2802,15 @@ const UI = {
         if (!isOwnProfile) {
             const isFriend = AppState.friends.includes(userId);
             const friendBtn = document.getElementById('profile-friend-btn');
+            const labelEl = friendBtn?.querySelector('.btn-label');
             if (isFriend) {
-                friendBtn.textContent = '✓ Friends';
-                friendBtn.disabled = true;
+                if (labelEl) labelEl.textContent = 'Friends';
+                else if (friendBtn) friendBtn.textContent = 'Friends';
+                if (friendBtn) friendBtn.disabled = true;
             } else {
-                friendBtn.textContent = '👥 Add Friend';
-                friendBtn.disabled = false;
+                if (labelEl) labelEl.textContent = 'Add Friend';
+                else if (friendBtn) friendBtn.textContent = 'Add Friend';
+                if (friendBtn) friendBtn.disabled = false;
             }
         }
         
@@ -3456,7 +3529,12 @@ const GameUI = {
         this.stopTimer();
         
         document.getElementById('game-over-title').textContent = won ? 'Congratulations!' : 'Game Over';
-        document.getElementById('result-icon').textContent = won ? '🏆' : '😔';
+        const resultIcon = document.getElementById('result-icon');
+        if (resultIcon) {
+            resultIcon.innerHTML = won
+                ? '<svg class="ui-icon ui-icon-xl" aria-hidden="true"><use href="#i-trophy"></use></svg>'
+                : '<svg class="ui-icon ui-icon-xl" aria-hidden="true"><use href="#i-x"></use></svg>';
+        }
         document.getElementById('result-message').textContent = won ? 'You solved the puzzle!' : 'Better luck next time!';
         document.getElementById('final-score').textContent = AppState.playerScore;
         document.getElementById('final-time').textContent = UI.formatTime(AppState.gameSeconds);
@@ -3575,22 +3653,39 @@ const GameUI = {
 // Event Handlers
 // ===========================================
 function setupEventListeners() {
+    function applyTheme(mode) {
+        const body = document.body;
+        body.classList.toggle('light-theme', mode === 'light');
+        body.classList.toggle('dark-theme', mode !== 'light');
+        try { localStorage.setItem('stonedoku_theme', mode); } catch { /* ignore */ }
+    }
+
+    function initTheme() {
+        let saved = null;
+        try { saved = localStorage.getItem('stonedoku_theme'); } catch { /* ignore */ }
+        applyTheme(saved === 'dark' ? 'dark' : 'light');
+    }
+
+    function syncSoundToggleUi() {
+        const btn = document.getElementById('sound-toggle');
+        if (!btn) return;
+        btn.classList.toggle('is-muted', !AppState.soundEnabled);
+    }
+
+    initTheme();
+    syncSoundToggleUi();
+
     // Theme toggle
     document.getElementById('theme-toggle')?.addEventListener('click', () => {
         const body = document.body;
-        const isDark = body.classList.contains('dark-theme');
-        body.classList.remove('dark-theme', 'light-theme');
-        body.classList.add(isDark ? 'light-theme' : 'dark-theme');
-        
-        const icon = document.querySelector('.theme-icon');
-        if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+        const isLight = body.classList.contains('light-theme');
+        applyTheme(isLight ? 'dark' : 'light');
     });
     
     // Sound toggle
     document.getElementById('sound-toggle')?.addEventListener('click', () => {
         AppState.soundEnabled = !AppState.soundEnabled;
-        const icon = document.querySelector('.sound-icon');
-        if (icon) icon.textContent = AppState.soundEnabled ? '🔊' : '🔇';
+        syncSoundToggleUi();
     });
     
     // Auth - Anonymous login
@@ -4324,9 +4419,10 @@ function initProfilePage() {
     
     // Copy profile URL
     document.getElementById('copy-profile-url')?.addEventListener('click', () => {
-        const urlInput = document.getElementById('profile-vanity-url');
-        if (urlInput) {
-            navigator.clipboard.writeText(urlInput.value).then(() => {
+        const linkEl = document.getElementById('profile-vanity-link');
+        const url = linkEl?.href || linkEl?.textContent || '';
+        if (url) {
+            navigator.clipboard.writeText(url).then(() => {
                 alert('Profile URL copied!');
             });
         }
@@ -4367,19 +4463,23 @@ function initProfilePage() {
         
         const btn = document.getElementById('profile-friend-btn');
         const currentText = btn?.textContent || '';
+        const labelEl = btn?.querySelector('.btn-label');
         
         try {
             if (currentText.includes('Add Friend')) {
                 await ProfileManager.sendFriendRequest(AppState.currentUser.uid, profileUserId);
-                if (btn) btn.textContent = '📤 Request Sent';
+                if (labelEl) labelEl.textContent = 'Request Sent';
+                else if (btn) btn.textContent = 'Request Sent';
                 alert('Friend request sent!');
             } else if (currentText.includes('Remove Friend')) {
                 await ProfileManager.removeFriend(AppState.currentUser.uid, profileUserId);
-                if (btn) btn.textContent = '👤 Add Friend';
+                if (labelEl) labelEl.textContent = 'Add Friend';
+                else if (btn) btn.textContent = 'Add Friend';
                 alert('Friend removed');
             } else if (currentText.includes('Accept Request')) {
                 await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, profileUserId);
-                if (btn) btn.textContent = '✓ Friends';
+                if (labelEl) labelEl.textContent = 'Friends';
+                else if (btn) btn.textContent = 'Friends';
             }
         } catch (error) {
             console.error('Friend action error:', error);
@@ -4400,10 +4500,19 @@ function initProfilePage() {
             widget.classList.remove('minimized');
             fab.classList.add('hidden');
         }
-        
+
+        const dmList = document.getElementById('dm-list');
+        const chatHint = document.getElementById('chat-hint');
+        const messagesEl = document.getElementById('chat-widget-messages');
+
+        if (dmList) dmList.style.display = 'none';
+        if (messagesEl) messagesEl.style.display = 'flex';
+        if (chatHint) chatHint.style.display = 'none';
+
         // Switch to DM mode with this user
         AppState.widgetChatMode = `dm_${profileUserId}`;
-        
+        if (typeof window.clearUnread === 'function') window.clearUnread(AppState.widgetChatMode);
+
         // Highlight DM tab
         document.querySelectorAll('.widget-tab').forEach(t => t.classList.remove('active'));
         document.querySelector('.widget-tab[data-chat="dms"]')?.classList.add('active');
@@ -4427,16 +4536,10 @@ function initProfilePage() {
 
             ChatManager.listenToDirectMessages(dmId, (msg) => {
                 UI.addChatMessage('chat-widget-messages', msg.fromDisplayName || msg.from, msg.text, msg.timestamp, msg.from);
-                if (typeof window.incrementUnread === 'function') window.incrementUnread();
+                if (typeof window.incrementUnread === 'function') window.incrementUnread(`dm_${msg.from}`, msg.from);
             });
         } catch (e) {
             console.warn('Failed to open DM conversation:', e);
-        }
-        
-        // Clear messages and load DM history
-        const messagesEl = document.getElementById('chat-widget-messages');
-        if (messagesEl) {
-            messagesEl.innerHTML = '<div class="chat-info">Direct messages with this user</div>';
         }
     });
     
@@ -4554,14 +4657,14 @@ function initFloatingChat() {
     suggestionBox.id = 'chat-suggestion-box';
     suggestionBox.style.position = 'absolute';
     suggestionBox.style.zIndex = '9999';
-    suggestionBox.style.background = '#fff';
-    suggestionBox.style.border = '1px solid rgba(0,0,0,0.12)';
-    suggestionBox.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+    suggestionBox.style.background = 'var(--color-card-bg-solid)';
+    suggestionBox.style.border = '1px solid var(--color-grid-border)';
+    suggestionBox.style.boxShadow = 'var(--shadow-md)';
     suggestionBox.style.display = 'none';
     suggestionBox.style.minWidth = '180px';
     suggestionBox.style.maxHeight = '240px';
     suggestionBox.style.overflow = 'auto';
-    suggestionBox.style.borderRadius = '6px';
+    suggestionBox.style.borderRadius = '0';
     suggestionBox.style.padding = '6px 0';
     suggestionBox.style.fontSize = '14px';
     widget.appendChild(suggestionBox);
@@ -4741,15 +4844,52 @@ function initFloatingChat() {
     
     if (!widget || !fab) return;
     
-    // Track unread messages
-    let unreadCount = 0;
+    // Track unread messages per channel: global, game, dm_<userId>
+    const unreadByChannel = new Map();
+
+    function getUnreadTotal() {
+        let total = 0;
+        for (const v of unreadByChannel.values()) total += v;
+        return total;
+    }
+
+    function setUnread(channel, count) {
+        const n = Math.max(0, Number(count) || 0);
+        if (!channel) return;
+        if (n === 0) unreadByChannel.delete(channel);
+        else unreadByChannel.set(channel, n);
+    }
+
+    function clearUnread(channel) {
+        setUnread(channel, 0);
+        updateUnreadBadge();
+    }
+
+    function getActiveChannel() {
+        const activeTab = document.querySelector('.widget-tab.active');
+        const tabMode = activeTab?.dataset.chat || 'global';
+        const stateMode = AppState.widgetChatMode || tabMode;
+
+        // When in a DM conversation, widgetChatMode is dm_<userId> while tab can still be "dms".
+        if (stateMode && stateMode.startsWith && stateMode.startsWith('dm_')) return stateMode;
+        if (stateMode === 'global' || stateMode === 'game' || stateMode === 'dms') return stateMode;
+        return tabMode;
+    }
+
+    function clearActiveUnread() {
+        const active = getActiveChannel();
+        if (active === 'global' || active === 'game' || (active && active.startsWith && active.startsWith('dm_'))) {
+            clearUnread(active);
+        } else {
+            updateUnreadBadge();
+        }
+    }
     
     // FAB click - open chat
     fab.addEventListener('click', () => {
         widget.classList.remove('minimized');
         fab.classList.add('hidden');
-        unreadCount = 0;
-        updateUnreadBadge();
+        clearActiveUnread();
         input?.focus();
     });
     
@@ -4770,7 +4910,7 @@ function initFloatingChat() {
     let dragOffset = { x: 0, y: 0 };
     
     header?.addEventListener('mousedown', (e) => {
-        if (e.target.tagName === 'BUTTON') return;
+        if (e.target.closest && e.target.closest('button')) return;
         isDragging = true;
         widget.classList.add('dragging');
         const rect = widget.getBoundingClientRect();
@@ -4820,6 +4960,12 @@ function initFloatingChat() {
                 if (messages) {
                     messages.scrollTop = messages.scrollHeight;
                 }
+            }
+
+            if (chatMode === 'global' || chatMode === 'game') {
+                clearUnread(chatMode);
+            } else {
+                updateUnreadBadge();
             }
         });
     });
@@ -4884,14 +5030,15 @@ function initFloatingChat() {
     function updateUnreadBadge() {
         const fabUnread = document.getElementById('fab-unread');
         const widgetUnread = document.getElementById('unread-badge');
-        
-        if (unreadCount > 0) {
+
+        const unreadTotal = getUnreadTotal();
+        if (unreadTotal > 0) {
             if (fabUnread) {
-                fabUnread.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                fabUnread.textContent = unreadTotal > 99 ? '99+' : unreadTotal;
                 fabUnread.style.display = 'block';
             }
             if (widgetUnread) {
-                widgetUnread.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                widgetUnread.textContent = unreadTotal > 99 ? '99+' : unreadTotal;
                 widgetUnread.style.display = 'inline-block';
             }
         } else {
@@ -4900,12 +5047,34 @@ function initFloatingChat() {
         }
     }
     
+    function shouldIncrementUnread(channel, senderId) {
+        // Never count your own messages
+        if (senderId && AppState.currentUser && senderId === AppState.currentUser.uid) return false;
+        
+        const minimized = widget.classList.contains('minimized');
+        
+        // If the widget is minimized, always count
+        if (minimized) return true;
+
+        // If widget is open, only count if the active channel differs from the incoming channel
+        return getActiveChannel() !== channel;
+    }
+    
     // Store the function globally for use in chat listener
-    window.incrementUnread = () => {
-        if (widget.classList.contains('minimized')) {
-            unreadCount++;
+    window.incrementUnread = (channel = 'global', senderId = null) => {
+        if (shouldIncrementUnread(channel, senderId)) {
+            setUnread(channel, (unreadByChannel.get(channel) || 0) + 1);
             updateUnreadBadge();
         }
+    };
+
+    // Allow other UI flows (e.g., opening a DM from profile) to clear a channel explicitly
+    window.clearUnread = (channel = null) => {
+        if (!channel) {
+            clearActiveUnread();
+            return;
+        }
+        clearUnread(channel);
     };
 }
 
@@ -5228,7 +5397,7 @@ async function startVersusGame(roomData) {
         
         // Show unread notification
         if (typeof window.incrementUnread === 'function') {
-            window.incrementUnread();
+            window.incrementUnread('game', message.userId);
         }
     });
 }
@@ -5419,7 +5588,7 @@ function showPostMatchScreen(match, userId, opponentId, isWinner, isTie, isDisco
         title.textContent = "It's a Tie!";
         header.classList.remove('victory', 'defeat');
     } else if (isWinner) {
-        title.textContent = '🏆 Victory!';
+        title.textContent = 'Victory!';
         header.classList.add('victory');
         header.classList.remove('defeat');
     } else {
@@ -5641,7 +5810,7 @@ async function showOpponentDisconnectModal(opponentName) {
         const title = document.getElementById('game-over-title');
         const message = document.getElementById('game-over-message');
         
-        if (title) title.textContent = '🏆 Victory!';
+        if (title) title.textContent = 'Victory!';
         if (message) message.textContent = `${opponentName} disconnected. You win by forfeit!`;
         
         ViewManager.showModal('game-over-modal');
@@ -5759,7 +5928,7 @@ function registerAuthListener() {
                     
                     // Show unread notification if widget is minimized
                     if (typeof window.incrementUnread === 'function') {
-                        window.incrementUnread();
+                        window.incrementUnread('global', message.userId);
                     }
                 });
                 

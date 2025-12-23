@@ -5,7 +5,9 @@
     "firebase-admin": "^13.6.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.35.1"
+    "@playwright/test": "^1.35.1",
+    "chokidar": "^4.0.3",
+    "ws": "^8.18.3"
   },
   "scripts": {
     "test:e2e": "playwright test",
@@ -13,7 +15,7 @@
     "migrate:avatars": "RUN_MIGRATION=1 node scripts/migrate-avatars.js",
     "auth:delete:dry": "node scripts/delete-all-users.js",
     "auth:delete": "RUN_DELETE=1 node scripts/delete-all-users.js",
-    "preview": "python3 -m http.server 8080",
-    "preview:open": "(python3 -m http.server 8080)"
+    "dev": "node scripts/dev.mjs",
+    "preview": "npm run dev"
   }
 }

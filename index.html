@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Stonedoku - Real-Time Competitive Sudoku</title>
-    <link rel="icon" type="image/svg+xml" href="/public/favicon.svg">
-    <link rel="apple-touch-icon" href="/public/favicon.svg">
+    <title>Stonedoku</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/favicon.svg">
     <meta name="theme-color" content="#111317">
     <meta name="description" content="Compete in real-time 1v1 Sudoku battles with players around the world">
     <!-- Security & Privacy -->
@@ -16,10 +16,168 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=20251221D">
-    <link rel="stylesheet" href="theme.css?v=1">
+    <link rel="stylesheet" href="/styles.css?v=20251222A">
 </head>
-<body>
+<body class="light-theme">
+    <svg class="ui-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <symbol id="i-sun" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4 12H2M22 12h-2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"></path>
+        </symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24">
+            <path d="M21 12.6A8.5 8.5 0 1 1 11.4 3a6.5 6.5 0 0 0 9.6 9.6Z"></path>
+        </symbol>
+        <symbol id="i-volume" viewBox="0 0 24 24">
+            <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z"></path>
+            <path d="M15.5 8.5a4.5 4.5 0 0 1 0 7"></path>
+            <path d="M18 6a8 8 0 0 1 0 12"></path>
+        </symbol>
+        <symbol id="i-volume-off" viewBox="0 0 24 24">
+            <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z"></path>
+            <path d="M16 9l5 6"></path>
+            <path d="M21 9l-5 6"></path>
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 24 24">
+            <path d="M20 21a8 8 0 0 0-16 0"></path>
+            <circle cx="12" cy="8" r="4"></circle>
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24">
+            <path d="M20 12a8 8 0 0 1-14.3 4.8"></path>
+            <path d="M4 12a8 8 0 0 1 14.3-4.8"></path>
+            <path d="M18 3v6h-6"></path>
+            <path d="M6 21v-6h6"></path>
+        </symbol>
+        <symbol id="i-gear" viewBox="0 0 24 24">
+            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
+            <path d="M19.4 15a7.9 7.9 0 0 0 .1-2l2-1.2-2-3.4-2.3.7a7.7 7.7 0 0 0-1.7-1L15 5h-6l-.5 2.1a7.7 7.7 0 0 0-1.7 1L4.5 7.4l-2 3.4 2 1.2a7.9 7.9 0 0 0 .1 2l-2 1.2 2 3.4 2.3-.7c.5.4 1.1.7 1.7 1L9 21h6l.5-2.1c.6-.3 1.2-.6 1.7-1l2.3.7 2-3.4-2-1.2Z"></path>
+        </symbol>
+        <symbol id="i-undo" viewBox="0 0 24 24">
+            <path d="M9 14 4 9l5-5"></path>
+            <path d="M4 9h10a6 6 0 0 1 0 12h-2"></path>
+        </symbol>
+        <symbol id="i-bulb" viewBox="0 0 24 24">
+            <path d="M9 18h6"></path>
+            <path d="M10 22h4"></path>
+            <path d="M8.5 14.5a6 6 0 1 1 7 0c-.7.6-1.1 1.3-1.2 2H9.7c-.1-.7-.5-1.4-1.2-2Z"></path>
+        </symbol>
+        <symbol id="i-backspace" viewBox="0 0 24 24">
+            <path d="M20 6H10L4 12l6 6h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Z"></path>
+            <path d="M14.5 9.5 18 13"></path>
+            <path d="M18 9.5 14.5 13"></path>
+        </symbol>
+        <symbol id="i-pencil" viewBox="0 0 24 24">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z"></path>
+        </symbol>
+        <symbol id="i-camera" viewBox="0 0 24 24">
+            <path d="M5 7h4l1.5-2h3L15 7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"></path>
+            <circle cx="12" cy="14" r="3"></circle>
+        </symbol>
+        <symbol id="i-chat" viewBox="0 0 24 24">
+            <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"></path>
+        </symbol>
+        <symbol id="i-bolt" viewBox="0 0 24 24">
+            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"></path>
+        </symbol>
+        <symbol id="i-target" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="8"></circle>
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M22 12h-2"></path>
+        </symbol>
+        <symbol id="i-chart" viewBox="0 0 24 24">
+            <path d="M4 19V5"></path>
+            <path d="M4 19h16"></path>
+            <path d="M8 16v-6"></path>
+            <path d="M12 16v-9"></path>
+            <path d="M16 16v-3"></path>
+        </symbol>
+        <symbol id="i-trophy" viewBox="0 0 24 24">
+            <path d="M8 21h8"></path>
+            <path d="M12 17v4"></path>
+            <path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"></path>
+            <path d="M7 6H4a3 3 0 0 0 3 5"></path>
+            <path d="M17 6h3a3 3 0 0 1-3 5"></path>
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24">
+            <path d="M20 6 9 17l-5-5"></path>
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 24 24">
+            <path d="M18 6 6 18"></path>
+            <path d="M6 6l12 12"></path>
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+            <path d="M12 5v14"></path>
+            <path d="M5 12h14"></path>
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 24 24">
+            <path d="M5 12h14"></path>
+        </symbol>
+        <symbol id="i-maximize" viewBox="0 0 24 24">
+            <path d="M4 4h16v16H4z"></path>
+        </symbol>
+        <symbol id="i-send" viewBox="0 0 24 24">
+            <path d="M22 2 11 13"></path>
+            <path d="M22 2 15 22l-4-9-9-4 20-7Z"></path>
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+            <path d="M9 9h10v10H9z"></path>
+            <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path>
+        </symbol>
+        <symbol id="i-hourglass" viewBox="0 0 24 24">
+            <path d="M6 2h12"></path>
+            <path d="M6 22h12"></path>
+            <path d="M7 2c0 6 5 6 5 10s-5 4-5 10"></path>
+            <path d="M17 2c0 6-5 6-5 10s5 4 5 10"></path>
+        </symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24">
+            <path d="M3 3h18v18H3z"></path>
+            <path d="M9 3v18"></path>
+            <path d="M15 3v18"></path>
+            <path d="M3 9h18"></path>
+            <path d="M3 15h18"></path>
+        </symbol>
+        <symbol id="i-controller" viewBox="0 0 24 24">
+            <path d="M7.5 14.5h-2a4.5 4.5 0 0 1 0-9h13a4.5 4.5 0 0 1 0 9h-2"></path>
+            <path d="M8 12h4"></path>
+            <path d="M10 10v4"></path>
+            <path d="M16.5 10.5h.01"></path>
+            <path d="M18.5 12.5h.01"></path>
+        </symbol>
+        <symbol id="i-swords" viewBox="0 0 24 24">
+            <path d="M4 20l8-8"></path>
+            <path d="M6 4l6 6"></path>
+            <path d="M20 20l-8-8"></path>
+            <path d="M18 4l-6 6"></path>
+            <path d="M8 8 6 10"></path>
+            <path d="M16 8l2 2"></path>
+        </symbol>
+        <symbol id="i-dice" viewBox="0 0 24 24">
+            <path d="M5 5h14v14H5z"></path>
+            <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none"></circle>
+            <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none"></circle>
+            <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+            <circle cx="9" cy="15" r="1" fill="currentColor" stroke="none"></circle>
+            <circle cx="15" cy="15" r="1" fill="currentColor" stroke="none"></circle>
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 24 24">
+            <path d="M16 11a4 4 0 1 0-8 0"></path>
+            <path d="M3 21a9 9 0 0 1 18 0"></path>
+            <path d="M20 18a4.5 4.5 0 0 0-3.3-4.3"></path>
+            <path d="M7.3 13.7A4.5 4.5 0 0 0 4 18"></path>
+        </symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M3 12h18"></path>
+            <path d="M12 3a12 12 0 0 1 0 18"></path>
+            <path d="M12 3a12 12 0 0 0 0 18"></path>
+        </symbol>
+        <symbol id="i-cookie" viewBox="0 0 24 24">
+            <path d="M21 13a8.5 8.5 0 1 1-10-10 4 4 0 0 0 4 4 4 4 0 0 0 4 4 2 2 0 0 0 2-2Z"></path>
+            <circle cx="8.5" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+            <circle cx="12" cy="15.5" r="1" fill="currentColor" stroke="none"></circle>
+            <circle cx="13.5" cy="9.5" r="1" fill="currentColor" stroke="none"></circle>
+        </symbol>
+    </svg>
     <!-- Skip Links for Accessibility -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
     <a href="#sudoku-board" class="skip-link">Skip to game board</a>
@@ -33,26 +191,33 @@
     <div id="app" role="application" aria-label="Stonedoku Game">
         <!-- Header -->
         <header class="app-header">
-            <div class="logo" id="logo-home">
-                <img src="/assets/siteTitle.png" alt="Stonedoku" class="site-title-image">
-                <span class="sr-only">Stonedoku</span>
-            </div>
-            <nav class="nav-controls">
-                <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme">
-                    <span class="theme-icon">🌙</span>
+            <div class="app-header-inner">
+                <div class="logo" id="logo-home">
+                    <h1>Stonedoku</h1>
+                </div>
+                <nav class="nav-controls">
+                <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme" title="Toggle theme">
+                    <span class="icon-stack" aria-hidden="true">
+                        <svg class="ui-icon icon-moon"><use href="#i-moon"></use></svg>
+                        <svg class="ui-icon icon-sun"><use href="#i-sun"></use></svg>
+                    </span>
                 </button>
-                <button id="sound-toggle" class="btn btn-icon" aria-label="Toggle sound">
-                    <span class="sound-icon">🔊</span>
+                <button id="sound-toggle" class="btn btn-icon" aria-label="Toggle sound" title="Toggle sound">
+                    <span class="icon-stack" aria-hidden="true">
+                        <svg class="ui-icon icon-volume"><use href="#i-volume"></use></svg>
+                        <svg class="ui-icon icon-volume-off"><use href="#i-volume-off"></use></svg>
+                    </span>
                 </button>
                 <div class="user-info" id="user-info" style="display: none;">
                     <span class="user-status" id="user-status"></span>
                     <span class="user-name" id="user-name"></span>
                     <button id="my-profile-btn" class="btn btn-icon" aria-label="My Profile" title="My Profile">
-                        👤
+                        <svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>
                     </button>
                     <button id="logout-btn" class="btn btn-secondary btn-sm">Logout</button>
                 </div>
             </nav>
+            </div>
         </header>
 
         <!-- Main Content -->
@@ -64,7 +229,7 @@
                     <div class="auth-hero">
                         <div class="hero-content">
                             <div class="hero-badge">
-                                <span class="badge-icon">⚡</span>
+                                <span class="badge-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-bolt"></use></svg></span>
                                 <span>Real-time multiplayer</span>
                             </div>
                             <h1 class="hero-title">
@@ -77,15 +242,15 @@
                             </p>
                             <div class="hero-features">
                                 <div class="feature-item">
-                                    <span class="feature-icon">🎯</span>
+                                    <span class="feature-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-target"></use></svg></span>
                                     <span>Solo & Versus Modes</span>
                                 </div>
                                 <div class="feature-item">
-                                    <span class="feature-icon">📊</span>
+                                    <span class="feature-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-chart"></use></svg></span>
                                     <span>Track Your Progress</span>
                                 </div>
                                 <div class="feature-item">
-                                    <span class="feature-icon">🏆</span>
+                                    <span class="feature-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-trophy"></use></svg></span>
                                     <span>Earn Achievements</span>
                                 </div>
                             </div>
@@ -256,19 +421,19 @@
                     </div>
 
                     <!-- Step 3: Profile Picture (Optional) -->
-                    <div class="onboarding-step" id="onboarding-step-3">
-                        <div class="onboarding-card">
-                            <div class="onboarding-emoji">📸</div>
-                            <h2 class="onboarding-title">Looking good!</h2>
-                            <p class="onboarding-subtitle">Add a profile picture so others can recognize you</p>
+	                    <div class="onboarding-step" id="onboarding-step-3">
+	                        <div class="onboarding-card">
+	                            <div class="onboarding-emoji" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-camera"></use></svg></div>
+	                            <h2 class="onboarding-title">Looking good!</h2>
+	                            <p class="onboarding-subtitle">Add a profile picture so others can recognize you</p>
                             
                             <div class="onboarding-form">
-                                <div class="profile-upload-area" id="profile-upload-area">
-                                    <div class="upload-preview" id="upload-preview">
-                                        <div class="upload-placeholder">
-                                            <span class="upload-icon">📷</span>
-                                            <span class="upload-text">Click or drag to upload</span>
-                                        </div>
+	                                <div class="profile-upload-area" id="profile-upload-area">
+	                                    <div class="upload-preview" id="upload-preview">
+	                                        <div class="upload-placeholder">
+	                                            <span class="upload-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-camera"></use></svg></span>
+	                                            <span class="upload-text">Click or drag to upload</span>
+	                                        </div>
                                         <img id="preview-image" src="" alt="Preview" style="display: none;">
                                     </div>
                                     <input type="file" id="onboard-avatar" accept="image/*" hidden>
@@ -388,14 +553,14 @@
                                 <div class="form-error" id="reset-confirm-status"></div>
                             </form>
                         </div>
-                        <div id="reset-success-panel" class="reset-panel" style="display: none;">
-                            <div class="reset-success">
-                                <div class="reset-success-icon">✅</div>
-                                <h3>Password updated</h3>
-                                <p>You can now sign in with your new password.</p>
-                                <button type="button" class="btn btn-primary btn-block" id="reset-return-login">Return to sign in</button>
-                            </div>
-                        </div>
+	                        <div id="reset-success-panel" class="reset-panel" style="display: none;">
+	                            <div class="reset-success">
+	                                <div class="reset-success-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-check"></use></svg></div>
+	                                <h3>Password updated</h3>
+	                                <p>You can now sign in with your new password.</p>
+	                                <button type="button" class="btn btn-primary btn-block" id="reset-return-login">Return to sign in</button>
+	                            </div>
+	                        </div>
                         <div class="reset-footer">
                             <button type="button" class="link-btn-inline" id="reset-back-to-login">← Back to sign in</button>
                         </div>
@@ -412,68 +577,65 @@
                             <h2>Welcome back, <span class="brand-gradient" id="welcome-name">Player</span></h2>
                             <p>What would you like to play today?</p>
                         </div>
-                        <div class="online-badge">
-                            <span class="pulse-dot"></span>
-                            <span id="online-count">0</span> players online
-                        </div>
                     </div>
 
                     <!-- Quick Play Section -->
-                    <div class="lobby-main">
-                        <div class="play-section">
-                            <h3 class="section-title">🎮 Choose Your Mode</h3>
-                            <div class="game-mode-grid">
-                                <!-- Single Player Card -->
-                                <div class="game-card single-card">
-                                    <div class="card-badge">Solo</div>
-                                    <div class="card-icon">🧩</div>
-                                    <div class="card-content">
-                                        <h4>Classic Sudoku</h4>
-                                        <p>Train your skills at your own pace</p>
-                                        <div class="difficulty-buttons">
-                                            <button class="diff-btn easy" data-difficulty="easy">
-                                                <span class="diff-icon">🟢</span> Easy
-                                            </button>
-                                            <button class="diff-btn medium" data-difficulty="medium">
-                                                <span class="diff-icon">🟡</span> Medium
-                                            </button>
-                                            <button class="diff-btn hard" data-difficulty="hard">
-                                                <span class="diff-icon">🔴</span> Hard
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+	                    <div class="lobby-main">
+	                        <div class="play-section">
+	                            <h3 class="section-title"><svg class="ui-icon" aria-hidden="true"><use href="#i-controller"></use></svg>Choose Your Mode</h3>
+	                            <div class="game-mode-grid">
+	                                <!-- Single Player Card -->
+	                                <div class="game-card single-card">
+	                                    <div class="card-badge">Solo</div>
+	                                    <div class="card-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-grid"></use></svg></div>
+	                                    <div class="card-content">
+	                                        <h4>Classic Sudoku</h4>
+	                                        <p>Train your skills at your own pace</p>
+	                                        <div class="difficulty-buttons">
+	                                            <button class="diff-btn easy" data-difficulty="easy">
+	                                                <span class="diff-dot diff-dot-easy" aria-hidden="true"></span> Easy
+	                                            </button>
+	                                            <button class="diff-btn medium" data-difficulty="medium">
+	                                                <span class="diff-dot diff-dot-medium" aria-hidden="true"></span> Medium
+	                                            </button>
+	                                            <button class="diff-btn hard" data-difficulty="hard">
+	                                                <span class="diff-dot diff-dot-hard" aria-hidden="true"></span> Hard
+	                                            </button>
+	                                        </div>
+	                                    </div>
+	                                </div>
 
                                 <!-- Versus Card -->
-                                <div class="game-card versus-card">
-                                    <div class="card-badge accent">Live</div>
-                                    <div class="card-icon">⚔️</div>
-                                    <div class="card-content">
-                                        <h4>Bust the Board</h4>
-                                        <p>1v1 real-time Sudoku battle</p>
-                                        <div class="versus-actions">
-                                            <button class="btn btn-glow" id="create-room">
-                                                <span>🎲</span> Create Game
-                                            </button>
-                                            <div class="join-inline">
-                                                <input type="text" id="room-code-input" placeholder="CODE" maxlength="4">
-                                                <button class="btn btn-outline" id="join-room">Join</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+	                                <div class="game-card versus-card">
+	                                    <div class="card-badge accent">Live</div>
+	                                    <div class="card-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-swords"></use></svg></div>
+	                                    <div class="card-content">
+	                                        <h4>Bust the Board</h4>
+	                                        <p>1v1 real-time Sudoku battle</p>
+	                                        <div class="versus-actions">
+	                                            <button class="btn btn-glow" id="create-room">
+	                                                <svg class="ui-icon" aria-hidden="true"><use href="#i-dice"></use></svg>
+	                                                Create Game
+	                                            </button>
+	                                            <div class="join-inline">
+	                                                <input type="text" id="room-code-input" placeholder="CODE" maxlength="4">
+	                                                <button class="btn btn-outline" id="join-room">Join</button>
+	                                            </div>
+	                                        </div>
+	                                    </div>
+	                                </div>
                             </div>
                         </div>
 
                         <!-- Side Panel -->
-                        <div class="lobby-side">
-                            <!-- Your Stats -->
-                            <div class="stats-card">
-                                <h3 class="section-title">📊 Your Stats</h3>
-                                <div class="stats-row">
-                                    <div class="stat-box">
-                                        <span class="stat-num" id="stat-wins">0</span>
-                                        <span class="stat-lbl">Wins</span>
+	                        <div class="lobby-side">
+	                            <!-- Your Stats -->
+	                            <div class="stats-card">
+	                                <h3 class="section-title"><svg class="ui-icon" aria-hidden="true"><use href="#i-chart"></use></svg>Your Stats</h3>
+	                                <div class="stats-row">
+	                                    <div class="stat-box">
+	                                        <span class="stat-num" id="stat-wins">0</span>
+	                                        <span class="stat-lbl">Wins</span>
                                     </div>
                                     <div class="stat-box">
                                         <span class="stat-num" id="stat-losses">0</span>
@@ -486,16 +648,23 @@
                                 </div>
                             </div>
 
-                            <!-- Online Players -->
-                            <div class="players-card">
-                                <h3 class="section-title">👥 Players Online</h3>
-                                <div class="players-list" id="players-list">
-                                    <div class="empty-players">
-                                        <span class="empty-icon">👻</span>
-                                        <span>No players online</span>
-                                    </div>
-                                </div>
-                            </div>
+	                            <!-- Online Players -->
+	                            <div class="players-card">
+	                                <h3 class="section-title">
+	                                    <svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>
+	                                    Players Online
+	                                    <span class="players-count-pill" aria-label="Players online">
+	                                        <span class="pulse-dot" aria-hidden="true"></span>
+	                                        <span id="online-count">0</span>
+	                                    </span>
+	                                </h3>
+	                                <div class="players-list" id="players-list">
+	                                    <div class="empty-players">
+	                                        <span class="empty-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-users"></use></svg></span>
+	                                        <span>No players online</span>
+	                                    </div>
+	                                </div>
+	                            </div>
                         </div>
                     </div>
                 </div>
@@ -503,18 +672,19 @@
 
             <!-- Waiting Room View (Waiting for opponent to join) -->
             <section id="waiting-view" class="view" style="display: none;">
-                <div class="waiting-container">
-                    <div class="waiting-card">
-                        <div class="waiting-icon">⏳</div>
-                        <h2>Waiting for Opponent</h2>
-                        <p class="waiting-subtitle">Share this code with a friend to start playing</p>
+	                <div class="waiting-container">
+	                    <div class="waiting-card">
+	                        <div class="waiting-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-hourglass"></use></svg></div>
+	                        <h2>Waiting for Opponent</h2>
+	                        <p class="waiting-subtitle">Share this code with a friend to start playing</p>
                         
-                        <div class="room-code-display">
-                            <div class="code-box" id="display-room-code">----</div>
-                            <button class="btn btn-secondary btn-copy" id="copy-code">
-                                <span class="copy-icon">📋</span> Copy Code
-                            </button>
-                        </div>
+	                        <div class="room-code-display">
+	                            <div class="code-box" id="display-room-code">----</div>
+	                            <button class="btn btn-secondary btn-copy" id="copy-code">
+	                                <span class="copy-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-copy"></use></svg></span>
+	                                Copy Code
+	                            </button>
+	                        </div>
                         
                         <div class="waiting-animation">
                             <div class="waiting-dots">
@@ -525,26 +695,27 @@
                             <p>Looking for players...</p>
                         </div>
                         
-                        <button class="btn btn-danger btn-cancel" id="cancel-waiting">
-                            ✕ Cancel
-                        </button>
-                    </div>
-                </div>
+	                        <button class="btn btn-danger btn-cancel" id="cancel-waiting">
+	                            <svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg>
+	                            Cancel
+	                        </button>
+	                    </div>
+	                </div>
             </section>
 
             <!-- Pre-Game Lobby (Both players ready up) -->
             <section id="pregame-lobby-view" class="view" style="display: none;">
                 <div class="pregame-container">
-                    <div class="pregame-header">
-                        <h2>⚔️ Match Found!</h2>
-                        <p>Get ready for battle</p>
-                    </div>
+	                    <div class="pregame-header">
+	                        <h2><svg class="ui-icon" aria-hidden="true"><use href="#i-swords"></use></svg>Match Found!</h2>
+	                        <p>Get ready for battle</p>
+	                    </div>
                     
                     <div class="pregame-players">
                         <!-- Player 1 (Self) -->
-                        <div class="pregame-player self">
-                            <div class="player-avatar">👤</div>
-                            <div class="player-name" id="pregame-player-name">You</div>
+	                        <div class="pregame-player self">
+	                            <div class="player-avatar" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-user"></use></svg></div>
+	                            <div class="player-name" id="pregame-player-name">You</div>
                             <div class="player-ready-status" id="pregame-player-status">
                                 <span class="status-text">Not Ready</span>
                             </div>
@@ -558,20 +729,20 @@
                         </div>
                         
                         <!-- Player 2 (Opponent) -->
-                        <div class="pregame-player opponent">
-                            <div class="player-avatar">👤</div>
-                            <div class="player-name" id="pregame-opponent-name">Opponent</div>
+	                        <div class="pregame-player opponent">
+	                            <div class="player-avatar" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-user"></use></svg></div>
+	                            <div class="player-name" id="pregame-opponent-name">Opponent</div>
                             <div class="player-ready-status" id="pregame-opponent-status">
                                 <span class="status-text">Not Ready</span>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="pregame-actions">
-                        <button class="btn btn-ready" id="ready-btn">
-                            <span class="ready-icon">✓</span>
-                            <span class="ready-text">Ready Up!</span>
-                        </button>
+	                    <div class="pregame-actions">
+	                        <button class="btn btn-ready" id="ready-btn">
+	                            <span class="ready-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-check"></use></svg></span>
+	                            <span class="ready-text">Ready Up!</span>
+	                        </button>
                         <button class="btn btn-secondary" id="leave-pregame">
                             Leave Match
                         </button>
@@ -579,9 +750,9 @@
                     
                     <!-- Pre-game Chat -->
                     <div class="pregame-chat">
-                        <div class="pregame-chat-header">
-                            <span>💬 Chat</span>
-                        </div>
+	                    <div class="pregame-chat-header">
+	                            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg>Chat</span>
+	                        </div>
                         <div class="pregame-chat-messages" id="pregame-chat-messages">
                             <div class="chat-system-msg">Say hello to your opponent!</div>
                         </div>
@@ -639,8 +810,11 @@
                         <!-- New Game Card -->
                         <div class="new-game-card">
                             <div class="new-game-header">
-                                <h3>▶ New Game</h3>
-                                <button class="btn btn-sm btn-secondary" id="restart-btn">↻ Restart</button>
+                                <h3>New Game</h3>
+                                <button class="btn btn-sm btn-secondary" id="restart-btn">
+                                    <svg class="ui-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>
+                                    Restart
+                                </button>
                             </div>
                             <div class="difficulty-grid">
                                 <button class="difficulty-btn btn-easy" data-difficulty="easy">Easy</button>
@@ -652,7 +826,7 @@
 
                         <!-- Settings Card -->
                         <div class="settings-card">
-                            <h3>⚙️ Settings</h3>
+                            <h3><svg class="ui-icon" aria-hidden="true"><use href="#i-gear"></use></svg> Settings</h3>
                             <div class="setting-row">
                                 <span class="setting-label">Highlight Conflicts</span>
                                 <label class="toggle-switch">
@@ -761,19 +935,19 @@
                         <div class="action-buttons-card">
                             <div class="action-buttons">
                                 <button class="action-btn" id="undo-btn">
-                                    <span class="icon">↩</span>
+                                    <span class="icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-undo"></use></svg></span>
                                     <span>Undo</span>
                                 </button>
                                 <button class="action-btn" id="hint-btn">
-                                    <span class="icon">💡</span>
+                                    <span class="icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-bulb"></use></svg></span>
                                     <span>Hint</span>
                                 </button>
                                 <button class="action-btn" id="erase-btn">
-                                    <span class="icon">⌫</span>
+                                    <span class="icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-backspace"></use></svg></span>
                                     <span>Erase</span>
                                 </button>
                                 <button class="action-btn" id="notes-btn">
-                                    <span class="icon">✏️</span>
+                                    <span class="icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-pencil"></use></svg></span>
                                     <span>Notes</span>
                                 </button>
                             </div>
@@ -788,11 +962,11 @@
                     <div class="modal-header">
                         <h2 id="game-over-title">Game Over!</h2>
                     </div>
-                    <div class="modal-body">
-                        <div class="result-display" id="result-display">
-                            <div class="result-icon" id="result-icon">🏆</div>
-                            <p id="result-message">You won!</p>
-                        </div>
+	                    <div class="modal-body">
+	                        <div class="result-display" id="result-display">
+	                            <div class="result-icon" id="result-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-trophy"></use></svg></div>
+	                            <p id="result-message">You won!</p>
+	                        </div>
                         <div class="game-stats">
                             <div class="stat-row">
                                 <span>Your Score:</span>
@@ -818,64 +992,66 @@
                         <h1 id="postmatch-title">Match Complete!</h1>
                     </div>
                     
-                    <div class="postmatch-result">
-                        <div class="postmatch-player winner" id="postmatch-winner">
-                            <div class="trophy-icon">🏆</div>
-                            <div class="result-label">WINNER</div>
-                            <div class="player-avatar">👤</div>
-                            <div class="player-name" id="postmatch-winner-name">Player</div>
-                            <div class="player-score" id="postmatch-winner-score">0 points</div>
-                        </div>
+	                    <div class="postmatch-result">
+	                        <div class="postmatch-player winner" id="postmatch-winner">
+	                            <div class="trophy-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-trophy"></use></svg></div>
+	                            <div class="result-label">WINNER</div>
+	                            <div class="player-avatar" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-user"></use></svg></div>
+	                            <div class="player-name" id="postmatch-winner-name">Player</div>
+	                            <div class="player-score" id="postmatch-winner-score">0 points</div>
+	                        </div>
                         
                         <div class="postmatch-vs">
                             <div class="vs-badge">VS</div>
                         </div>
                         
-                        <div class="postmatch-player loser" id="postmatch-loser">
-                            <div class="result-label">DEFEATED</div>
-                            <div class="player-avatar">👤</div>
-                            <div class="player-name" id="postmatch-loser-name">Opponent</div>
-                            <div class="player-score" id="postmatch-loser-score">0 points</div>
-                        </div>
-                    </div>
+	                        <div class="postmatch-player loser" id="postmatch-loser">
+	                            <div class="result-label">DEFEATED</div>
+	                            <div class="player-avatar" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-user"></use></svg></div>
+	                            <div class="player-name" id="postmatch-loser-name">Opponent</div>
+	                            <div class="player-score" id="postmatch-loser-score">0 points</div>
+	                        </div>
+	                    </div>
                     
-                    <div class="postmatch-stats">
-                        <div class="stat-card">
-                            <span class="stat-icon">⏱️</span>
-                            <span class="stat-value" id="postmatch-time">00:00</span>
-                            <span class="stat-label">Time</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-icon">📊</span>
-                            <span class="stat-value" id="postmatch-reason">Completed</span>
-                            <span class="stat-label">Result</span>
-                        </div>
-                    </div>
+	                    <div class="postmatch-stats">
+	                        <div class="stat-card">
+	                            <span class="stat-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-hourglass"></use></svg></span>
+	                            <span class="stat-value" id="postmatch-time">00:00</span>
+	                            <span class="stat-label">Time</span>
+	                        </div>
+	                        <div class="stat-card">
+	                            <span class="stat-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-chart"></use></svg></span>
+	                            <span class="stat-value" id="postmatch-reason">Completed</span>
+	                            <span class="stat-label">Result</span>
+	                        </div>
+	                    </div>
                     
                     <div class="postmatch-rematch">
                         <div class="rematch-status" id="rematch-status">
                             <span class="rematch-text">Want a rematch?</span>
                         </div>
                         
-                        <div class="rematch-votes">
-                            <div class="vote-indicator self" id="rematch-vote-self">
-                                <span class="vote-icon">❓</span>
-                                <span class="vote-label">You</span>
-                            </div>
-                            <div class="vote-indicator opponent" id="rematch-vote-opponent">
-                                <span class="vote-icon">❓</span>
-                                <span class="vote-label">Opponent</span>
-                            </div>
-                        </div>
+	                        <div class="rematch-votes">
+	                            <div class="vote-indicator self" id="rematch-vote-self">
+	                                <span class="vote-icon" aria-hidden="true">?</span>
+	                                <span class="vote-label">You</span>
+	                            </div>
+	                            <div class="vote-indicator opponent" id="rematch-vote-opponent">
+	                                <span class="vote-icon" aria-hidden="true">?</span>
+	                                <span class="vote-label">Opponent</span>
+	                            </div>
+	                        </div>
                         
-                        <div class="rematch-actions" id="rematch-actions">
-                            <button class="btn btn-success btn-rematch" id="rematch-yes">
-                                ✓ Rematch!
-                            </button>
-                            <button class="btn btn-danger btn-no-rematch" id="rematch-no">
-                                ✕ No Thanks
-                            </button>
-                        </div>
+	                        <div class="rematch-actions" id="rematch-actions">
+	                            <button class="btn btn-success btn-rematch" id="rematch-yes">
+	                                <svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg>
+	                                Rematch!
+	                            </button>
+	                            <button class="btn btn-danger btn-no-rematch" id="rematch-no">
+	                                <svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg>
+	                                No Thanks
+	                            </button>
+	                        </div>
                         
                         <div class="rematch-waiting" id="rematch-waiting" style="display: none;">
                             <div class="waiting-dots">
@@ -901,15 +1077,15 @@
                     
                     <div class="profile-page-content">
                         <!-- Profile Card -->
-                        <div class="profile-card-main">
-                            <div class="profile-picture-wrapper">
-                                <img src="" alt="Profile Picture" id="profile-page-picture" class="profile-picture">
-                                <div class="profile-picture-placeholder" id="profile-picture-placeholder">👤</div>
-                                <label class="profile-picture-edit" id="profile-picture-edit" style="display: none;">
-                                    <input type="file" accept="image/*" id="profile-picture-input">
-                                    <span class="edit-icon">📷</span>
-                                </label>
-                            </div>
+	                        <div class="profile-card-main">
+	                            <div class="profile-picture-wrapper">
+	                                <img src="" alt="Profile Picture" id="profile-page-picture" class="profile-picture">
+	                                <div class="profile-picture-placeholder" id="profile-picture-placeholder" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-user"></use></svg></div>
+	                                <label class="profile-picture-edit" id="profile-picture-edit" style="display: none;">
+	                                    <input type="file" accept="image/*" id="profile-picture-input">
+	                                    <span class="edit-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-camera"></use></svg></span>
+	                                </label>
+	                            </div>
                             
                             <div class="profile-details">
                                 <h2 id="profile-page-username">Username</h2>
@@ -926,78 +1102,79 @@
                                     </div>
                                 </div>
                                 <p class="profile-member-date">Member since <span id="profile-page-member-since">---</span></p>
-                                <div class="profile-vanity-url" id="profile-vanity-url">
+	                                <div class="profile-vanity-url" id="profile-vanity-url">
                                     <span class="vanity-label">Profile URL:</span>
                                     <a href="#" id="profile-vanity-link">stone-doku.web.app/u/username</a>
-                                    <button class="btn btn-icon btn-copy-url" id="copy-profile-url" title="Copy URL">📋</button>
-                                </div>
-                            </div>
-                        </div>
+	                                    <button class="btn btn-icon btn-copy-url" id="copy-profile-url" title="Copy URL" aria-label="Copy profile URL"><svg class="ui-icon" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+	                                </div>
+	                            </div>
+	                        </div>
                         
-                        <!-- Stats Section -->
-                        <div class="profile-stats-section">
-                            <h3>📊 Statistics</h3>
-                            <div class="profile-stats-grid">
-                                <div class="profile-stat-card">
-                                    <span class="stat-icon">🏆</span>
-                                    <span class="stat-value" id="profile-page-wins">0</span>
-                                    <span class="stat-label">Wins</span>
-                                </div>
-                                <div class="profile-stat-card">
-                                    <span class="stat-icon">💔</span>
-                                    <span class="stat-value" id="profile-page-losses">0</span>
-                                    <span class="stat-label">Losses</span>
-                                </div>
-                                <div class="profile-stat-card accent">
-                                    <span class="stat-icon">📈</span>
-                                    <span class="stat-value" id="profile-page-winrate">0%</span>
-                                    <span class="stat-label">Win Rate</span>
-                                </div>
-                                <div class="profile-stat-card">
-                                    <span class="stat-icon">🎮</span>
-                                    <span class="stat-value" id="profile-page-games">0</span>
-                                    <span class="stat-label">Games Played</span>
-                                </div>
-                            </div>
-                        </div>
+	                        <!-- Stats Section -->
+	                        <div class="profile-stats-section">
+	                            <h3><svg class="ui-icon" aria-hidden="true"><use href="#i-chart"></use></svg>Statistics</h3>
+	                            <div class="profile-stats-grid">
+	                                <div class="profile-stat-card">
+	                                    <span class="stat-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-trophy"></use></svg></span>
+	                                    <span class="stat-value" id="profile-page-wins">0</span>
+	                                    <span class="stat-label">Wins</span>
+	                                </div>
+	                                <div class="profile-stat-card">
+	                                    <span class="stat-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-x"></use></svg></span>
+	                                    <span class="stat-value" id="profile-page-losses">0</span>
+	                                    <span class="stat-label">Losses</span>
+	                                </div>
+	                                <div class="profile-stat-card accent">
+	                                    <span class="stat-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-chart"></use></svg></span>
+	                                    <span class="stat-value" id="profile-page-winrate">0%</span>
+	                                    <span class="stat-label">Win Rate</span>
+	                                </div>
+	                                <div class="profile-stat-card">
+	                                    <span class="stat-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-controller"></use></svg></span>
+	                                    <span class="stat-value" id="profile-page-games">0</span>
+	                                    <span class="stat-label">Games Played</span>
+	                                </div>
+	                            </div>
+	                        </div>
                         
-                        <!-- Badges Section -->
-                        <div class="profile-badges-section">
-                            <h3>🏅 Badges</h3>
-                            <div class="profile-badges-grid" id="profile-page-badges">
-                                <div class="badge-empty">No badges yet. Keep playing to earn badges!</div>
-                            </div>
-                        </div>
+	                        <!-- Badges Section -->
+	                        <div class="profile-badges-section">
+	                            <h3><svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>Badges</h3>
+	                            <div class="profile-badges-grid" id="profile-page-badges">
+	                                <div class="badge-empty">No badges yet. Keep playing to earn badges!</div>
+	                            </div>
+	                        </div>
                         
-                        <!-- Social Sharing -->
-                        <div class="profile-social-section">
-                            <h3>📤 Share Your Stats</h3>
-                            <div class="social-share-buttons">
+	                        <!-- Social Sharing -->
+	                        <div class="profile-social-section">
+	                            <h3><svg class="ui-icon" aria-hidden="true"><use href="#i-send"></use></svg>Share Your Stats</h3>
+	                            <div class="social-share-buttons">
                                 <button class="btn btn-social btn-twitter" id="share-twitter">
                                     <span class="social-icon">𝕏</span> Share on X
                                 </button>
                                 <button class="btn btn-social btn-facebook" id="share-facebook">
                                     <span class="social-icon">f</span> Share on Facebook
                                 </button>
-                                <button class="btn btn-social btn-copy" id="share-copy">
-                                    <span class="social-icon">📋</span> Copy Stats
-                                </button>
-                            </div>
-                        </div>
+	                                <button class="btn btn-social btn-copy" id="share-copy">
+	                                    <span class="social-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-copy"></use></svg></span>
+	                                    Copy Stats
+	                                </button>
+	                            </div>
+	                        </div>
                         
-                        <!-- Actions for own profile -->
-                        <div class="profile-actions" id="profile-own-actions" style="display: none;">
-                            <button class="btn btn-primary" id="edit-profile-btn">✏️ Edit Profile</button>
-                            <button class="btn btn-success" id="save-profile-btn" style="display: none;">💾 Save Changes</button>
-                            <button class="btn btn-secondary" id="cancel-edit-btn" style="display: none;">Cancel</button>
-                        </div>
+	                        <!-- Actions for own profile -->
+	                        <div class="profile-actions" id="profile-own-actions" style="display: none;">
+	                            <button class="btn btn-primary" id="edit-profile-btn"><svg class="ui-icon" aria-hidden="true"><use href="#i-pencil"></use></svg>Edit Profile</button>
+	                            <button class="btn btn-success" id="save-profile-btn" style="display: none;"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg>Save Changes</button>
+	                            <button class="btn btn-secondary" id="cancel-edit-btn" style="display: none;">Cancel</button>
+	                        </div>
                         
                         <!-- Actions for other profiles -->
-                        <div class="profile-actions" id="profile-other-actions" style="display: none;">
-                            <button class="btn btn-primary" id="profile-challenge-btn">⚔️ Challenge</button>
-                            <button class="btn btn-secondary" id="profile-friend-btn">👥 Add Friend</button>
-                            <button class="btn btn-accent" id="profile-dm-btn">💬 Message</button>
-                        </div>
+	                        <div class="profile-actions" id="profile-other-actions" style="display: none;">
+	                            <button class="btn btn-primary" id="profile-challenge-btn"><svg class="ui-icon" aria-hidden="true"><use href="#i-swords"></use></svg><span class="btn-label">Challenge</span></button>
+	                            <button class="btn btn-secondary" id="profile-friend-btn"><svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg><span class="btn-label">Add Friend</span></button>
+	                            <button class="btn btn-accent" id="profile-dm-btn"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg><span class="btn-label">Message</span></button>
+	                        </div>
                     </div>
                 </div>
             </section>
@@ -1073,26 +1250,26 @@
         </main>
 
         <!-- Floating Chat Widget -->
-        <div id="chat-widget" class="chat-widget minimized">
-            <div class="chat-widget-header" id="chat-widget-header">
-                <div class="chat-widget-tabs" id="chat-widget-tabs">
-                    <button class="widget-tab active" data-chat="global">🌐 Global</button>
-                    <button class="widget-tab" data-chat="game" id="widget-game-tab" style="display: none;">👥 Game</button>
-                    <button class="widget-tab" data-chat="dms" id="widget-dms-tab">💬 DMs</button>
-                </div>
-                <div class="chat-widget-controls">
-                    <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
-                    <button class="widget-btn" id="chat-minimize" title="Minimize">−</button>
-                    <button class="widget-btn" id="chat-maximize" title="Maximize">□</button>
-                </div>
-            </div>
+	        <div id="chat-widget" class="chat-widget minimized">
+	            <div class="chat-widget-header" id="chat-widget-header">
+	                <div class="chat-widget-tabs" id="chat-widget-tabs">
+	                    <button class="widget-tab active" data-chat="global"><svg class="ui-icon" aria-hidden="true"><use href="#i-globe"></use></svg>Global</button>
+	                    <button class="widget-tab" data-chat="game" id="widget-game-tab" style="display: none;"><svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>Game</button>
+	                    <button class="widget-tab" data-chat="dms" id="widget-dms-tab"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg>DMs</button>
+	                </div>
+	                <div class="chat-widget-controls">
+	                    <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
+	                    <button class="widget-btn" id="chat-minimize" title="Minimize" aria-label="Minimize chat"><svg class="ui-icon" aria-hidden="true"><use href="#i-minus"></use></svg></button>
+	                    <button class="widget-btn" id="chat-maximize" title="Maximize" aria-label="Maximize chat"><svg class="ui-icon" aria-hidden="true"><use href="#i-maximize"></use></svg></button>
+	                </div>
+	            </div>
             <div class="chat-widget-body">
                 <!-- DM List (shown when DMs tab active) -->
-                <div class="dm-list" id="dm-list" style="display: none;">
-                    <div class="dm-list-header">
-                        <span>Direct Messages</span>
-                        <button class="btn btn-sm btn-icon" id="new-dm-btn" title="Start new conversation">+</button>
-                    </div>
+	                <div class="dm-list" id="dm-list" style="display: none;">
+	                    <div class="dm-list-header">
+	                        <span>Direct Messages</span>
+	                        <button class="btn btn-sm btn-icon" id="new-dm-btn" title="Start new conversation" aria-label="Start new conversation"><svg class="ui-icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+	                    </div>
                     <div class="dm-conversations" id="dm-conversations">
                         <div class="dm-empty">No conversations yet. Start a chat by clicking a player's name or using @whisper username message</div>
                     </div>
@@ -1125,21 +1302,22 @@
                         <button type="button" class="emoji-btn">🙌</button>
                         <button type="button" class="emoji-btn">🤝</button>
                     </div>
-                </div>
-                <div class="chat-hint" id="chat-hint">
-                    💡 Tip: Use @whisper username message to send private messages
-                </div>
-                <form class="chat-widget-form" id="chat-widget-form">
-                    <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle">😊</button>
-                    <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
-                    <button type="submit" class="send-btn">➤</button>
-                </form>
-            </div>
-        </div>
+	                </div>
+	                <div class="chat-hint" id="chat-hint">
+	                    <svg class="ui-icon" aria-hidden="true"><use href="#i-bulb"></use></svg>
+	                    Tip: Use @whisper username message to send private messages
+	                </div>
+	                <form class="chat-widget-form" id="chat-widget-form">
+	                    <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle">😊</button>
+	                    <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
+	                    <button type="submit" class="send-btn" aria-label="Send message"><svg class="ui-icon" aria-hidden="true"><use href="#i-send"></use></svg></button>
+	                </form>
+	            </div>
+	        </div>
 
         <!-- Chat Toggle Button (when minimized) -->
         <button id="chat-fab" class="chat-fab">
-            <span class="fab-icon">💬</span>
+            <span class="fab-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-chat"></use></svg></span>
             <span class="fab-unread" id="fab-unread" style="display: none;">0</span>
         </button>
 
@@ -1162,12 +1340,12 @@
     </div>
 
     <!-- Cookie Consent Banner (UK PECR Compliant) -->
-    <div id="cookie-consent" class="cookie-banner" role="dialog" aria-labelledby="cookie-title" aria-describedby="cookie-desc" style="display: none;">
-        <div class="cookie-content">
-            <div class="cookie-header">
-                <span class="cookie-icon">🍪</span>
-                <h2 id="cookie-title">Cookie Preferences</h2>
-            </div>
+	    <div id="cookie-consent" class="cookie-banner" role="dialog" aria-labelledby="cookie-title" aria-describedby="cookie-desc" style="display: none;">
+	        <div class="cookie-content">
+	            <div class="cookie-header">
+	                <span class="cookie-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-cookie"></use></svg></span>
+	                <h2 id="cookie-title">Cookie Preferences</h2>
+	            </div>
             <p id="cookie-desc">We use cookies to enhance your experience. Under UK law (PECR), we need your consent for non-essential cookies.</p>
             <div class="cookie-options">
                 <label class="cookie-option">
@@ -1575,8 +1753,8 @@
     </div>
 
     <!-- Firebase SDK -->
-    <script type="module" src="app.js?v=20251221D"></script>
-    <script src="effects.js"></script>
+    <script type="module" src="/app.js?v=20251221D"></script>
+    <script src="/effects.js"></script>
         </div>
     </div>
 </body>

@@ -44,13 +44,17 @@ stonedoku/
 
 ## Local Development
 
-To run the app locally:
+To run the app locally (with live reload):
 
 ```bash
-firebase serve
+npm run dev
 ```
 
-The app will be available at `http://localhost:5000`
+The dev server binds to the correct port for your environment:
+- On Google Cloud Workstations/IDX, open the Preview URL shown in the terminal (often `http://localhost:80/`).
+- Otherwise, open `http://localhost:8080`.
+
+If you’re seeing an “old” version, double-check you’re visiting the URL printed by `npm run dev` (not a different preview/forwarded port that might point at another server).
 
 ## Deployment
 

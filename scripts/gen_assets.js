@@ -2,12 +2,12 @@
 /**
  * Asset generation orchestrator.
  * - Reads prompts from ./asset_prompts.json
- * - Backs up existing assets to /public/assets/_backup/<timestamp>
+ * - Backs up existing assets to /assets/_backup/<timestamp>
  * - Generates images via OpenAI Responses API (image_generation tool)
  * - Upscales with realesrgan-ncnn-vulkan / Upscayl / sharp fallback
  * - Vectorizes overlays via potrace (or falls back to simple embed)
  * - Converts to WebP (backgrounds) and SVG (overlays)
- * - Writes to /public/assets/
+ * - Writes to /assets/
  *
  * CLI flags:
  *   --only <name>       Only process a specific asset (match prompt name)
@@ -23,7 +23,7 @@ const sharp = require("sharp");
 const { vectorizeOverlay } = require("./lib/vectorize");
 
 const ROOT = path.resolve(__dirname, "..");
-const ASSETS_DIR = path.join(ROOT, "public", "assets");
+const ASSETS_DIR = path.join(ROOT, "assets");
 const PROMPTS_PATH = path.join(ROOT, "scripts", "asset_prompts.json");
 const TMP_DIR = path.join(ROOT, "tmp_assets");
 
