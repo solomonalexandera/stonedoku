@@ -8,10 +8,12 @@ import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     updateProfile,
+    deleteUser,
     signOut,
     onAuthStateChanged,
     verifyPasswordResetCode,
-    confirmPasswordReset
+    confirmPasswordReset,
+    sendPasswordResetEmail
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { 
     getDatabase, 
@@ -38,11 +40,13 @@ import {
     getDoc,
     setDoc,
     updateDoc,
+    deleteDoc,
     collection,
     query,
     where,
     getDocs,
     orderBy,
+    onSnapshot,
     limit,
     documentId,
     arrayUnion,
@@ -80,6 +84,38 @@ const auth = getAuth(firebaseApp);
 const rtdb = getDatabase(firebaseApp);
 const firestore = getFirestore(firebaseApp);
 const storage = getStorage(firebaseApp);
+
+// ===========================================
+// Password Policy (matches Firebase enforcement)
+// ===========================================
+const PasswordPolicy = {
+    minLength: 6,
+    maxLength: 4096,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireSpecial: true,
+
+    validate(password) {
+        const value = String(password || '');
+        const issues = [];
+
+        if (value.length < this.minLength) issues.push(`at least ${this.minLength} characters`);
+        if (value.length > this.maxLength) issues.push(`no more than ${this.maxLength} characters`);
+        if (this.requireUppercase && !/[A-Z]/.test(value)) issues.push('an uppercase letter');
+        if (this.requireLowercase && !/[a-z]/.test(value)) issues.push('a lowercase letter');
+        if (this.requireSpecial && !/[^A-Za-z0-9]/.test(value)) issues.push('a special character');
+
+        return { ok: issues.length === 0, issues };
+    },
+
+    message(password) {
+        const result = this.validate(password);
+        if (result.ok) return '';
+        const parts = result.issues;
+        const list = parts.length <= 2 ? parts.join(' and ') : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+        return `Password must include ${list}.`;
+    }
+};
 
 // ==========================
 // App version + cache management
@@ -165,8 +201,19 @@ const LogManager = (function(){
     };
 
     let disabled = false;
+    function hasAnalyticsConsent() {
+        try {
+            const raw = localStorage.getItem('stonedoku_cookie_consent');
+            if (!raw) return false;
+            const parsed = JSON.parse(raw);
+            return !!parsed?.analytics;
+        } catch {
+            return false;
+        }
+    }
     async function writeToFirestore(level, args) {
         if (disabled) return;
+        if (!hasAnalyticsConsent()) return;
         if (!window.AppState || !window.AppState.currentUser) return;
         try {
             // Build a compact message and optional meta payload
@@ -227,10 +274,12 @@ const AppState = {
     opponentScore: 0,
     gameTimer: null,
     gameSeconds: 0,
+    timeLimitSeconds: 0, // 0 = none (used in Custom Sudoku)
     soundEnabled: true,
     listeners: [],
     onlinePlayers: {},
     currentOpponent: null, // opponent ID in 1v1 mode
+    pendingChallenge: null, // { fromUserId, fromName } for incoming challenge modal
     pendingUsername: null, // Username pending for new signups
     authReady: false, // Flag for auth state ready
     // Onboarding state
@@ -264,7 +313,10 @@ const AppState = {
     moveHistory: [], // for undo
     currentDifficulty: 'medium',
     widgetChatMode: 'global', // 'global', 'game', or 'dm_[userId]'
+    widgetGameChatContext: null, // 'lobby:<code>' | 'match:<id>'
+    widgetGameChatUnsub: null, // function to stop current game-channel listener
     activeDMs: {}, // userId -> { messages: [], unread: 0 }
+    dmThreads: {}, // otherUserId -> { otherDisplayName, lastText, lastTimestamp, unread }
     friends: [], // Array of friend user IDs
     settings: {
         highlightConflicts: true,
@@ -273,12 +325,28 @@ const AppState = {
     }
 };
 
+function isRegisteredUser(user = AppState.currentUser, profile = AppState.profile) {
+    if (!user) return false;
+    if (user.isAnonymous) return false;
+    const email = user.email || profile?.email || null;
+    return !!email;
+}
+
 const AudioManager = {
     context: null,
     
     init() {
         try {
             this.context = new (window.AudioContext || window.webkitAudioContext)();
+            // Resume on first user gesture (required by most browsers).
+            const resume = () => {
+                if (!this.context) return;
+                if (this.context.state === 'suspended') this.context.resume().catch(() => {});
+                window.removeEventListener('pointerdown', resume);
+                window.removeEventListener('keydown', resume);
+            };
+            window.addEventListener('pointerdown', resume, { once: true });
+            window.addEventListener('keydown', resume, { once: true });
         } catch (e) {
             console.warn('Web Audio API not supported');
         }
@@ -302,30 +370,87 @@ const AudioManager = {
         oscillator.start(this.context.currentTime);
         oscillator.stop(this.context.currentTime + duration);
     },
+
+    createNoiseBuffer(durationSeconds = 0.12) {
+        if (!this.context) return null;
+        const sr = this.context.sampleRate;
+        const length = Math.max(1, Math.floor(sr * durationSeconds));
+        const buffer = this.context.createBuffer(1, length, sr);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < length; i++) {
+            data[i] = (Math.random() * 2 - 1) * 0.9;
+        }
+        return buffer;
+    },
+
+    playNoiseBurst({ duration = 0.12, filterType = 'bandpass', frequency = 1100, q = 0.9, gain = 0.12 } = {}) {
+        if (!this.context || !AppState.soundEnabled) return;
+        const buffer = this.createNoiseBuffer(duration);
+        if (!buffer) return;
+
+        const source = this.context.createBufferSource();
+        source.buffer = buffer;
+
+        const filter = this.context.createBiquadFilter();
+        filter.type = filterType;
+        filter.frequency.value = frequency;
+        filter.Q.value = q;
+
+        const gainNode = this.context.createGain();
+        gainNode.gain.setValueAtTime(0.0001, this.context.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(gain, this.context.currentTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, this.context.currentTime + duration);
+
+        source.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.context.destination);
+
+        source.start(this.context.currentTime);
+        source.stop(this.context.currentTime + duration);
+    },
     
     playCellFill() {
-        this.playTone(800, 0.1, 'sine');
+        // "Stone tap": a short bandpassed noise + a muted low tone.
+        this.playNoiseBurst({ duration: 0.08, filterType: 'bandpass', frequency: 1400, q: 1.2, gain: 0.08 });
+        this.playTone(240, 0.07, 'triangle');
     },
     
     playError() {
-        this.playTone(200, 0.3, 'square');
+        // "Grave" error: low thud + descending tone.
+        this.playNoiseBurst({ duration: 0.14, filterType: 'lowpass', frequency: 260, q: 0.7, gain: 0.12 });
+        this.playTone(180, 0.18, 'sawtooth');
+        setTimeout(() => this.playTone(130, 0.18, 'sawtooth'), 90);
     },
     
     playCorrect() {
-        this.playTone(600, 0.15, 'sine');
-        setTimeout(() => this.playTone(800, 0.15, 'sine'), 100);
+        // Subtle "bell" acknowledgement.
+        this.playTone(520, 0.16, 'sine');
+        setTimeout(() => this.playTone(660, 0.18, 'sine'), 90);
     },
     
     playVictory() {
-        [523, 659, 784, 1047].forEach((freq, i) => {
-            setTimeout(() => this.playTone(freq, 0.2, 'sine'), i * 150);
+        // Restrained ceremonial cadence.
+        [392, 523, 659, 784].forEach((freq, i) => {
+            setTimeout(() => this.playTone(freq, 0.24, 'sine'), i * 180);
         });
     },
     
     playDefeat() {
-        [400, 350, 300, 250].forEach((freq, i) => {
-            setTimeout(() => this.playTone(freq, 0.25, 'sawtooth'), i * 200);
+        [220, 196, 174, 155].forEach((freq, i) => {
+            setTimeout(() => this.playTone(freq, 0.28, 'sawtooth'), i * 220);
         });
+    },
+
+    playChatPing() {
+        // Quiet, non-whimsical notification.
+        this.playNoiseBurst({ duration: 0.07, filterType: 'bandpass', frequency: 900, q: 1.4, gain: 0.055 });
+        this.playTone(330, 0.08, 'sine');
+    },
+
+    playDmPing() {
+        // Slightly warmer ping for DMs.
+        this.playNoiseBurst({ duration: 0.08, filterType: 'bandpass', frequency: 760, q: 1.2, gain: 0.06 });
+        this.playTone(294, 0.09, 'sine');
     }
 };
 
@@ -613,7 +738,7 @@ const ArchitecturalStateSystem = {
 };
 
 const ViewManager = {
-    views: ['auth', 'onboarding', 'reset', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch', 'profile'],
+    views: ['auth', 'onboarding', 'reset', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch', 'profile', 'updates', 'admin'],
     
     show(viewName) {
         const prev = AppState.currentView;
@@ -1079,6 +1204,138 @@ const ProfileManager = {
         }
         
         return friends;
+    }
+};
+
+// ===========================================
+// Friends Panel (Lobby)
+// ===========================================
+const FriendsPanel = {
+    async refresh() {
+        if (!AppState.currentUser) return;
+        try {
+            const snap = await ProfileManager.getProfile(AppState.currentUser.uid);
+            if (snap.exists()) {
+                const data = snap.data() || {};
+                AppState.profile = data;
+                AppState.friends = Array.isArray(data.friends) ? data.friends : [];
+            }
+        } catch (e) {
+            console.warn('Failed to refresh profile for friends panel', e);
+        }
+        await this.render();
+    },
+
+    async render() {
+        const card = document.getElementById('friends-card');
+        const requestsList = document.getElementById('friend-requests-list');
+        const friendsList = document.getElementById('friends-list');
+        if (!card || !requestsList || !friendsList) return;
+
+        if (!isRegisteredUser()) {
+            card.style.display = 'none';
+            return;
+        }
+        card.style.display = 'block';
+
+        const requests = Array.isArray(AppState.profile?.friendRequests) ? AppState.profile.friendRequests : [];
+        const friends = Array.isArray(AppState.friends) ? AppState.friends : [];
+
+        const loadProfiles = async (ids) => {
+            const unique = Array.from(new Set(ids.filter(Boolean)));
+            const results = await Promise.all(unique.map(async (id) => {
+                try {
+                    const snap = await ProfileManager.getProfile(id);
+                    if (!snap.exists()) return { id, data: null };
+                    return { id, data: snap.data() || null };
+                } catch {
+                    return { id, data: null };
+                }
+            }));
+            return results;
+        };
+
+        // Requests
+        const requestIds = requests.map((r) => r?.from).filter(Boolean);
+        const requestProfiles = await loadProfiles(requestIds);
+        requestsList.innerHTML = '';
+        if (requestProfiles.length === 0) {
+            requestsList.innerHTML = '<div class="friend-empty">No incoming requests.</div>';
+        } else {
+            for (const r of requestProfiles) {
+                const name = r.data?.username || r.data?.displayName || `Player_${String(r.id).substring(0, 6)}`;
+                const row = document.createElement('div');
+                row.className = 'friend-item';
+                row.innerHTML = `
+                    <div class="friend-name">${UI.escapeHtml(name)}</div>
+                    <div class="friend-actions">
+                        <button class="btn btn-icon" type="button" title="Accept"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg></button>
+                        <button class="btn btn-icon" type="button" title="Decline"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                    </div>
+                `;
+                const [acceptBtn, declineBtn] = row.querySelectorAll('button');
+                acceptBtn?.addEventListener('click', async () => {
+                    try {
+                        await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, r.id);
+                        await this.refresh();
+                    } catch (e) {
+                        console.error('Failed to accept friend request', e);
+                        alert('Failed to accept request.');
+                    }
+                });
+                declineBtn?.addEventListener('click', async () => {
+                    try {
+                        await ProfileManager.declineFriendRequest(AppState.currentUser.uid, r.id);
+                        await this.refresh();
+                    } catch (e) {
+                        console.error('Failed to decline friend request', e);
+                        alert('Failed to decline request.');
+                    }
+                });
+                requestsList.appendChild(row);
+            }
+        }
+
+        // Friends list
+        const friendProfiles = await loadProfiles(friends);
+        friendsList.innerHTML = '';
+        if (friendProfiles.length === 0) {
+            friendsList.innerHTML = '<div class="friend-empty">No friends yet.</div>';
+        } else {
+            for (const f of friendProfiles) {
+                const name = f.data?.username || f.data?.displayName || `Player_${String(f.id).substring(0, 6)}`;
+                const row = document.createElement('div');
+                row.className = 'friend-item';
+                row.innerHTML = `
+                    <div class="friend-name">${UI.escapeHtml(name)}</div>
+                    <div class="friend-actions">
+                        <button class="btn btn-icon" type="button" title="Profile"><svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg></button>
+                        <button class="btn btn-icon" type="button" title="Message"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg></button>
+                        <button class="btn btn-icon" type="button" title="Remove"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                    </div>
+                `;
+                const [profileBtn, messageBtn, removeBtn] = row.querySelectorAll('button');
+                profileBtn?.addEventListener('click', () => UI.showProfilePage(f.id));
+                messageBtn?.addEventListener('click', async () => {
+                    try {
+                        await window.ChatWidget?.openDm?.(f.id);
+                    } catch (e) {
+                        console.warn('Failed to open DM from friends panel', e);
+                    }
+                });
+                removeBtn?.addEventListener('click', async () => {
+                    if (!confirm('Remove this friend?')) return;
+                    try {
+                        await ProfileManager.removeFriend(AppState.currentUser.uid, f.id);
+                        await this.refresh();
+                    } catch (e) {
+                        console.error('Failed to remove friend', e);
+                        alert('Failed to remove friend.');
+                    }
+                });
+                friendsList.appendChild(row);
+            }
+        }
     }
 };
 
@@ -1640,6 +1897,17 @@ async function cleanupAfterMatch() {
     AppState.currentOpponent = null;
     AppState.gameMode = 'lobby';
 
+    // Stop widget Game-channel listener (match/lobby) and hide the Game tab.
+    try {
+        if (typeof AppState.widgetGameChatUnsub === 'function') AppState.widgetGameChatUnsub();
+    } catch { /* ignore */ }
+    AppState.widgetGameChatUnsub = null;
+    AppState.widgetGameChatContext = null;
+    window.ChatWidget?.clearChannel?.('game');
+    if (typeof window.clearUnread === 'function') window.clearUnread('game');
+    const widgetGameTab = document.getElementById('widget-game-tab');
+    if (widgetGameTab) widgetGameTab.style.display = 'none';
+
     // Remove versus-mode class
     const gameContainer = document.querySelector('.game-container');
     if (gameContainer) gameContainer.classList.remove('versus-mode');
@@ -1735,12 +2003,17 @@ const OnboardingSystem = {
             const confirm = confirmInput?.value;
             
             const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-            const passwordValid = password.length >= 6;
+            const passwordResult = PasswordPolicy.validate(password);
+            const passwordValid = passwordResult.ok;
             const confirmValid = password === confirm;
             
             // Update error messages
             document.getElementById('email-error').textContent = 
                 email && !emailValid ? 'Please enter a valid email' : '';
+            const pwErrorEl = document.getElementById('password-error');
+            if (pwErrorEl) {
+                pwErrorEl.textContent = password ? (passwordValid ? '' : PasswordPolicy.message(password)) : '';
+            }
             document.getElementById('confirm-error').textContent = 
                 confirm && !confirmValid ? 'Passwords do not match' : '';
             
@@ -1853,12 +2126,13 @@ const OnboardingSystem = {
         let text = '';
         let color = '';
         
-        if (password.length >= 6) strength += 25;
-        if (password.length >= 8) strength += 25;
-        if (/[A-Z]/.test(password)) strength += 15;
-        if (/[a-z]/.test(password)) strength += 10;
-        if (/[0-9]/.test(password)) strength += 15;
-        if (/[^A-Za-z0-9]/.test(password)) strength += 10;
+        const minLen = PasswordPolicy.minLength;
+        if (password.length >= minLen) strength += 20;
+        if (/[A-Z]/.test(password)) strength += 20;
+        if (/[a-z]/.test(password)) strength += 20;
+        if (/[^A-Za-z0-9]/.test(password)) strength += 20;
+        if (password.length >= Math.max(minLen + 4, 10)) strength += 10;
+        if (/[0-9]/.test(password)) strength += 10;
         
         if (strength < 30) {
             text = 'Weak';
@@ -2016,7 +2290,7 @@ const OnboardingSystem = {
             if (error.code === 'auth/email-already-in-use') {
                 message = 'This email is already registered. Try signing in instead.';
             } else if (error.code === 'auth/weak-password') {
-                message = 'Password is too weak. Please use a stronger password.';
+                message = PasswordPolicy.message(password) || 'Password does not meet requirements.';
             }
             alert(message);
         }
@@ -2116,25 +2390,16 @@ const OnboardingSystem = {
             
             // Listen to global chat
             ChatManager.listenToGlobalChat((message) => {
-                const widgetMessages = document.getElementById('chat-widget-messages');
-                const activeTab = document.querySelector('.widget-tab.active');
-                const widgetMode = activeTab?.dataset.chat || 'global';
-                
-                if (widgetMessages && widgetMode === 'global') {
-                    UI.addChatMessage('chat-widget-messages', message.displayName, message.text, message.timestamp, message.userId);
-                }
-                
-                if (typeof window.incrementUnread === 'function') {
-                    window.incrementUnread('global', message.userId);
-                }
+                window.ChatWidget?.ingestMessage?.('global', message);
+            });
+
+            ChatManager.listenToDmThreads(user.uid, (threads) => {
+                window.ChatWidget?.setDmThreads?.(threads);
             });
             
             // Listen for challenges
             ChallengeSystem.listenToNotifications(user.uid, (challengerId, notification) => {
-                if (notification.status === 'pending') {
-                    document.getElementById('challenger-name').textContent = notification.fromName;
-                    ViewManager.showModal('challenge-modal');
-                }
+                handleChallengeNotification(challengerId, notification);
             });
             
             // Show chat widget
@@ -2258,15 +2523,37 @@ const PasswordReset = {
                 btn.textContent = 'Sending...';
             }
             this.setStatus('reset-request-status', '');
-            const resp = await fetch('/api/auth/reset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-            const payload = await resp.json().catch(() => ({}));
-            if (!resp.ok) {
-                throw new Error(payload.error || 'Unable to send reset email.');
+            const continueUrl = `${window.location.origin}${window.location.pathname}#/reset`;
+            const actionCodeSettings = {
+                url: continueUrl,
+                handleCodeInApp: true
+            };
+
+            try {
+                await sendPasswordResetEmail(auth, email, actionCodeSettings);
+            } catch (err) {
+                const code = err?.code || '';
+                // Avoid leaking whether an email exists.
+                if (code === 'auth/user-not-found') {
+                    this.setStatus('reset-request-status', 'If that email exists, a reset link is on its way.', false);
+                    return;
+                }
+                // If client-side email sending is blocked/misconfigured, fall back to the server helper.
+                try {
+                    const resp = await fetch('/api/auth/reset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    });
+                    const payload = await resp.json().catch(() => ({}));
+                    if (!resp.ok) throw new Error(payload.error || 'Unable to send reset email.');
+                } catch (fallbackErr) {
+                    // Prefer a helpful message when the email is invalid.
+                    if (code === 'auth/invalid-email') throw new Error('Please enter a valid email address.');
+                    throw err;
+                }
             }
+
             this.setStatus('reset-request-status', 'If that email exists, a reset link is on its way.', false);
         } catch (e) {
             console.error('Reset request failed', e);
@@ -2285,8 +2572,9 @@ const PasswordReset = {
             this.togglePanels('request');
             return;
         }
-        if (!password || password.length < 6) {
-            this.setStatus('reset-confirm-status', 'Password must be at least 6 characters.', true);
+        const policy = PasswordPolicy.validate(password);
+        if (!password || !policy.ok) {
+            this.setStatus('reset-confirm-status', PasswordPolicy.message(password) || 'Password does not meet requirements.', true);
             return;
         }
         if (password !== confirm) {
@@ -2411,6 +2699,11 @@ const TourSystem = {
         const tooltip = document.getElementById('tour-tooltip');
         
         if (!target || !spotlight || !tooltip) return;
+
+        // Ensure the target is actually visible (mobile + smaller screens).
+        try {
+            target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+        } catch { /* ignore */ }
         
         // Update spotlight
         const rect = target.getBoundingClientRect();
@@ -2517,16 +2810,78 @@ const TourSystem = {
 // Chat Manager
 // ===========================================
 const ChatManager = {
+    participantsEnsured: new Set(),
+
+    dmIdFor(userA, userB) {
+        return [userA, userB].sort().join('_');
+    },
+
+    async ensureDmParticipants(dmId, userA, userB) {
+        try {
+            if (!dmId || !userA || !userB) return;
+            if (!isRegisteredUser()) return;
+            if (this.participantsEnsured.has(dmId)) return;
+            const [a, b] = [userA, userB].sort();
+            const participantsRef = ref(rtdb, `dmParticipants/${dmId}`);
+            // Don't attempt to read first; rules may block reads until the node exists.
+            // Create is allowed when absent; if it already exists, ignore the failure.
+            try {
+                await set(participantsRef, { a, b });
+            } catch { /* ignore */ }
+            this.participantsEnsured.add(dmId);
+        } catch (e) {
+            console.warn('ensureDmParticipants failed', e);
+        }
+    },
+
+    async updateDmThreads({ fromUserId, fromDisplayName, toUserId, toDisplayName, text }) {
+        if (!fromUserId || !toUserId) return;
+
+        const preview = String(text || '').slice(0, 240);
+        const now = Date.now();
+
+        const senderThreadRef = ref(rtdb, `dmThreads/${fromUserId}/${toUserId}`);
+        const recipientThreadRef = ref(rtdb, `dmThreads/${toUserId}/${fromUserId}`);
+
+        const safeToName = toDisplayName || AppState.dmThreads?.[toUserId]?.otherDisplayName || `Player_${toUserId.substring(0, 6)}`;
+        const safeFromName = fromDisplayName || `Player_${fromUserId.substring(0, 6)}`;
+
+        // Sender: last message, unread cleared.
+        await update(senderThreadRef, {
+            otherDisplayName: safeToName,
+            lastText: preview,
+            lastTimestamp: now,
+            lastFrom: fromUserId,
+            unread: 0
+        });
+
+        // Recipient: increment unread and update preview.
+        await runTransaction(recipientThreadRef, (current) => {
+            const cur = current || {};
+            const unread = Math.max(0, Number(cur.unread) || 0);
+            return {
+                ...cur,
+                otherDisplayName: cur.otherDisplayName || safeFromName,
+                lastText: preview,
+                lastTimestamp: now,
+                lastFrom: fromUserId,
+                unread: unread + 1
+            };
+        });
+    },
+
     async sendGlobalMessage(userId, displayName, text) {
         // Check for whisper command
         if (text.startsWith('@whisper ') || text.startsWith('@w ')) {
-            const parts = text.match(/^@w(?:hisper)?\s+(\S+)\s+(.+)$/i);
-            if (parts) {
-                const targetUsername = parts[1];
-                const message = parts[2];
-                await this.sendWhisper(userId, displayName, targetUsername, message);
-                return { type: 'whisper', target: targetUsername };
+            if (!isRegisteredUser()) {
+                throw new Error('Sign in to use direct messages.');
             }
+            const parts = text.match(/^@w(?:hisper)?\s+(\S+)\s+(.+)$/i);
+            if (!parts) throw new Error('Whisper format: @whisper username message');
+            const targetUsername = parts[1];
+            const message = parts[2];
+            await this.sendWhisper(userId, displayName, targetUsername, message);
+            return { type: 'whisper', target: targetUsername };
         }
         
         const filteredText = ProfanityFilter.filter(text);
@@ -2549,12 +2904,15 @@ const ChatManager = {
             throw new Error(`User "${targetUsername}" not found`);
         }
         
-        const targetUserId = targetProfile.data().userId;
+        const targetData = targetProfile.data() || {};
+        const targetUserId = targetData.userId;
         const filteredText = ProfanityFilter.filter(text);
         
         // Create a DM conversation ID (sorted user IDs to ensure consistency)
-        const dmId = [fromUserId, targetUserId].sort().join('_');
+        const dmId = this.dmIdFor(fromUserId, targetUserId);
         const dmRef = ref(rtdb, `directMessages/${dmId}`);
+
+        await this.ensureDmParticipants(dmId, fromUserId, targetUserId);
         
         await push(dmRef, {
             from: fromUserId,
@@ -2564,15 +2922,25 @@ const ChatManager = {
             timestamp: serverTimestamp(),
             read: false
         });
+
+        await this.updateDmThreads({
+            fromUserId,
+            fromDisplayName,
+            toUserId: targetUserId,
+            toDisplayName: targetData.username || targetData.displayName || targetUsername,
+            text: filteredText
+        });
         
         return { dmId, targetUserId, targetUsername };
     },
     
-    async sendDirectMessage(fromUserId, fromDisplayName, toUserId, text) {
+    async sendDirectMessage(fromUserId, fromDisplayName, toUserId, text, toDisplayName = null) {
         try {
             const filteredText = ProfanityFilter.filter(text);
-            const dmId = [fromUserId, toUserId].sort().join('_');
+            const dmId = this.dmIdFor(fromUserId, toUserId);
             const dmRef = ref(rtdb, `directMessages/${dmId}`);
+
+            await this.ensureDmParticipants(dmId, fromUserId, toUserId);
 
             await push(dmRef, {
                 from: fromUserId,
@@ -2581,6 +2949,14 @@ const ChatManager = {
                 text: filteredText,
                 timestamp: serverTimestamp(),
                 read: false
+            });
+
+            await this.updateDmThreads({
+                fromUserId,
+                fromDisplayName,
+                toUserId,
+                toDisplayName,
+                text: filteredText
             });
 
             return dmId;
@@ -2608,6 +2984,19 @@ const ChatManager = {
         });
         
         AppState.listeners.push({ ref: chatRef, callback: listener });
+        return listener;
+    },
+
+    listenToDmThreads(userId, callback) {
+        const threadsRef = ref(rtdb, `dmThreads/${userId}`);
+        const listener = onValue(threadsRef, (snapshot) => {
+            const threads = [];
+            snapshot.forEach((child) => {
+                threads.push({ otherUserId: child.key, ...(child.val() || {}) });
+            });
+            callback(threads);
+        });
+        AppState.listeners.push({ ref: threadsRef, callback: listener });
         return listener;
     },
     
@@ -2658,23 +3047,97 @@ const ChallengeSystem = {
         return listener;
     },
     
-    async acceptChallenge(userId, challengerId) {
-        // Create a room for both players
-        const code = await LobbyManager.createRoom(challengerId, 'Challenger');
-        
-        // Update notification
-        await update(ref(rtdb, `notifications/${userId}/${challengerId}`), {
+    async acceptChallenge(acceptingUserId, acceptingName, challengerId) {
+        // Create a room owned by the accepting user, then notify the challenger to join.
+        const code = await LobbyManager.createRoom(acceptingUserId, acceptingName);
+
+        const acceptedPayload = {
+            type: 'challenge',
+            from: acceptingUserId,
+            fromName: acceptingName,
+            timestamp: serverTimestamp(),
+            status: 'accepted',
+            roomCode: code
+        };
+
+        // Notify challenger of acceptance + room code
+        await set(ref(rtdb, `notifications/${challengerId}/${acceptingUserId}`), acceptedPayload);
+        // Keep a copy for the acceptor too (useful for debugging / multi-device)
+        await update(ref(rtdb, `notifications/${acceptingUserId}/${challengerId}`), {
             status: 'accepted',
             roomCode: code
         });
-        
+
         return code;
     },
     
-    async declineChallenge(userId, challengerId) {
-        await remove(ref(rtdb, `notifications/${userId}/${challengerId}`));
+    async declineChallenge(acceptingUserId, acceptingName, challengerId) {
+        await remove(ref(rtdb, `notifications/${acceptingUserId}/${challengerId}`));
+        await set(ref(rtdb, `notifications/${challengerId}/${acceptingUserId}`), {
+            type: 'challenge',
+            from: acceptingUserId,
+            fromName: acceptingName,
+            timestamp: serverTimestamp(),
+            status: 'declined'
+        });
     }
 };
+
+function getCurrentDisplayName() {
+    const profile = AppState.profile;
+    const base = profile?.username || profile?.displayName || AppState.currentUser?.displayName;
+    if (base) return base;
+    const uid = AppState.currentUser?.uid || '';
+    return uid ? `Player_${uid.substring(0, 6)}` : 'Player';
+}
+
+async function handleChallengeNotification(otherUserId, notification) {
+    try {
+        if (!notification || notification.type !== 'challenge') return;
+        const status = notification.status;
+
+        if (status === 'pending') {
+            AppState.pendingChallenge = { fromUserId: otherUserId, fromName: notification.fromName || 'Player' };
+            const nameEl = document.getElementById('challenger-name');
+            if (nameEl) nameEl.textContent = notification.fromName || 'Player';
+            ViewManager.showModal('challenge-modal');
+            return;
+        }
+
+        if (status === 'accepted' && notification.roomCode) {
+            // Only auto-join if we are not already engaged in a room/match.
+            if (AppState.currentRoom || AppState.currentMatch) return;
+            if (AppState.currentView !== 'lobby' && AppState.currentView !== 'auth') return;
+
+            const code = String(notification.roomCode).trim();
+            if (!/^\d{4}$/.test(code)) return;
+
+            if (!AppState.currentUser) return;
+            const displayName = getCurrentDisplayName();
+            await LobbyManager.joinRoom(code, AppState.currentUser.uid, displayName);
+            AppState.currentRoom = code;
+            const codeEl = document.getElementById('display-room-code');
+            if (codeEl) codeEl.textContent = code;
+            ViewManager.show('waiting');
+            PresenceSystem.updateActivity('Joining match');
+            LobbyManager.listenToRoom(code, handleRoomUpdate);
+
+            // Cleanup notifications
+            try { await remove(ref(rtdb, `notifications/${AppState.currentUser.uid}/${otherUserId}`)); } catch { /* ignore */ }
+            return;
+        }
+
+        if (status === 'declined') {
+            // Challenger sees decline. Keep it subtle; no modal.
+            if (AppState.currentView === 'lobby') {
+                UI.showToast?.(`${notification.fromName || 'Player'} declined your challenge`, 'info');
+            }
+            try { if (AppState.currentUser) await remove(ref(rtdb, `notifications/${AppState.currentUser.uid}/${otherUserId}`)); } catch { /* ignore */ }
+        }
+    } catch (e) {
+        console.warn('handleChallengeNotification failed', e);
+    }
+}
 
 // ===========================================
 // UI Helpers
@@ -2930,14 +3393,32 @@ const UI = {
             const isFriend = AppState.friends.includes(userId);
             const friendBtn = document.getElementById('profile-friend-btn');
             const labelEl = friendBtn?.querySelector('.btn-label');
-            if (isFriend) {
-                if (labelEl) labelEl.textContent = 'Friends';
-                else if (friendBtn) friendBtn.textContent = 'Friends';
-                if (friendBtn) friendBtn.disabled = true;
+            const dmBtn = document.getElementById('profile-dm-btn');
+            const socialEnabled = isRegisteredUser();
+
+            if (!socialEnabled) {
+                if (friendBtn) friendBtn.style.display = 'none';
+                if (dmBtn) dmBtn.style.display = 'none';
             } else {
-                if (labelEl) labelEl.textContent = 'Add Friend';
-                else if (friendBtn) friendBtn.textContent = 'Add Friend';
-                if (friendBtn) friendBtn.disabled = false;
+                if (friendBtn) friendBtn.style.display = '';
+                if (dmBtn) dmBtn.style.display = '';
+
+                const requests = Array.isArray(AppState.profile?.friendRequests) ? AppState.profile.friendRequests : [];
+                const hasIncomingRequest = requests.some((r) => r && r.from === userId);
+
+                if (hasIncomingRequest) {
+                    if (labelEl) labelEl.textContent = 'Accept Request';
+                    else if (friendBtn) friendBtn.textContent = 'Accept Request';
+                    if (friendBtn) friendBtn.disabled = false;
+                } else if (isFriend) {
+                    if (labelEl) labelEl.textContent = 'Friends';
+                    else if (friendBtn) friendBtn.textContent = 'Friends';
+                    if (friendBtn) friendBtn.disabled = true;
+                } else {
+                    if (labelEl) labelEl.textContent = 'Add Friend';
+                    else if (friendBtn) friendBtn.textContent = 'Add Friend';
+                    if (friendBtn) friendBtn.disabled = false;
+                }
             }
         }
         
@@ -3113,6 +3594,112 @@ const UI = {
 };
 
 // ===========================================
+// Board Integrity (fractured -> repaired per 3x3)
+// ===========================================
+const BoardIntegritySystem = {
+    gridEl: null,
+    boxCells: Array.from({ length: 9 }, () => []),
+    boxRepair: Array(9).fill(0),
+
+    clamp01(n) {
+        return Math.max(0, Math.min(1, Number(n) || 0));
+    },
+
+    initGrid(gridEl) {
+        this.gridEl = gridEl || document.getElementById('sudoku-grid');
+        this.boxCells = Array.from({ length: 9 }, () => []);
+        this.boxRepair = Array(9).fill(0);
+
+        if (this.gridEl) {
+            this.gridEl.classList.add('is-fractured');
+        }
+    },
+
+    registerCell(cell, row, col) {
+        const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+        cell.dataset.box = String(box);
+        this.boxCells[box].push(cell);
+
+        const fx = (Math.random() - 0.5) * 4; // px
+        const fy = (Math.random() - 0.5) * 4; // px
+        const fr = (Math.random() - 0.5) * 0.8; // deg
+
+        cell.style.setProperty('--repair', '0');
+        cell.style.setProperty('--fracture-x0', `${fx.toFixed(2)}px`);
+        cell.style.setProperty('--fracture-y0', `${fy.toFixed(2)}px`);
+        cell.style.setProperty('--fracture-r0', `${fr.toFixed(3)}deg`);
+        cell.style.setProperty('--fracture-x', `${fx.toFixed(2)}px`);
+        cell.style.setProperty('--fracture-y', `${fy.toFixed(2)}px`);
+        cell.style.setProperty('--fracture-r', `${fr.toFixed(3)}deg`);
+    },
+
+    setBoxRepair(box, repair) {
+        const r = this.clamp01(repair);
+        this.boxRepair[box] = r;
+        const list = this.boxCells[box] || [];
+        const scale = 1 - r;
+        for (const cell of list) {
+            cell.style.setProperty('--repair', r.toFixed(3));
+
+            const baseX = parseFloat(cell.style.getPropertyValue('--fracture-x0')) || 0;
+            const baseY = parseFloat(cell.style.getPropertyValue('--fracture-y0')) || 0;
+            const baseR = parseFloat(cell.style.getPropertyValue('--fracture-r0')) || 0;
+
+            cell.style.setProperty('--fracture-x', `${(baseX * scale).toFixed(2)}px`);
+            cell.style.setProperty('--fracture-y', `${(baseY * scale).toFixed(2)}px`);
+            cell.style.setProperty('--fracture-r', `${(baseR * scale).toFixed(3)}deg`);
+        }
+    },
+
+    updateFromSingleState() {
+        if (!AppState.puzzle || !AppState.solution || !AppState.originalPuzzle) return;
+
+        const totals = Array(9).fill(0);
+        const correct = Array(9).fill(0);
+
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                if (AppState.originalPuzzle[row][col] !== 0) continue;
+                const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+                totals[box]++;
+                if (AppState.puzzle[row][col] === AppState.solution[row][col]) {
+                    correct[box]++;
+                }
+            }
+        }
+
+        for (let box = 0; box < 9; box++) {
+            const r = totals[box] > 0 ? correct[box] / totals[box] : 1;
+            this.setBoxRepair(box, r);
+        }
+    },
+
+    updateFromVersusBoard(board) {
+        if (!board) return;
+
+        const totals = Array(9).fill(0);
+        const filled = Array(9).fill(0);
+
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                const cellData = board[`${row}_${col}`];
+                if (!cellData || cellData.given) continue;
+                const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+                totals[box]++;
+                if (cellData.filledBy && cellData.value) {
+                    filled[box]++;
+                }
+            }
+        }
+
+        for (let box = 0; box < 9; box++) {
+            const r = totals[box] > 0 ? filled[box] / totals[box] : 1;
+            this.setBoxRepair(box, r);
+        }
+    }
+};
+
+// ===========================================
 // Game UI Helper Functions
 // ===========================================
 const GameHelpers = {
@@ -3174,6 +3761,8 @@ const GameHelpers = {
         
         if (progressEl) progressEl.textContent = `${percent}%`;
         if (fillEl) fillEl.style.width = `${percent}%`;
+
+        BoardIntegritySystem.updateFromSingleState();
     },
     
     // Update mistakes display
@@ -3303,6 +3892,7 @@ const GameUI = {
         if (!grid) return;
         
         grid.innerHTML = '';
+        BoardIntegritySystem.initGrid(grid);
         
         // Add ARIA attributes for accessibility
         grid.setAttribute('role', 'grid');
@@ -3314,6 +3904,7 @@ const GameUI = {
                 cell.className = 'sudoku-cell';
                 cell.dataset.row = row;
                 cell.dataset.col = col;
+                BoardIntegritySystem.registerCell(cell, row, col);
                 
                 // Accessibility attributes
                 cell.setAttribute('role', 'gridcell');
@@ -3397,6 +3988,12 @@ const GameUI = {
         }
         
         console.log('renderPuzzle complete, cells found:', cellsFound);
+
+        if (board) {
+            BoardIntegritySystem.updateFromVersusBoard(board);
+        } else {
+            BoardIntegritySystem.updateFromSingleState();
+        }
         
         // Store puzzle state for versus mode
         if (board) {
@@ -3639,11 +4236,16 @@ const GameUI = {
     startTimer() {
         AppState.gameSeconds = 0;
         const timerEl = document.getElementById('game-timer');
+        const versusTimerEl = document.getElementById('game-timer-versus');
         
         AppState.gameTimer = setInterval(() => {
             AppState.gameSeconds++;
-            if (timerEl) {
-                timerEl.textContent = UI.formatTime(AppState.gameSeconds);
+            const formatted = UI.formatTime(AppState.gameSeconds);
+            if (timerEl) timerEl.textContent = formatted;
+            if (versusTimerEl) versusTimerEl.textContent = formatted;
+
+            if (AppState.gameMode === 'single' && AppState.timeLimitSeconds > 0 && AppState.gameSeconds >= AppState.timeLimitSeconds) {
+                this.endSinglePlayerGame(false, 'Time limit reached');
             }
         }, 1000);
     },
@@ -3655,7 +4257,7 @@ const GameUI = {
         }
     },
     
-    endSinglePlayerGame(won) {
+    endSinglePlayerGame(won, reason = null) {
         this.stopTimer();
         
         document.getElementById('game-over-title').textContent = won ? 'Congratulations!' : 'Game Over';
@@ -3665,7 +4267,7 @@ const GameUI = {
                 ? '<svg class="ui-icon ui-icon-xl" aria-hidden="true"><use href="#i-trophy"></use></svg>'
                 : '<svg class="ui-icon ui-icon-xl" aria-hidden="true"><use href="#i-x"></use></svg>';
         }
-        document.getElementById('result-message').textContent = won ? 'You solved the puzzle!' : 'Better luck next time!';
+        document.getElementById('result-message').textContent = won ? 'You solved the puzzle!' : (reason || 'Better luck next time!');
         document.getElementById('final-score').textContent = AppState.playerScore;
         document.getElementById('final-time').textContent = UI.formatTime(AppState.gameSeconds);
         const oppRow = document.getElementById('opponent-score-row');
@@ -3791,12 +4393,16 @@ function setupEventListeners() {
         const body = document.body;
         body.classList.toggle('light-theme', mode === 'light');
         body.classList.toggle('dark-theme', mode !== 'light');
-        try { localStorage.setItem('stonedoku_theme', mode); } catch { /* ignore */ }
+        if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
+            try { localStorage.setItem('stonedoku_theme', mode); } catch { /* ignore */ }
+        }
     }
 
     function initTheme() {
         let saved = null;
-        try { saved = localStorage.getItem('stonedoku_theme'); } catch { /* ignore */ }
+        if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
+            try { saved = localStorage.getItem('stonedoku_theme'); } catch { /* ignore */ }
+        }
         applyTheme(saved === 'dark' ? 'dark' : 'light');
     }
 
@@ -3808,6 +4414,38 @@ function setupEventListeners() {
 
     initTheme();
     syncSoundToggleUi();
+
+    // Header menu (mobile)
+    const headerMenuToggle = document.getElementById('header-menu-toggle');
+    const headerMenu = document.getElementById('header-menu');
+    const closeHeaderMenu = () => {
+        if (!headerMenu || !headerMenuToggle) return;
+        headerMenu.classList.remove('is-open');
+        headerMenuToggle.setAttribute('aria-expanded', 'false');
+    };
+    const toggleHeaderMenu = (ev) => {
+        if (!headerMenu || !headerMenuToggle) return;
+        ev?.preventDefault?.();
+        ev?.stopPropagation?.();
+        const next = !headerMenu.classList.contains('is-open');
+        headerMenu.classList.toggle('is-open', next);
+        headerMenuToggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+    };
+    headerMenuToggle?.addEventListener('click', toggleHeaderMenu);
+    document.addEventListener('click', (e) => {
+        if (!headerMenu || !headerMenuToggle) return;
+        const target = e.target;
+        const clickedInside = headerMenu.contains(target) || headerMenuToggle.contains(target);
+        if (!clickedInside) closeHeaderMenu();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeHeaderMenu();
+    });
+    window.addEventListener('resize', closeHeaderMenu, { passive: true });
+    document.getElementById('updates-nav-btn')?.addEventListener('click', closeHeaderMenu);
+    document.getElementById('admin-nav-btn')?.addEventListener('click', closeHeaderMenu);
+    document.getElementById('logout-btn')?.addEventListener('click', closeHeaderMenu);
+    document.getElementById('my-profile-btn')?.addEventListener('click', closeHeaderMenu);
 
     // Theme toggle
     document.getElementById('theme-toggle')?.addEventListener('click', () => {
@@ -3958,9 +4596,10 @@ function setupEventListeners() {
             alert('Passwords do not match. Please try again.');
             return;
         }
-        
-        if (password.length < 6) {
-            alert('Password must be at least 6 characters long.');
+
+        const policy = PasswordPolicy.validate(password);
+        if (!policy.ok) {
+            alert(PasswordPolicy.message(password) || 'Password does not meet requirements.');
             return;
         }
         
@@ -3991,7 +4630,7 @@ function setupEventListeners() {
             if (error.code === 'auth/email-already-in-use') {
                 alert('An account with this email already exists. Please sign in instead.');
             } else if (error.code === 'auth/weak-password') {
-                alert('Password is too weak. Please use at least 6 characters.');
+                alert(PasswordPolicy.message(password) || 'Password does not meet requirements.');
             } else {
                 alert('Sign up failed: ' + error.message);
             }
@@ -4006,9 +4645,28 @@ function setupEventListeners() {
         console.log('Logout button clicked');
         try {
             console.log('Starting logout process...');
+            const user = auth.currentUser;
             await PresenceSystem.cleanup();
-            console.log('Presence cleaned up, signing out...');
-            await signOut(auth);
+            console.log('Presence cleaned up');
+
+            if (user?.isAnonymous) {
+                console.log('Anonymous user detected; deleting guest account');
+                try {
+                    await deleteDoc(doc(firestore, 'users', user.uid));
+                } catch (e) {
+                    console.warn('Failed to delete anonymous user profile doc', e);
+                }
+                try {
+                    await deleteUser(user);
+                } catch (e) {
+                    console.warn('Failed to delete anonymous auth user', e);
+                    await signOut(auth);
+                }
+            } else {
+                console.log('Signing out...');
+                await signOut(auth);
+            }
+
             console.log('Signed out successfully');
             AppState.currentUser = null;
             ViewManager.show('auth');
@@ -4131,6 +4789,15 @@ function setupEventListeners() {
             await LobbyManager.leaveRoom(AppState.currentRoom, AppState.currentUser.uid);
             AppState.currentRoom = null;
         }
+        try {
+            if (typeof AppState.widgetGameChatUnsub === 'function') AppState.widgetGameChatUnsub();
+        } catch { /* ignore */ }
+        AppState.widgetGameChatUnsub = null;
+        AppState.widgetGameChatContext = null;
+        window.ChatWidget?.clearChannel?.('game');
+        if (typeof window.clearUnread === 'function') window.clearUnread('game');
+        const widgetGameTab = document.getElementById('widget-game-tab');
+        if (widgetGameTab) widgetGameTab.style.display = 'none';
         ViewManager.show('lobby');
         PresenceSystem.updateActivity('In Lobby');
     });
@@ -4166,6 +4833,15 @@ function setupEventListeners() {
             await LobbyManager.leaveRoom(AppState.currentRoom, AppState.currentUser.uid);
             AppState.currentRoom = null;
         }
+        try {
+            if (typeof AppState.widgetGameChatUnsub === 'function') AppState.widgetGameChatUnsub();
+        } catch { /* ignore */ }
+        AppState.widgetGameChatUnsub = null;
+        AppState.widgetGameChatContext = null;
+        window.ChatWidget?.clearChannel?.('game');
+        if (typeof window.clearUnread === 'function') window.clearUnread('game');
+        const widgetGameTab = document.getElementById('widget-game-tab');
+        if (widgetGameTab) widgetGameTab.style.display = 'none';
         // Reset countdown if running
         if (countdownInterval) {
             clearInterval(countdownInterval);
@@ -4317,12 +4993,65 @@ function setupEventListeners() {
     
     // Challenge modal
     document.getElementById('accept-challenge')?.addEventListener('click', async () => {
-        // Handle challenge acceptance
-        ViewManager.hideModal('challenge-modal');
+        try {
+            const current = AppState.pendingChallenge;
+            if (!current || !AppState.currentUser) {
+                ViewManager.hideModal('challenge-modal');
+                return;
+            }
+            const displayName = getCurrentDisplayName();
+            const code = await ChallengeSystem.acceptChallenge(AppState.currentUser.uid, displayName, current.fromUserId);
+            AppState.currentRoom = code;
+            const codeEl = document.getElementById('display-room-code');
+            if (codeEl) codeEl.textContent = code;
+            ViewManager.hideModal('challenge-modal');
+            ViewManager.show('waiting');
+            PresenceSystem.updateActivity('Waiting for opponent');
+            LobbyManager.listenToRoom(code, handleRoomUpdate);
+            AppState.pendingChallenge = null;
+        } catch (e) {
+            console.warn('Accept challenge failed', e);
+            alert('Failed to accept challenge. Please try again.');
+        }
     });
-    
+
+    // Custom Sudoku
+    const customModal = document.getElementById('custom-sudoku-modal');
+    document.getElementById('open-custom-sudoku')?.addEventListener('click', () => {
+        if (!customModal) return;
+        ViewManager.showModal('custom-sudoku-modal');
+        // Sync default state with current settings
+        const auto = document.getElementById('custom-auto-check');
+        if (auto) auto.checked = !!AppState.settings.autoCheck;
+    });
+    document.getElementById('custom-sudoku-cancel')?.addEventListener('click', () => {
+        ViewManager.hideModal('custom-sudoku-modal');
+    });
+    document.getElementById('custom-sudoku-form')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const difficulty = document.getElementById('custom-difficulty')?.value || 'medium';
+        const timeLimitSeconds = Number(document.getElementById('custom-time-limit')?.value || 0) || 0;
+        const maxMistakes = Number(document.getElementById('custom-mistakes')?.value || 3) || 3;
+        const autoCheck = !!document.getElementById('custom-auto-check')?.checked;
+        ViewManager.hideModal('custom-sudoku-modal');
+        startSinglePlayerGame(difficulty, { timeLimitSeconds, maxMistakes, autoCheck });
+    });
+
     document.getElementById('decline-challenge')?.addEventListener('click', () => {
-        ViewManager.hideModal('challenge-modal');
+        (async () => {
+            try {
+                const current = AppState.pendingChallenge;
+                if (current && AppState.currentUser) {
+                    const displayName = getCurrentDisplayName();
+                    await ChallengeSystem.declineChallenge(AppState.currentUser.uid, displayName, current.fromUserId);
+                }
+            } catch (e) {
+                console.warn('Decline challenge failed', e);
+            } finally {
+                AppState.pendingChallenge = null;
+                ViewManager.hideModal('challenge-modal');
+            }
+        })();
     });
     
     // Profile modal close
@@ -4422,6 +5151,14 @@ function setupEventListeners() {
     // Check for profile vanity URL on load
     // ===========================================
     handleVanityUrl();
+    handleUpdatesUrl();
+    handleAdminUrl();
+
+    window.addEventListener('hashchange', () => {
+        handleUpdatesUrl();
+        handleAdminUrl();
+        handleVanityUrl();
+    });
 }
 
 // NOTE: Responsive scaling is handled by CSS (fluid layout & clamp-based typography).
@@ -4625,53 +5362,9 @@ function initProfilePage() {
     document.getElementById('profile-dm-btn')?.addEventListener('click', async () => {
         const profileUserId = document.getElementById('profile-view')?.dataset.userId;
         if (!profileUserId) return;
-        
-        // Open chat widget with DM tab
-        const widget = document.getElementById('chat-widget');
-        const fab = document.getElementById('chat-fab');
-        
-        if (widget && fab) {
-            widget.classList.remove('minimized');
-            fab.classList.add('hidden');
-        }
 
-        const dmList = document.getElementById('dm-list');
-        const chatHint = document.getElementById('chat-hint');
-        const messagesEl = document.getElementById('chat-widget-messages');
-
-        if (dmList) dmList.style.display = 'none';
-        if (messagesEl) messagesEl.style.display = 'flex';
-        if (chatHint) chatHint.style.display = 'none';
-
-        // Switch to DM mode with this user
-        AppState.widgetChatMode = `dm_${profileUserId}`;
-        if (typeof window.clearUnread === 'function') window.clearUnread(AppState.widgetChatMode);
-
-        // Highlight DM tab
-        document.querySelectorAll('.widget-tab').forEach(t => t.classList.remove('active'));
-        document.querySelector('.widget-tab[data-chat="dms"]')?.classList.add('active');
-        
-        // Start listening to DMs with this user
-        // Compute dmId and load history + listener
         try {
-            const dmId = [AppState.currentUser.uid, profileUserId].sort().join('_');
-            const messagesEl = document.getElementById('chat-widget-messages');
-            if (messagesEl) {
-                messagesEl.innerHTML = '<div class="chat-info">Direct messages with this user</div>';
-                // Load existing history
-                const dmSnapshot = await get(ref(rtdb, `directMessages/${dmId}`));
-                if (dmSnapshot.exists()) {
-                    dmSnapshot.forEach(child => {
-                        const msg = child.val();
-                        UI.addChatMessage('chat-widget-messages', msg.fromDisplayName || msg.from, msg.text, msg.timestamp, msg.from);
-                    });
-                }
-            }
-
-            ChatManager.listenToDirectMessages(dmId, (msg) => {
-                UI.addChatMessage('chat-widget-messages', msg.fromDisplayName || msg.from, msg.text, msg.timestamp, msg.from);
-                if (typeof window.incrementUnread === 'function') window.incrementUnread(`dm_${msg.from}`, msg.from);
-            });
+            await window.ChatWidget?.openDm?.(profileUserId);
         } catch (e) {
             console.warn('Failed to open DM conversation:', e);
         }
@@ -4771,6 +5464,48 @@ async function handleVanityUrl() {
     }
 }
 
+// ===========================================
+// Updates Deep Links (#/updates or #/updates/<docId>)
+// ===========================================
+function handleUpdatesUrl() {
+    try {
+        const hash = window.location.hash || '';
+        if (!hash.startsWith('#/updates')) return false;
+        const match = hash.match(/^#\/updates(?:\/([^?]+))?(?:\?(.*))?$/i);
+        if (!match) return false;
+
+        let focusId = match[1] ? decodeURIComponent(match[1]) : null;
+        if (!focusId && match[2]) {
+            const params = new URLSearchParams(match[2]);
+            focusId = params.get('id');
+        }
+
+        // Ensure the feed is visible; UpdatesCenter handles missing DOM gracefully.
+        UpdatesCenter.openFeed(focusId || null);
+        return true;
+    } catch (e) {
+        console.warn('Failed to handle updates URL', e);
+        return false;
+    }
+}
+
+// ===========================================
+// Admin Deep Links (#/admin)
+// ===========================================
+function handleAdminUrl() {
+    try {
+        const hash = window.location.hash || '';
+        if (!hash.startsWith('#/admin')) return false;
+        if (typeof AdminConsole?.openFromHash === 'function') {
+            AdminConsole.openFromHash().catch((e) => console.warn('Admin open failed', e));
+        }
+        return true;
+    } catch (e) {
+        console.warn('Failed to handle admin URL', e);
+        return false;
+    }
+}
+
 // Listen for hash changes
 window.addEventListener('hashchange', handleVanityUrl);
 window.addEventListener('hashchange', () => PasswordReset.hydrateFromUrl());
@@ -4786,10 +5521,13 @@ function initFloatingChat() {
     const maximizeBtn = document.getElementById('chat-maximize');
     const form = document.getElementById('chat-widget-form');
     const input = document.getElementById('chat-widget-input');
+
+    if (!widget || !fab) return;
+
     // Suggestion popup for @whisper username autocomplete
     const suggestionBox = document.createElement('div');
     suggestionBox.id = 'chat-suggestion-box';
-    suggestionBox.style.position = 'absolute';
+    suggestionBox.style.position = 'fixed';
     suggestionBox.style.zIndex = '9999';
     suggestionBox.style.background = 'var(--color-card-bg-solid)';
     suggestionBox.style.border = '1px solid var(--color-grid-border)';
@@ -4801,12 +5539,13 @@ function initFloatingChat() {
     suggestionBox.style.borderRadius = '0';
     suggestionBox.style.padding = '6px 0';
     suggestionBox.style.fontSize = '14px';
-    widget.appendChild(suggestionBox);
+    document.body.appendChild(suggestionBox);
 
     let suggestions = [];
     let selectedIndex = -1;
 
     async function fetchUsernameSuggestions(prefix) {
+        if (!dmEnabled) return [];
         if (!prefix) return [];
         const p = prefix.toLowerCase();
         const selfUsername = (AppState.profile?.usernameLower || AppState.profile?.username || '').toLowerCase();
@@ -4880,10 +5619,31 @@ function initFloatingChat() {
 
     function positionSuggestionBox() {
         if (!input) return;
+        if (widget.classList.contains('minimized')) {
+            suggestionBox.style.display = 'none';
+            return;
+        }
         const rect = input.getBoundingClientRect();
-        suggestionBox.style.left = `${rect.left + window.scrollX}px`;
-        suggestionBox.style.top = `${rect.bottom + window.scrollY + 6}px`;
-        suggestionBox.style.width = `${rect.width}px`;
+        const viewportW = window.innerWidth || document.documentElement.clientWidth;
+        const viewportH = window.innerHeight || document.documentElement.clientHeight;
+        const safeBottom = 10 + (window.visualViewport?.offsetTop || 0);
+
+        const boxMaxH = 240;
+        const desiredW = rect.width;
+        const desiredLeft = rect.left;
+        const belowTop = rect.bottom + 6;
+        const aboveTop = rect.top - 6 - boxMaxH;
+
+        let left = Math.max(10, Math.min(desiredLeft, viewportW - desiredW - 10));
+        let top = belowTop;
+        // If we would overflow below, place above.
+        if (belowTop + boxMaxH > viewportH - safeBottom) {
+            top = Math.max(10, aboveTop);
+        }
+
+        suggestionBox.style.left = `${Math.round(left)}px`;
+        suggestionBox.style.top = `${Math.round(top)}px`;
+        suggestionBox.style.width = `${Math.round(desiredW)}px`;
     }
 
     function renderSuggestions(list) {
@@ -4917,7 +5677,13 @@ function initFloatingChat() {
 
     function applySuggestion(username) {
         if (!input) return;
-        input.value = `@whisper ${username} `;
+        const value = input.value || '';
+        const m = value.match(/^(@w(?:hisper)?\s+)([A-Za-z0-9_\-]*)(.*)$/i);
+        if (!m) return;
+        const prefix = m[1];
+        const rest = m[3] || '';
+        const needsSpace = rest.length > 0 && !rest.startsWith(' ');
+        input.value = `${prefix}${username}${needsSpace ? ' ' : ''}${rest}`.replace(/\s{2,}/g, ' ');
         input.focus();
         suggestionBox.style.display = 'none';
     }
@@ -4956,15 +5722,40 @@ function initFloatingChat() {
 
     let suggestionHideTimer = null;
     input?.addEventListener('input', async (e) => {
-        const val = e.target.value;
-        // match @w or @whisper followed by space and a fragment
-        const m = val.match(/^@w(?:hisper)?\s+([A-Za-z0-9_\-]{1,})$/i);
+        if (!dmEnabled) {
+            suggestionBox.style.display = 'none';
+            return;
+        }
+        const val = e.target.value || '';
+        const m = val.match(/^(@w(?:hisper)?\s+)([A-Za-z0-9_\-]{0,})(.*)$/i);
         if (!m) {
-            // also handle when user types @username right after @whisper
             suggestionHideTimer = setTimeout(() => { suggestionBox.style.display = 'none'; }, 200);
             return;
         }
-        const fragment = m[1];
+
+        const prefix = m[1] || '';
+        const fragment = m[2] || '';
+        const rest = m[3] || '';
+        const cursor = typeof input.selectionStart === 'number' ? input.selectionStart : val.length;
+        const usernameStart = prefix.length;
+        const usernameEnd = usernameStart + fragment.length;
+
+        // Only show suggestions while the caret is within the username token.
+        if (cursor < usernameStart || cursor > usernameEnd) {
+            suggestionHideTimer = setTimeout(() => { suggestionBox.style.display = 'none'; }, 150);
+            return;
+        }
+
+        // If they've already started typing the message, avoid popping suggestions.
+        if (rest.length > 0 && !rest.startsWith(' ')) {
+            suggestionHideTimer = setTimeout(() => { suggestionBox.style.display = 'none'; }, 150);
+            return;
+        }
+
+        if (fragment.length < 1) {
+            suggestionHideTimer = setTimeout(() => { suggestionBox.style.display = 'none'; }, 150);
+            return;
+        }
         const list = await fetchUsernameSuggestions(fragment);
         renderSuggestions(list);
     });
@@ -4975,8 +5766,6 @@ function initFloatingChat() {
     });
     const emojiToggle = document.getElementById('widget-emoji-toggle');
     const emojiPicker = document.getElementById('emoji-picker-widget');
-    
-    if (!widget || !fab) return;
     
     // Track unread messages per channel: global, game, dm_<userId>
     const unreadByChannel = new Map();
@@ -5018,12 +5807,446 @@ function initFloatingChat() {
             updateUnreadBadge();
         }
     }
+
+    const dmListEl = document.getElementById('dm-list');
+    const dmConversationsEl = document.getElementById('dm-conversations');
+    const chatHintEl = document.getElementById('chat-hint');
+    const messagesEl = document.getElementById('chat-widget-messages');
+    const newDmBtn = document.getElementById('new-dm-btn');
+    const dmTabBtn = document.getElementById('widget-dms-tab');
+
+    const dmStartModal = document.getElementById('dm-start-modal');
+    const dmStartInput = document.getElementById('dm-start-username');
+    const dmStartResults = document.getElementById('dm-start-results');
+    const dmStartCancel = document.getElementById('dm-start-cancel');
+
+    const MAX_MESSAGES_PER_CHANNEL = 200;
+    const messageStore = new Map(); // channel -> Array<{ userId, displayName, text, timestamp }>
+    let activeDmUnsub = null;
+    let activeDmUserId = null;
+    let activeDmSeenKeys = new Set();
+    let dmUnreadCache = new Map(); // otherUserId -> unread count (for sound + diffing)
+    let dmEnabled = false;
+
+    function setChatHint(message) {
+        if (!chatHintEl) return;
+        const textEl = chatHintEl.querySelector('#chat-hint-text');
+        if (textEl) textEl.textContent = message;
+    }
+
+    function setDmEnabled(next) {
+        dmEnabled = !!next;
+        if (dmTabBtn) dmTabBtn.style.display = dmEnabled ? '' : 'none';
+        if (newDmBtn) newDmBtn.style.display = dmEnabled ? '' : 'none';
+
+        if (!dmEnabled) {
+            if (AppState.widgetChatMode === 'dms' || (AppState.widgetChatMode && AppState.widgetChatMode.startsWith && AppState.widgetChatMode.startsWith('dm_'))) {
+                AppState.widgetChatMode = 'global';
+                document.querySelectorAll('.widget-tab').forEach((t) => t.classList.toggle('active', t.dataset.chat === 'global'));
+                if (dmListEl) dmListEl.style.display = 'none';
+                if (messagesEl) messagesEl.style.display = 'flex';
+                if (chatHintEl) chatHintEl.style.display = 'none';
+                renderChannel('global');
+            }
+            setChatHint('Sign in to start direct messages.');
+        } else {
+            setChatHint('Tip: Use @whisper username message to send private messages');
+        }
+    }
+
+    function normalizeTimestamp(ts) {
+        if (typeof ts === 'number') return ts;
+        if (typeof ts === 'string' && ts) {
+            const n = Number(ts);
+            if (Number.isFinite(n)) return n;
+        }
+        if (ts && typeof ts === 'object') {
+            // Handle RTDB serverTimestamp placeholders and other oddities.
+            const n = Number(ts);
+            if (Number.isFinite(n)) return n;
+        }
+        return Date.now();
+    }
+
+    function normalizeChatMessage(raw) {
+        const userId = raw?.userId ?? raw?.from ?? null;
+        const displayName = raw?.displayName ?? raw?.fromDisplayName ?? raw?.sender ?? (userId ? `Player_${String(userId).substring(0, 6)}` : 'Player');
+        const text = String(raw?.text ?? '').trim();
+        const timestamp = normalizeTimestamp(raw?.timestamp);
+        return { userId, displayName, text, timestamp };
+    }
+
+    function storeAppend(channel, raw) {
+        if (!channel) return;
+        const msg = normalizeChatMessage(raw);
+        if (!msg.text) return;
+
+        const list = messageStore.get(channel) || [];
+        list.push(msg);
+        if (list.length > MAX_MESSAGES_PER_CHANNEL) list.splice(0, list.length - MAX_MESSAGES_PER_CHANNEL);
+        messageStore.set(channel, list);
+
+        const active = getActiveChannel();
+        const isActive = active === channel;
+        const messagesVisible = messagesEl && messagesEl.style.display !== 'none';
+        if (isActive && messagesVisible && !widget.classList.contains('minimized')) {
+            UI.addChatMessage('chat-widget-messages', msg.displayName, msg.text, msg.timestamp, msg.userId);
+        }
+    }
+
+    function renderChannel(channel) {
+        if (!messagesEl) return;
+        messagesEl.innerHTML = '';
+
+        if (channel && channel.startsWith && channel.startsWith('dm_')) {
+            const otherId = channel.replace('dm_', '');
+            const name = AppState.dmThreads?.[otherId]?.otherDisplayName || `Player_${otherId.substring(0, 6)}`;
+            const headerMsg = document.createElement('div');
+            headerMsg.className = 'chat-system-msg';
+            headerMsg.textContent = `Direct messages with ${name}`;
+            messagesEl.appendChild(headerMsg);
+        }
+
+        const list = messageStore.get(channel) || [];
+        for (const msg of list) {
+            UI.addChatMessage('chat-widget-messages', msg.displayName, msg.text, msg.timestamp, msg.userId);
+        }
+    }
+
+    function renderDmList() {
+        if (!dmConversationsEl) return;
+
+        const threads = Object.entries(AppState.dmThreads || {})
+            .map(([otherUserId, data]) => ({ otherUserId, ...(data || {}) }))
+            .sort((a, b) => (Number(b.lastTimestamp) || 0) - (Number(a.lastTimestamp) || 0));
+
+        if (threads.length === 0) {
+            dmConversationsEl.innerHTML = '<div class="dm-empty">No conversations yet. Start one from a profile or the + button.</div>';
+            return;
+        }
+
+        dmConversationsEl.innerHTML = '';
+        for (const t of threads) {
+            const item = document.createElement('div');
+            item.className = 'dm-conversation-item';
+            item.dataset.userId = t.otherUserId;
+
+            if (AppState.widgetChatMode === `dm_${t.otherUserId}`) item.classList.add('active');
+
+            const avatar = document.createElement('div');
+            avatar.className = 'dm-avatar';
+            avatar.innerHTML = '<svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>';
+
+            const info = document.createElement('div');
+            info.className = 'dm-info';
+
+            const name = document.createElement('div');
+            name.className = 'dm-name';
+            name.textContent = t.otherDisplayName || `Player_${t.otherUserId.substring(0, 6)}`;
+
+            const preview = document.createElement('div');
+            preview.className = 'dm-preview';
+            preview.textContent = t.lastText || '';
+
+            info.appendChild(name);
+            info.appendChild(preview);
+
+            item.appendChild(avatar);
+            item.appendChild(info);
+
+            const unread = Math.max(0, Number(t.unread) || 0);
+            if (unread > 0) {
+                const badge = document.createElement('div');
+                badge.className = 'dm-unread';
+                badge.textContent = unread > 99 ? '99+' : String(unread);
+                item.appendChild(badge);
+            }
+
+            item.addEventListener('click', () => {
+                openDmConversation(t.otherUserId);
+            });
+
+            dmConversationsEl.appendChild(item);
+        }
+    }
+
+    function syncDmUnreadCounts() {
+        const dmChannels = new Set();
+        for (const [otherUserId, thread] of Object.entries(AppState.dmThreads || {})) {
+            const channel = `dm_${otherUserId}`;
+            dmChannels.add(channel);
+            const unread = Math.max(0, Number(thread?.unread) || 0);
+            const prevUnread = Math.max(0, Number(dmUnreadCache.get(otherUserId)) || 0);
+            if (unread > prevUnread && typeof shouldIncrementUnread === 'function' && shouldIncrementUnread(channel, otherUserId)) {
+                AudioManager.playDmPing();
+            }
+            dmUnreadCache.set(otherUserId, unread);
+            setUnread(channel, unread);
+        }
+
+        // Clear removed DM channels
+        for (const key of Array.from(unreadByChannel.keys())) {
+            if (String(key).startsWith('dm_') && !dmChannels.has(key)) {
+                unreadByChannel.delete(key);
+            }
+        }
+        // Clear removed cache entries
+        for (const key of Array.from(dmUnreadCache.keys())) {
+            if (!AppState.dmThreads || !Object.prototype.hasOwnProperty.call(AppState.dmThreads, key)) {
+                dmUnreadCache.delete(key);
+            }
+        }
+
+        updateUnreadBadge();
+        renderDmList();
+    }
+
+    async function openDmConversation(otherUserId) {
+        if (!otherUserId || !AppState.currentUser) return;
+
+        // Open widget
+        widget.classList.remove('minimized');
+        fab.classList.add('hidden');
+        suggestionBox.style.display = 'none';
+
+        // Activate DMs tab
+        document.querySelectorAll('.widget-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.widget-tab[data-chat="dms"]')?.classList.add('active');
+
+        AppState.widgetChatMode = `dm_${otherUserId}`;
+        if (dmListEl) dmListEl.style.display = 'none';
+        if (messagesEl) messagesEl.style.display = 'flex';
+        if (chatHintEl) chatHintEl.style.display = 'none';
+
+        clearUnread(AppState.widgetChatMode);
+        renderDmList();
+
+        // Mark read in RTDB (best effort)
+        try {
+            await update(ref(rtdb, `dmThreads/${AppState.currentUser.uid}/${otherUserId}`), { unread: 0 });
+        } catch { /* ignore */ }
+
+        // Stop previous DM listener
+        if (typeof activeDmUnsub === 'function') activeDmUnsub();
+        activeDmUnsub = null;
+        activeDmUserId = otherUserId;
+        activeDmSeenKeys = new Set();
+
+        const dmId = ChatManager.dmIdFor(AppState.currentUser.uid, otherUserId);
+        const dmRef = ref(rtdb, `directMessages/${dmId}`);
+        await ChatManager.ensureDmParticipants(dmId, AppState.currentUser.uid, otherUserId);
+
+        // Load history once (keyed) so we can dedupe the live listener
+        try {
+            const snap = await get(dmRef);
+            const history = [];
+            if (snap.exists()) {
+                snap.forEach((child) => {
+                    activeDmSeenKeys.add(child.key);
+                    history.push(child.val());
+                });
+            }
+            history.sort((a, b) => normalizeTimestamp(a?.timestamp) - normalizeTimestamp(b?.timestamp));
+            messageStore.set(`dm_${otherUserId}`, history.map(normalizeChatMessage));
+        } catch (e) {
+            console.warn('Failed to load DM history', e);
+            messageStore.set(`dm_${otherUserId}`, []);
+        }
+
+        renderChannel(`dm_${otherUserId}`);
+
+        // Live listener for new messages
+        activeDmUnsub = onChildAdded(dmRef, (snapshot) => {
+            if (activeDmUserId !== otherUserId) return;
+            if (activeDmSeenKeys.has(snapshot.key)) return;
+            activeDmSeenKeys.add(snapshot.key);
+
+            const msg = snapshot.val();
+            storeAppend(`dm_${otherUserId}`, msg);
+
+            // If this DM is open and visible, immediately mark as read.
+            if (!widget.classList.contains('minimized') && getActiveChannel() === `dm_${otherUserId}` && msg?.from && msg.from !== AppState.currentUser.uid) {
+                update(ref(rtdb, `dmThreads/${AppState.currentUser.uid}/${otherUserId}`), { unread: 0 }).catch(() => {});
+            }
+        });
+    }
+
+    // Expose a small API for other modules/listeners to push messages and threads.
+    window.ChatWidget = {
+        ingestMessage(channel, raw) {
+            storeAppend(channel, raw);
+            if (channel === 'game') {
+                const msg = normalizeChatMessage(raw);
+                if (typeof shouldIncrementUnread === 'function' && shouldIncrementUnread(channel, msg.userId)) {
+                    AudioManager.playChatPing();
+                }
+                if (typeof window.incrementUnread === 'function') window.incrementUnread(channel, msg.userId);
+            } else if (channel === 'global') {
+                const msg = normalizeChatMessage(raw);
+                if (typeof window.incrementUnread === 'function') window.incrementUnread(channel, msg.userId);
+            }
+        },
+        setDmThreads(threads) {
+            const next = {};
+            for (const t of threads || []) {
+                if (!t || !t.otherUserId) continue;
+                next[t.otherUserId] = t;
+            }
+            AppState.dmThreads = next;
+            syncDmUnreadCounts();
+        },
+        openDm(otherUserId) {
+            if (!dmEnabled) {
+                alert('Sign in to use direct messages.');
+                return Promise.resolve();
+            }
+            return openDmConversation(otherUserId);
+        },
+        setDmEnabled(enabled) {
+            setDmEnabled(enabled);
+        },
+        isDmEnabled() {
+            return dmEnabled;
+        },
+        clearChannel(channel) {
+            if (!channel) return;
+            messageStore.delete(channel);
+            if (messagesEl && messagesEl.style.display !== 'none' && getActiveChannel() === channel) {
+                renderChannel(channel);
+            }
+        },
+        reset() {
+            messageStore.clear();
+            AppState.dmThreads = {};
+            unreadByChannel.clear();
+            updateUnreadBadge();
+            renderDmList();
+            if (messagesEl) messagesEl.innerHTML = '';
+            if (typeof activeDmUnsub === 'function') activeDmUnsub();
+            activeDmUnsub = null;
+            activeDmUserId = null;
+            activeDmSeenKeys = new Set();
+        },
+        renderActive() {
+            const active = getActiveChannel();
+            if (active === 'global' || active === 'game' || (active && active.startsWith && active.startsWith('dm_'))) {
+                renderChannel(active);
+            }
+        }
+    };
+
+    function openDmStartModal() {
+        if (!dmStartModal) return;
+        if (dmStartResults) dmStartResults.innerHTML = '';
+        if (dmStartInput) dmStartInput.value = '';
+        ViewManager.showModal('dm-start-modal');
+        setTimeout(() => dmStartInput?.focus(), 50);
+    }
+
+    function closeDmStartModal() {
+        if (!dmStartModal) return;
+        ViewManager.hideModal('dm-start-modal');
+    }
+
+    async function resolveUsernameToUserId(username) {
+        const uname = String(username || '').trim().toLowerCase();
+        if (!uname) return null;
+        try {
+            const snap = await getDoc(doc(firestore, 'usernames', uname));
+            if (snap.exists()) {
+                const data = snap.data() || {};
+                if (data.userId) return { userId: data.userId, username: uname };
+            }
+        } catch { /* ignore */ }
+        const profile = await ProfileManager.getProfileByUsername(uname);
+        if (!profile) return null;
+        const data = profile.data() || {};
+        return { userId: data.userId || profile.id, username: data.usernameLower || uname };
+    }
+
+    async function searchDmUsers(prefix) {
+        const p = String(prefix || '').trim().toLowerCase();
+        if (!p) return [];
+        const q = query(collection(firestore, 'usernames'), where(documentId(), '>=', p), where(documentId(), '<=', p + '\uf8ff'), limit(12));
+        const snap = await getDocs(q);
+        return snap.docs
+            .map((d) => ({ username: d.id, userId: d.data()?.userId }))
+            .filter((x) => x.userId);
+    }
+
+    function renderDmStartResults(items) {
+        if (!dmStartResults) return;
+        dmStartResults.innerHTML = '';
+        if (!items || items.length === 0) return;
+        const list = document.createElement('div');
+        list.className = 'dm-start-list';
+        for (const item of items) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dm-start-item';
+            btn.textContent = item.username;
+            btn.addEventListener('click', async () => {
+                try {
+                    await openDmConversation(item.userId);
+                    closeDmStartModal();
+                } catch (e) {
+                    console.error('Failed to open DM', e);
+                    alert('Failed to open DM.');
+                }
+            });
+            list.appendChild(btn);
+        }
+        dmStartResults.appendChild(list);
+    }
+
+    let dmStartSearchTimer = null;
+    dmStartInput?.addEventListener('input', () => {
+        if (!dmEnabled) return;
+        if (dmStartSearchTimer) clearTimeout(dmStartSearchTimer);
+        dmStartSearchTimer = setTimeout(async () => {
+            const items = await searchDmUsers(dmStartInput.value);
+            renderDmStartResults(items);
+        }, 120);
+    });
+
+    document.getElementById('dm-start-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!dmEnabled) return;
+        const username = dmStartInput?.value || '';
+        try {
+            const resolved = await resolveUsernameToUserId(username);
+            if (!resolved) {
+                alert('User not found.');
+                return;
+            }
+            await openDmConversation(resolved.userId);
+            closeDmStartModal();
+        } catch (e2) {
+            console.error('Failed to start DM', e2);
+            alert('Failed to start DM.');
+        }
+    });
+
+    dmStartCancel?.addEventListener('click', closeDmStartModal);
+    dmStartModal?.addEventListener('click', (e) => {
+        if (e.target === dmStartModal) closeDmStartModal();
+    });
+
+    newDmBtn?.addEventListener('click', () => {
+        if (!AppState.currentUser) return;
+        if (!dmEnabled) {
+            alert('Sign in to use direct messages.');
+            return;
+        }
+        openDmStartModal();
+    });
     
     // FAB click - open chat
     fab.addEventListener('click', () => {
         widget.classList.remove('minimized');
         fab.classList.add('hidden');
         clearActiveUnread();
+        window.ChatWidget?.renderActive?.();
         input?.focus();
     });
     
@@ -5032,6 +6255,7 @@ function initFloatingChat() {
         widget.classList.add('minimized');
         widget.classList.remove('maximized');
         fab.classList.remove('hidden');
+        suggestionBox.style.display = 'none';
     });
     
     // Maximize/restore
@@ -5060,6 +6284,7 @@ function initFloatingChat() {
         widget.style.top = `${Math.max(0, Math.min(y, window.innerHeight - 100))}px`;
         widget.style.right = 'auto';
         widget.style.bottom = 'auto';
+        if (suggestionBox.style.display !== 'none') positionSuggestionBox();
     });
     
     document.addEventListener('mouseup', () => {
@@ -5070,30 +6295,29 @@ function initFloatingChat() {
     // Tab switching
     document.querySelectorAll('.widget-tab').forEach(tab => {
         tab.addEventListener('click', () => {
+            const chatMode = tab.dataset.chat;
+            if (chatMode === 'dms' && !dmEnabled) {
+                alert('Sign in to use direct messages.');
+                return;
+            }
             document.querySelectorAll('.widget-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            const chatMode = tab.dataset.chat;
-            
-            const dmList = document.getElementById('dm-list');
-            const messages = document.getElementById('chat-widget-messages');
-            const chatHint = document.getElementById('chat-hint');
-            
+
+            suggestionBox.style.display = 'none';
+
             // Handle DMs tab specially
             if (chatMode === 'dms') {
                 AppState.widgetChatMode = 'dms';
-                if (dmList) dmList.style.display = 'block';
-                if (messages) messages.style.display = 'none';
-                if (chatHint) chatHint.style.display = 'block';
+                if (dmListEl) dmListEl.style.display = 'block';
+                if (messagesEl) messagesEl.style.display = 'none';
+                if (chatHintEl) chatHintEl.style.display = 'block';
+                renderDmList();
             } else {
                 AppState.widgetChatMode = chatMode;
-                if (dmList) dmList.style.display = 'none';
-                if (messages) messages.style.display = 'flex';
-                if (chatHint) chatHint.style.display = 'none';
-                
-                // Just scroll to bottom when switching tabs
-                if (messages) {
-                    messages.scrollTop = messages.scrollHeight;
-                }
+                if (dmListEl) dmListEl.style.display = 'none';
+                if (messagesEl) messagesEl.style.display = 'flex';
+                if (chatHintEl) chatHintEl.style.display = 'none';
+                renderChannel(chatMode);
             }
 
             if (chatMode === 'global' || chatMode === 'game') {
@@ -5128,6 +6352,10 @@ function initFloatingChat() {
         const text = input?.value.trim();
         
         if (text && AppState.currentUser) {
+            if ((text.startsWith('@whisper ') || text.startsWith('@w ')) && !dmEnabled) {
+                alert('Sign in to use direct messages.');
+                return;
+            }
             const displayName = AppState.currentUser.displayName || 
                               `Player_${AppState.currentUser.uid.substring(0, 6)}`;
             
@@ -5135,12 +6363,19 @@ function initFloatingChat() {
             const chatMode = activeTab?.dataset.chat || 'global';
             
             try {
-                if (chatMode === 'game' && AppState.currentMatch) {
-                    await ChatManager.sendGameMessage(AppState.currentMatch, AppState.currentUser.uid, displayName, text);
+                if (chatMode === 'game') {
+                    if (AppState.currentMatch) {
+                        await ChatManager.sendGameMessage(AppState.currentMatch, AppState.currentUser.uid, displayName, text);
+                    } else if (AppState.currentView === 'pregame-lobby' && AppState.currentRoom) {
+                        await LobbyManager.sendLobbyChat(AppState.currentRoom, AppState.currentUser.uid, displayName, text);
+                    } else {
+                        throw new Error('Game chat is only available during multiplayer sessions.');
+                    }
                 } else if (AppState.widgetChatMode.startsWith('dm_')) {
                     // Sending to a specific DM conversation
                     const otherUserId = AppState.widgetChatMode.replace('dm_', '');
-                    await ChatManager.sendDirectMessage(AppState.currentUser.uid, displayName, otherUserId, text);
+                    const toName = AppState.dmThreads?.[otherUserId]?.otherDisplayName || null;
+                    await ChatManager.sendDirectMessage(AppState.currentUser.uid, displayName, otherUserId, text, toName);
                 } else {
                     await ChatManager.sendGlobalMessage(AppState.currentUser.uid, displayName, text);
                 }
@@ -5154,6 +6389,7 @@ function initFloatingChat() {
 
     // Autocomplete whisper command: @whi -> @whisper
     input?.addEventListener('input', (e) => {
+        if (!dmEnabled) return;
         const val = e.target.value;
         if (/^@whi(?!s)/i.test(val)) {
             e.target.value = val.replace(/^@whi/i, '@whisper');
@@ -5363,11 +6599,16 @@ function navigateCell(direction) {
     GameUI.selectCell(row, col);
 }
 
-function startSinglePlayerGame(difficulty) {
+function startSinglePlayerGame(difficulty, options = null) {
     AppState.gameMode = 'single';
     AppState.currentDifficulty = difficulty;
     AppState.playerScore = 0;
     AppState.selectedCell = null;
+    AppState.timeLimitSeconds = Number(options?.timeLimitSeconds || 0) || 0;
+    AppState.maxMistakes = Number(options?.maxMistakes || AppState.maxMistakes || 3) || 3;
+    if (typeof options?.autoCheck === 'boolean') {
+        AppState.settings.autoCheck = options.autoCheck;
+    }
     
     // Reset QOL state
     GameHelpers.resetGameState();
@@ -5385,6 +6626,10 @@ function startSinglePlayerGame(difficulty) {
     // Update UI elements
     const difficultyLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
     document.getElementById('current-difficulty').textContent = difficultyLabel;
+    const timeLimitEl = document.getElementById('time-limit-value');
+    if (timeLimitEl) {
+        timeLimitEl.textContent = AppState.timeLimitSeconds > 0 ? `${Math.round(AppState.timeLimitSeconds / 60)} min` : '—';
+    }
     const vsHeader = document.getElementById('game-header-versus');
     if (vsHeader) vsHeader.style.display = 'none';
     const singleHeader = document.getElementById('game-header-single');
@@ -5397,6 +6642,7 @@ function startSinglePlayerGame(difficulty) {
     // Initialize number counts and progress (starts at 0%)
     GameHelpers.updateRemainingCounts();
     GameHelpers.updateProgress();
+    GameHelpers.updateMistakesDisplay();
     
     ViewManager.show('game');
     GameUI.startTimer();
@@ -5535,17 +6781,13 @@ async function startVersusGame(roomData) {
     }
     
     // Listen for game chat and forward to floating widget
-    ChatManager.listenToGameChat(matchId, (message) => {
-        // Add to floating chat widget if game tab is active
-        const activeWidgetTab = document.querySelector('.widget-tab.active');
-        if (activeWidgetTab?.dataset.chat === 'game') {
-            UI.addChatMessage('chat-widget-messages', message.displayName, message.text, message.timestamp, message.userId);
-        }
-        
-        // Show unread notification
-        if (typeof window.incrementUnread === 'function') {
-            window.incrementUnread('game', message.userId);
-        }
+    if (typeof AppState.widgetGameChatUnsub === 'function') AppState.widgetGameChatUnsub();
+    AppState.widgetGameChatUnsub = null;
+    AppState.widgetGameChatContext = `match:${matchId}`;
+    window.ChatWidget?.clearChannel?.('game');
+    if (typeof window.clearUnread === 'function') window.clearUnread('game');
+    AppState.widgetGameChatUnsub = ChatManager.listenToGameChat(matchId, (message) => {
+        window.ChatWidget?.ingestMessage?.('game', message);
     });
 }
 
@@ -5605,11 +6847,25 @@ function showPregameLobby(room) {
     PresenceSystem.updateActivity('In Pre-Game Lobby');
     
     updatePregameLobbyUI(room);
-    
-    // Listen to lobby chat
-    LobbyManager.listenToLobbyChat(AppState.currentRoom, (messages) => {
-        renderPregameChat(messages);
-    });
+
+    // Use the floating chat widget's Game tab as the multiplayer chat surface.
+    const widgetGameTab = document.getElementById('widget-game-tab');
+    if (widgetGameTab) widgetGameTab.style.display = 'inline-block';
+
+    // Reset previous game-channel listeners (match or lobby) and clear the channel history.
+    if (typeof AppState.widgetGameChatUnsub === 'function') AppState.widgetGameChatUnsub();
+    AppState.widgetGameChatUnsub = null;
+    AppState.widgetGameChatContext = AppState.currentRoom ? `lobby:${AppState.currentRoom}` : null;
+    window.ChatWidget?.clearChannel?.('game');
+    if (typeof window.clearUnread === 'function') window.clearUnread('game');
+
+    // Listen to lobby chat and push into the widget's Game channel.
+    if (AppState.currentRoom) {
+        const chatRef = ref(rtdb, `lobbies/${AppState.currentRoom}/chat`);
+        AppState.widgetGameChatUnsub = onChildAdded(chatRef, (snapshot) => {
+            window.ChatWidget?.ingestMessage?.('game', snapshot.val());
+        });
+    }
 }
 
 function updatePregameLobbyUI(room) {
@@ -6015,6 +7271,29 @@ function registerAuthListener() {
         AppState.authReady = true;
         try {
             if (user) {
+                // Guest account expiry (self-healing cleanup)
+                // If an anonymous account hasn't been used for a while, delete it on next load.
+                const ANON_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+                if (user.isAnonymous) {
+                    const lastSignIn = Date.parse(user.metadata?.lastSignInTime || '') || 0;
+                    if (lastSignIn && Date.now() - lastSignIn > ANON_TTL_MS) {
+                        try {
+                            await PresenceSystem.cleanup();
+                        } catch { /* ignore */ }
+                        try {
+                            await deleteDoc(doc(firestore, 'users', user.uid));
+                        } catch { /* ignore */ }
+                        try {
+                            await deleteUser(user);
+                        } catch (e) {
+                            console.warn('Failed to delete expired anonymous user', e);
+                        }
+                        AppState.currentUser = null;
+                        ViewManager.show('auth');
+                        return;
+                    }
+                }
+
                 AppState.currentUser = user;
                 AppState.passwordReset.active = false;
                 
@@ -6046,9 +7325,11 @@ function registerAuthListener() {
                 document.getElementById('user-info').style.display = 'flex';
                 document.getElementById('user-name').textContent = truncatedName;
                 document.getElementById('welcome-name').textContent = displayName;
+                AdminConsole.refreshAdminState().catch(() => {});
                 
                 // Store friends in state
                 AppState.friends = profileData?.friends || [];
+                FriendsPanel.render().catch(() => {});
                 
                 UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
                 UI.updateBadges(profileData?.badges || []);
@@ -6064,27 +7345,23 @@ function registerAuthListener() {
                 
                 // Listen to global chat
                 ChatManager.listenToGlobalChat((message) => {
-                    // Add to floating chat widget (global mode)
-                    const widgetMessages = document.getElementById('chat-widget-messages');
-                    const activeTab = document.querySelector('.widget-tab.active');
-                    const widgetMode = activeTab?.dataset.chat || 'global';
-                    
-                    if (widgetMessages && widgetMode === 'global') {
-                        UI.addChatMessage('chat-widget-messages', message.displayName, message.text, message.timestamp, message.userId);
-                    }
-                    
-                    // Show unread notification if widget is minimized
-                    if (typeof window.incrementUnread === 'function') {
-                        window.incrementUnread('global', message.userId);
-                    }
+                    window.ChatWidget?.ingestMessage?.('global', message);
                 });
+
+                const allowDirectMessages = isRegisteredUser(user, profileData);
+                window.ChatWidget?.setDmEnabled?.(allowDirectMessages);
+                if (allowDirectMessages) {
+                    // Listen to DM thread updates for unread + list UI
+                    ChatManager.listenToDmThreads(user.uid, (threads) => {
+                        window.ChatWidget?.setDmThreads?.(threads);
+                    });
+                } else {
+                    window.ChatWidget?.setDmThreads?.([]);
+                }
                 
                 // Listen for challenges
                 ChallengeSystem.listenToNotifications(user.uid, (challengerId, notification) => {
-                    if (notification.status === 'pending') {
-                        document.getElementById('challenger-name').textContent = notification.fromName;
-                        ViewManager.showModal('challenge-modal');
-                    }
+                    handleChallengeNotification(challengerId, notification);
                 });
                 
                 // Show chat widget for logged in users
@@ -6097,6 +7374,11 @@ function registerAuthListener() {
             } else {
                 AppState.currentUser = null;
                 document.getElementById('user-info').style.display = 'none';
+                AdminConsole.refreshAdminState().catch(() => {});
+                window.ChatWidget?.reset?.();
+                window.ChatWidget?.setDmEnabled?.(false);
+                const friendsCard = document.getElementById('friends-card');
+                if (friendsCard) friendsCard.style.display = 'none';
                 
                 // Hide chat widget and FAB for logged out users
                 const chatWidget = document.getElementById('chat-widget');
@@ -6240,6 +7522,8 @@ const CookieConsent = {
         const consent = this.getConsent();
         if (!consent) {
             this.showBanner();
+        } else {
+            this.applyConsent();
         }
         this.setupListeners();
     },
@@ -6309,6 +7593,16 @@ const CookieConsent = {
         this.applyConsent();
     },
     
+    canUseAnalytics() {
+        const consent = this.getConsent();
+        return !!consent?.analytics;
+    },
+
+    canUsePreferences() {
+        const consent = this.getConsent();
+        return !!consent?.preferences;
+    },
+
     applyConsent() {
         const consent = this.getConsent();
         if (!consent) return;
@@ -6317,11 +7611,17 @@ const CookieConsent = {
         if (consent.analytics) {
             console.log('Analytics enabled');
             // Enable Firebase Analytics or other analytics
+        } else {
+            console.log('Analytics disabled');
         }
         
         // Apply preference cookies
         if (consent.preferences) {
             console.log('Preference cookies enabled');
+        } else {
+            console.log('Preference cookies disabled');
+            // Remove previously stored preference keys.
+            try { localStorage.removeItem('stonedoku_theme'); } catch { /* ignore */ }
         }
     },
     
@@ -6407,6 +7707,472 @@ const LegalModals = {
                 }
             });
         });
+    }
+};
+
+// ===========================================
+// Community Updates (Firestore-driven)
+// ===========================================
+const UpdatesCenter = {
+    unsub: null,
+    items: [],
+    state: {
+        expanded: false,
+        dismissedId: null,
+        currentId: null
+    },
+
+    init() {
+        this.bannerEl = document.getElementById('updates-banner');
+        if (!this.bannerEl) return;
+
+        this.feedEl = document.getElementById('updates-feed');
+        this.backBtn = document.getElementById('updates-back-btn');
+        this.eyebrowEl = document.getElementById('updates-banner-eyebrow');
+        this.titleEl = document.getElementById('updates-banner-title');
+        this.bodyEl = document.getElementById('updates-banner-body');
+        this.toggleBtn = document.getElementById('updates-banner-toggle');
+        this.dismissBtn = document.getElementById('updates-banner-dismiss');
+        this.openBtn = document.getElementById('updates-banner-open');
+        this.navBtn = document.getElementById('updates-nav-btn');
+
+        this.toggleBtn?.addEventListener('click', () => {
+            this.setExpanded(!this.state.expanded);
+        });
+        this.dismissBtn?.addEventListener('click', () => {
+            this.dismissBanner();
+        });
+
+        const open = () => this.openFeed(this.state.currentId);
+        this.openBtn?.addEventListener('click', open);
+        this.navBtn?.addEventListener('click', open);
+
+        this.backBtn?.addEventListener('click', () => {
+            if (AppState.currentUser) {
+                ViewManager.show('lobby');
+            } else {
+                ViewManager.show('auth');
+            }
+        });
+
+        this.listen();
+    },
+
+    getTimeMs(value) {
+        try {
+            if (!value) return 0;
+            if (typeof value === 'number') return value;
+            if (typeof value === 'string') return Date.parse(value) || 0;
+            if (value instanceof Date) return value.getTime();
+            if (value?.toMillis) return value.toMillis();
+            if (value?.seconds) return Number(value.seconds) * 1000;
+        } catch { /* ignore */ }
+        return 0;
+    },
+
+    normalizeItem(id, data) {
+        const title = String(data?.title || data?.heading || data?.name || '').trim();
+        const body = String(data?.body || data?.message || data?.summary || '').trim();
+        const kind = String(data?.type || data?.kind || 'update').trim();
+        const severity = String(data?.severity || 'info').trim();
+        const createdAtMs = this.getTimeMs(data?.createdAt || data?.publishedAt || data?.timestamp);
+        const startsAtMs = this.getTimeMs(data?.startsAt || data?.startAt);
+        const endsAtMs = this.getTimeMs(data?.endsAt || data?.endAt);
+        const active = data?.active !== false && String(data?.status || 'active') !== 'archived';
+        const banner = data?.banner !== false;
+        const pinned = data?.pinned === true;
+
+        return {
+            id,
+            title: title || 'Update',
+            body,
+            kind,
+            severity,
+            createdAtMs,
+            startsAtMs,
+            endsAtMs,
+            active,
+            banner,
+            pinned
+        };
+    },
+
+    pickBannerItem(items) {
+        const now = Date.now();
+        const candidates = items
+            .filter((item) => item.active && item.banner)
+            .filter((item) => (item.startsAtMs ? item.startsAtMs <= now : true))
+            .filter((item) => (item.endsAtMs ? item.endsAtMs >= now : true))
+            .sort((a, b) => {
+                if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+                return (b.createdAtMs || 0) - (a.createdAtMs || 0);
+            });
+        return candidates[0] || null;
+    },
+
+    setExpanded(expanded) {
+        this.state.expanded = !!expanded;
+        this.bannerEl?.classList.toggle('is-expanded', this.state.expanded);
+        if (this.toggleBtn) {
+            this.toggleBtn.setAttribute('aria-expanded', String(this.state.expanded));
+            this.toggleBtn.setAttribute('aria-label', this.state.expanded ? 'Collapse update' : 'Expand update');
+            this.toggleBtn.setAttribute('title', this.state.expanded ? 'Collapse' : 'Expand');
+        }
+    },
+
+    dismissBanner() {
+        this.state.dismissedId = this.state.currentId;
+        if (this.bannerEl) this.bannerEl.style.display = 'none';
+    },
+
+    renderBanner(items) {
+        const banner = this.pickBannerItem(items);
+        if (!banner || (this.state.dismissedId && banner.id === this.state.dismissedId)) {
+            if (this.bannerEl) this.bannerEl.style.display = 'none';
+            return;
+        }
+
+        const isNew = banner.id !== this.state.currentId;
+        this.state.currentId = banner.id;
+        if (isNew) this.setExpanded(false);
+
+        if (this.eyebrowEl) this.eyebrowEl.textContent = banner.kind === 'status' ? 'Status' : 'Update';
+        if (this.titleEl) this.titleEl.textContent = banner.title;
+        if (this.bodyEl) this.bodyEl.textContent = banner.body;
+
+        this.bannerEl.dataset.updateId = banner.id;
+        this.bannerEl.dataset.severity = banner.severity;
+        this.bannerEl.style.display = 'block';
+    },
+
+    formatDate(ms) {
+        if (!ms) return '';
+        try {
+            return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        } catch {
+            return '';
+        }
+    },
+
+    renderFeed(items) {
+        const container = this.feedEl || document.getElementById('updates-feed');
+        if (!container) return;
+
+        const visible = (items || [])
+            .filter((item) => item.active)
+            .sort((a, b) => {
+                if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+                return (b.createdAtMs || 0) - (a.createdAtMs || 0);
+            })
+            .slice(0, 100);
+
+        container.innerHTML = '';
+
+        if (!visible.length) {
+            const empty = document.createElement('div');
+            empty.className = 'updates-empty card';
+            empty.textContent = 'No updates yet.';
+            container.appendChild(empty);
+            return;
+        }
+
+        for (const item of visible) {
+            const details = document.createElement('details');
+            details.className = 'update-card';
+            details.dataset.updateId = item.id;
+            if (item.pinned) details.classList.add('is-pinned');
+            details.dataset.kind = item.kind;
+            details.dataset.severity = item.severity;
+
+            const summary = document.createElement('summary');
+            summary.className = 'update-card-summary';
+
+            const meta = document.createElement('div');
+            meta.className = 'update-meta';
+
+            const tag = document.createElement('span');
+            tag.className = 'update-tag';
+            tag.textContent = item.kind === 'status' ? 'Status' : 'Update';
+            meta.appendChild(tag);
+
+            if (item.pinned) {
+                const pinned = document.createElement('span');
+                pinned.className = 'update-tag update-tag--pinned';
+                pinned.textContent = 'Pinned';
+                meta.appendChild(pinned);
+            }
+
+            const time = document.createElement('time');
+            time.className = 'update-time';
+            time.textContent = this.formatDate(item.createdAtMs);
+            meta.appendChild(time);
+
+            const title = document.createElement('div');
+            title.className = 'update-title';
+            title.textContent = item.title;
+
+            const chevron = document.createElement('span');
+            chevron.className = 'update-chevron';
+            chevron.setAttribute('aria-hidden', 'true');
+            chevron.innerHTML = '<svg class="ui-icon"><use href="#i-chevron-down"></use></svg>';
+
+            summary.appendChild(meta);
+            summary.appendChild(title);
+            summary.appendChild(chevron);
+
+            const body = document.createElement('div');
+            body.className = 'update-card-body';
+            body.textContent = item.body || '';
+
+            details.appendChild(summary);
+            details.appendChild(body);
+            container.appendChild(details);
+        }
+    },
+
+    listen() {
+        try {
+            const q = query(collection(firestore, 'updates'), orderBy('createdAt', 'desc'), limit(25));
+            if (typeof this.unsub === 'function') this.unsub();
+            this.unsub = onSnapshot(
+                q,
+                (snapshot) => {
+                    const items = snapshot.docs.map((d) => this.normalizeItem(d.id, d.data()));
+                    this.items = items;
+                    this.renderBanner(items);
+                    this.renderFeed(items);
+                },
+                (error) => {
+                    console.warn('UpdatesCenter listener error', error);
+                }
+            );
+        } catch (error) {
+            console.warn('UpdatesCenter failed to start', error);
+        }
+    },
+
+    openFeed(focusId) {
+        const viewId = 'updates-view';
+        const el = document.getElementById(viewId);
+        if (!el) {
+            // Avoid breaking navigation if feed isn't yet in the DOM.
+            return;
+        }
+
+        if (!ViewManager.views.includes('updates')) {
+            ViewManager.views.push('updates');
+        }
+        ViewManager.show('updates');
+
+        try {
+            const target = focusId ? `#/updates/${encodeURIComponent(focusId)}` : '#/updates';
+            if (window.location.hash !== target) {
+                window.history.replaceState({}, document.title, target);
+            }
+        } catch { /* ignore */ }
+
+        if (focusId) {
+            requestAnimationFrame(() => {
+                const card = document.querySelector(`[data-update-id="${focusId}"]`);
+                if (card?.tagName === 'DETAILS') card.open = true;
+                card?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                card?.classList.add('is-highlighted');
+                setTimeout(() => card?.classList.remove('is-highlighted'), 2200);
+            });
+        }
+    }
+};
+
+// ===========================================
+// Admin Console (Firestore-driven)
+// ===========================================
+const AdminConsole = {
+    isAdmin: false,
+    unsub: null,
+
+    init() {
+        this.navBtn = document.getElementById('admin-nav-btn');
+        this.backBtn = document.getElementById('admin-back-btn');
+        this.form = document.getElementById('admin-update-form');
+        this.statusEl = document.getElementById('admin-update-status');
+        this.listEl = document.getElementById('admin-updates-list');
+
+        this.navBtn?.addEventListener('click', () => this.openFromNav());
+        this.backBtn?.addEventListener('click', () => {
+            ViewManager.show(AppState.currentUser ? 'lobby' : 'auth');
+        });
+
+        this.form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!this.isAdmin) return;
+            const title = document.getElementById('admin-update-title')?.value?.trim();
+            const body = document.getElementById('admin-update-body')?.value?.trim();
+            const kind = document.getElementById('admin-update-kind')?.value || 'update';
+            const severity = document.getElementById('admin-update-severity')?.value || 'info';
+            const banner = !!document.getElementById('admin-update-banner')?.checked;
+            const pinned = !!document.getElementById('admin-update-pinned')?.checked;
+
+            if (!title || !body) return;
+            if (this.statusEl) this.statusEl.textContent = '';
+
+            try {
+                await addDoc(collection(firestore, 'updates'), {
+                    title,
+                    body,
+                    kind,
+                    severity,
+                    active: true,
+                    banner,
+                    pinned,
+                    createdAt: Timestamp.now(),
+                    updatedAt: Timestamp.now(),
+                    authorUid: AppState.currentUser?.uid || null
+                });
+                this.form.reset();
+                const bannerToggle = document.getElementById('admin-update-banner');
+                if (bannerToggle) bannerToggle.checked = true;
+                if (this.statusEl) this.statusEl.textContent = 'Published.';
+                setTimeout(() => { if (this.statusEl) this.statusEl.textContent = ''; }, 1500);
+            } catch (err) {
+                console.error('Admin publish failed', err);
+                if (this.statusEl) this.statusEl.textContent = 'Failed to publish.';
+            }
+        });
+    },
+
+    updateNav() {
+        if (!this.navBtn) return;
+        this.navBtn.style.display = this.isAdmin ? 'inline-flex' : 'none';
+    },
+
+    async refreshAdminState() {
+        this.isAdmin = false;
+        if (!AppState.currentUser) {
+            this.updateNav();
+            return false;
+        }
+        try {
+            const snap = await getDoc(doc(firestore, 'admins', AppState.currentUser.uid));
+            this.isAdmin = snap.exists();
+        } catch (e) {
+            console.warn('Admin check failed', e);
+        }
+        this.updateNav();
+        return this.isAdmin;
+    },
+
+    async openFromNav() {
+        const ok = await this.refreshAdminState();
+        if (!ok) {
+            alert('Admin access required.');
+            return;
+        }
+        this.open();
+    },
+
+    async openFromHash() {
+        const ok = await this.refreshAdminState();
+        if (!ok) {
+            alert('Admin access required.');
+            ViewManager.show(AppState.currentUser ? 'lobby' : 'auth');
+            return;
+        }
+        this.open();
+    },
+
+    open() {
+        ViewManager.show('admin');
+        try {
+            if (window.location.hash !== '#/admin') window.history.replaceState({}, document.title, '#/admin');
+        } catch { /* ignore */ }
+        this.listen();
+    },
+
+    listen() {
+        if (!this.listEl) return;
+        if (typeof this.unsub === 'function') this.unsub();
+        const q = query(collection(firestore, 'updates'), orderBy('createdAt', 'desc'), limit(50));
+        this.unsub = onSnapshot(
+            q,
+            (snapshot) => {
+                const items = snapshot.docs.map((d) => UpdatesCenter.normalizeItem(d.id, d.data()));
+                this.renderList(items);
+            },
+            (error) => {
+                console.warn('Admin updates listener error', error);
+            }
+        );
+    },
+
+    renderList(items) {
+        if (!this.listEl) return;
+        this.listEl.innerHTML = '';
+        const visible = (items || []).slice(0, 50);
+        if (!visible.length) {
+            this.listEl.innerHTML = '<div class="friend-empty">No updates yet.</div>';
+            return;
+        }
+
+        for (const item of visible) {
+            const row = document.createElement('div');
+            row.className = 'admin-update-item';
+            row.dataset.updateId = item.id;
+
+            const meta = document.createElement('div');
+            meta.className = 'admin-update-meta';
+            meta.textContent = `${item.kind || 'update'} • ${item.severity || 'info'} • ${UpdatesCenter.formatDate(item.createdAtMs)}`;
+
+            const title = document.createElement('div');
+            title.className = 'admin-update-title';
+            title.textContent = item.title;
+
+            const actions = document.createElement('div');
+            actions.className = 'admin-update-actions';
+            actions.innerHTML = `
+                <div class="admin-update-toggles">
+                    <label class="admin-update-toggle"><input type="checkbox" class="admin-toggle-active"> Active</label>
+                    <label class="admin-update-toggle"><input type="checkbox" class="admin-toggle-banner"> Banner</label>
+                    <label class="admin-update-toggle"><input type="checkbox" class="admin-toggle-pinned"> Pinned</label>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm admin-update-danger">Delete</button>
+            `;
+
+            const activeEl = actions.querySelector('.admin-toggle-active');
+            const bannerEl = actions.querySelector('.admin-toggle-banner');
+            const pinnedEl = actions.querySelector('.admin-toggle-pinned');
+            const deleteBtn = actions.querySelector('button');
+
+            if (activeEl) activeEl.checked = !!item.active;
+            if (bannerEl) bannerEl.checked = !!item.banner;
+            if (pinnedEl) pinnedEl.checked = !!item.pinned;
+
+            const updateFlags = async (patch) => {
+                try {
+                    await updateDoc(doc(firestore, 'updates', item.id), { ...patch, updatedAt: Timestamp.now() });
+                } catch (e) {
+                    console.error('Failed to update update doc', e);
+                    alert('Failed to update.');
+                }
+            };
+
+            activeEl?.addEventListener('change', () => updateFlags({ active: !!activeEl.checked }));
+            bannerEl?.addEventListener('change', () => updateFlags({ banner: !!bannerEl.checked }));
+            pinnedEl?.addEventListener('change', () => updateFlags({ pinned: !!pinnedEl.checked }));
+            deleteBtn?.addEventListener('click', async () => {
+                if (!confirm('Delete this update?')) return;
+                try {
+                    await deleteDoc(doc(firestore, 'updates', item.id));
+                } catch (e) {
+                    console.error('Delete failed', e);
+                    alert('Failed to delete.');
+                }
+            });
+
+            row.appendChild(meta);
+            row.appendChild(title);
+            row.appendChild(actions);
+            this.listEl.appendChild(row);
+        }
     }
 };
 
@@ -6541,6 +8307,10 @@ async function bootstrapApp() {
     
     // Initialize cookie consent (UK PECR compliant)
     CookieConsent.init();
+
+    // Initialize community updates
+    UpdatesCenter.init();
+    AdminConsole.init();
     
     // Initialize legal modals
     LegalModals.init();
@@ -6580,8 +8350,12 @@ async function bootstrapApp() {
                 console.log('QA report', report);
                 try {
                     // Write to Firestore for remote review (collection: qaReports)
-                    await addDoc(collection(firestore, 'qaReports'), report);
-                    console.log('QA report saved to Firestore: qaReports');
+                    if (CookieConsent?.canUseAnalytics?.()) {
+                        await addDoc(collection(firestore, 'qaReports'), report);
+                        console.log('QA report saved to Firestore: qaReports');
+                    } else {
+                        console.log('QA report not saved (analytics consent not granted)');
+                    }
                 } catch (e) {
                     console.warn('Failed to save QA report to Firestore', e);
                 }

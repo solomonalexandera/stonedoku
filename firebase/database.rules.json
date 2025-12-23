@@ -5,75 +5,74 @@
     "presence": {
       ".read": "auth != null",
       "$userId": {
-        // Users can read presence status of others, but only write their own
         ".read": "auth != null",
         ".write": "auth != null && auth.uid == $userId",
         ".validate": "newData.hasChildren(['status', 'displayName', 'last_changed']) && (newData.child('status').val() == 'online' || newData.child('status').val() == 'offline')"
       }
     },
     "lobbies": {
-      // Lobbies are publicly readable to be listed, but writing requires authentication
       ".read": "auth != null",
       "$roomCode": {
-        // Full updates/parent-level writes only by the lobby host. Creation
-        // of a lobby is allowed when the creating user sets themselves as
-        // the host. Individual players may still write their own player
-        // child (see `players/$playerId` rule).
         ".write": "auth != null && ( !data.exists() ? newData.child('host').val() == auth.uid : root.child('lobbies').child($roomCode).child('host').val() == auth.uid )",
-        // Host can delete, players can join/leave
-          ".validate": "!data.exists() || (data.exists() && (newData.child('host').val() == auth.uid || newData.child('players').hasChild(auth.uid) || data.child('players').hasChild(auth.uid)))",
-          "players": {
-            "$playerId": {
-              ".read": "auth != null",
-              // Players may write/remove their own child entry; host may
-              // write any player child.
-              ".write": "auth != null && (auth.uid == $playerId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid)"
-            }
-          },
-          "rematchVotes": {
-            "$voterId": {
-              ".read": "auth != null",
-              ".write": "auth != null && (auth.uid == $voterId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid || root.child('lobbies').child($roomCode).child('players').child(auth.uid).exists())",
-              ".validate": "newData.hasChildren(['vote']) && (newData.child('vote').val() === true || newData.child('vote').val() === false)"
-            }
-          },
-          // Host can delete, players can join/leave (parent-level validation retained for full updates)
+        ".validate": "!data.exists() || (data.exists() && (newData.child('host').val() == auth.uid || newData.child('players').hasChild(auth.uid) || data.child('players').hasChild(auth.uid)))",
+        "players": {
+          "$playerId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (auth.uid == $playerId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid)"
+          }
+        },
+        "rematchVotes": {
+          "$voterId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (auth.uid == $voterId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid || root.child('lobbies').child($roomCode).child('players').child(auth.uid).exists())",
+            ".validate": "newData.hasChildren(['vote']) && (newData.child('vote').val() === true || newData.child('vote').val() === false)"
+          }
+        }
       }
     },
     "matches": {
       "$matchId": {
-        // Players in the match can read/write to it
         ".read": "auth != null && data.child('playerIds').hasChild(auth.uid)",
-        // Allow writes by participants for existing matches, and allow
-        // creation when the new match being written contains the auth
-        // uid in `playerIds`.
         ".write": "auth != null && (data.exists() ? data.child('playerIds').hasChild(auth.uid) : newData.child('playerIds').hasChild(auth.uid))",
         ".validate": "newData.hasChildren(['id', 'players', 'board', 'solution'])"
       }
     },
     "globalChat": {
-      // Authenticated users can read/write to global chat
       ".read": "auth != null",
       ".write": "auth != null",
       "$messageId": {
         ".validate": "newData.hasChildren(['userId', 'displayName', 'text', 'timestamp']) && newData.child('userId').val() === auth.uid"
       }
     },
+    "dmParticipants": {
+      "$dmId": {
+        ".read": "auth != null && auth.token.email != null && (data.child('a').val() === auth.uid || data.child('b').val() === auth.uid)",
+        ".write": "auth != null && auth.token.email != null && !data.exists() && (newData.child('a').val() === auth.uid || newData.child('b').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['a', 'b']) && newData.child('a').isString() && newData.child('b').isString() && newData.child('a').val() !== newData.child('b').val()"
+      }
+    },
     "directMessages": {
       "$dmId": {
-        // Only participants of a DM can read/write
-        ".read": "auth != null && $dmId.contains(auth.uid)",
-        ".write": "auth != null && $dmId.contains(auth.uid)",
+        ".read": "auth != null && auth.token.email != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid)",
+        ".write": "auth != null && auth.token.email != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid)",
         "$messageId": {
           ".validate": "newData.hasChildren(['from', 'to', 'text', 'timestamp']) && newData.child('from').val() === auth.uid"
         }
       }
     },
+    "dmThreads": {
+      "$userId": {
+        ".read": "auth != null && auth.token.email != null && auth.uid == $userId",
+        "$otherUserId": {
+          ".write": "auth != null && auth.token.email != null && (auth.uid == $userId || auth.uid == $otherUserId)",
+          ".validate": "newData.hasChildren(['lastText', 'lastTimestamp', 'lastFrom'])"
+        }
+      }
+    },
     "notifications": {
       "$userId": {
-        // Users can only access their own notifications
         ".read": "auth != null && auth.uid == $userId",
-        ".write": "auth != null" // Can be written to by others (e.g. challenges)
+        ".write": "auth != null"
       }
     }
   }

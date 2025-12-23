@@ -161,7 +161,6 @@ const watcher = chokidar.watch(
   [
     path.join(ROOT, 'index.html'),
     path.join(ROOT, 'styles.css'),
-    path.join(ROOT, 'theme.css'),
     path.join(ROOT, 'assets.css'),
     path.join(ROOT, 'app.js'),
     path.join(ROOT, 'effects.js'),

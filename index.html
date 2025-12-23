@@ -134,16 +134,24 @@
             <path d="M12 5v14"></path>
             <path d="M5 12h14"></path>
         </symbol>
-        <symbol id="i-minus" viewBox="0 0 24 24">
-            <path d="M5 12h14"></path>
-        </symbol>
-        <symbol id="i-maximize" viewBox="0 0 24 24">
-            <path d="M4 4h16v16H4z"></path>
-        </symbol>
-        <symbol id="i-send" viewBox="0 0 24 24">
-            <path d="M22 2 11 13"></path>
-            <path d="M22 2 15 22l-4-9-9-4 20-7Z"></path>
-        </symbol>
+	        <symbol id="i-minus" viewBox="0 0 24 24">
+	            <path d="M5 12h14"></path>
+	        </symbol>
+	        <symbol id="i-menu" viewBox="0 0 24 24">
+	            <path d="M4 6h16"></path>
+	            <path d="M4 12h16"></path>
+	            <path d="M4 18h16"></path>
+	        </symbol>
+	        <symbol id="i-maximize" viewBox="0 0 24 24">
+	            <path d="M4 4h16v16H4z"></path>
+	        </symbol>
+	        <symbol id="i-chevron-down" viewBox="0 0 24 24">
+	            <path d="M6 9l6 6 6-6"></path>
+	        </symbol>
+	        <symbol id="i-send" viewBox="0 0 24 24">
+	            <path d="M22 2 11 13"></path>
+	            <path d="M22 2 15 22l-4-9-9-4 20-7Z"></path>
+	        </symbol>
         <symbol id="i-copy" viewBox="0 0 24 24">
             <path d="M9 9h10v10H9z"></path>
             <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path>
@@ -215,38 +223,72 @@
         <div class="scene__content">
     <div id="app" role="application" aria-label="Stonedoku Game">
         <!-- Header -->
-        <header class="app-header">
-            <div class="app-header-inner">
-                <div class="logo" id="logo-home">
-                    <h1>Stonedoku</h1>
-                </div>
-                <nav class="nav-controls">
-                <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme" title="Toggle theme">
-                    <span class="icon-stack" aria-hidden="true">
-                        <svg class="ui-icon icon-moon"><use href="#i-moon"></use></svg>
-                        <svg class="ui-icon icon-sun"><use href="#i-sun"></use></svg>
-                    </span>
-                </button>
-                <button id="sound-toggle" class="btn btn-icon" aria-label="Toggle sound" title="Toggle sound">
-                    <span class="icon-stack" aria-hidden="true">
-                        <svg class="ui-icon icon-volume"><use href="#i-volume"></use></svg>
-                        <svg class="ui-icon icon-volume-off"><use href="#i-volume-off"></use></svg>
-                    </span>
-                </button>
-                <div class="user-info" id="user-info" style="display: none;">
-                    <span class="user-status" id="user-status"></span>
-                    <span class="user-name" id="user-name"></span>
-                    <button id="my-profile-btn" class="btn btn-icon" aria-label="My Profile" title="My Profile">
-                        <svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>
-                    </button>
-                    <button id="logout-btn" class="btn btn-secondary btn-sm">Logout</button>
-                </div>
-            </nav>
-            </div>
-        </header>
+	        <header class="app-header">
+	            <div class="app-header-inner">
+	                <div class="logo" id="logo-home">
+	                    <h1>Stonedoku</h1>
+	                </div>
+	                <nav class="nav-controls">
+	                <button id="header-menu-toggle" class="btn btn-icon header-menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="header-menu" title="Menu">
+	                    <svg class="ui-icon" aria-hidden="true"><use href="#i-menu"></use></svg>
+	                </button>
+	                <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme" title="Toggle theme">
+	                    <span class="icon-stack" aria-hidden="true">
+	                        <svg class="ui-icon icon-moon"><use href="#i-moon"></use></svg>
+	                        <svg class="ui-icon icon-sun"><use href="#i-sun"></use></svg>
+	                    </span>
+	                </button>
+	                <button id="sound-toggle" class="btn btn-icon" aria-label="Toggle sound" title="Toggle sound">
+	                    <span class="icon-stack" aria-hidden="true">
+	                        <svg class="ui-icon icon-volume"><use href="#i-volume"></use></svg>
+	                        <svg class="ui-icon icon-volume-off"><use href="#i-volume-off"></use></svg>
+	                    </span>
+	                </button>
+		                <div class="header-menu" id="header-menu" aria-label="Header menu">
+		                    <div class="user-info" id="user-info" style="display: none;">
+		                        <span class="user-status" id="user-status"></span>
+		                        <span class="user-name" id="user-name"></span>
+		                        <button id="my-profile-btn" class="btn btn-icon" aria-label="My Profile" title="My Profile">
+		                            <svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>
+		                        </button>
+		                        <button id="logout-btn" class="btn btn-secondary btn-header">Logout</button>
+		                    </div>
+		                    <button id="updates-nav-btn" class="btn btn-icon" type="button" aria-label="Open updates feed" title="Updates">
+		                        <svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg>
+		                    </button>
+		                    <button id="admin-nav-btn" class="btn btn-icon" type="button" aria-label="Open admin console" title="Admin console" style="display: none;">
+		                        <svg class="ui-icon" aria-hidden="true"><use href="#i-gear"></use></svg>
+		                    </button>
+		                </div>
+		            </nav>
+		            </div>
+		        </header>
 
-        <!-- Main Content -->
-        <main class="main-content" id="main-content" role="main">
+	        <!-- Updates Banner -->
+	        <section class="updates-banner" id="updates-banner" aria-label="Community updates" style="display: none;">
+	            <div class="updates-banner-inner">
+	                <div class="updates-banner-mark" aria-hidden="true">
+	                    <svg class="ui-icon"><use href="#i-book"></use></svg>
+	                </div>
+	                <div class="updates-banner-content">
+	                    <div class="updates-banner-eyebrow" id="updates-banner-eyebrow">Update</div>
+	                    <div class="updates-banner-title" id="updates-banner-title"></div>
+	                    <div class="updates-banner-body" id="updates-banner-body"></div>
+	                </div>
+	                <div class="updates-banner-actions">
+	                    <button class="btn btn-outline btn-sm" type="button" id="updates-banner-open">All updates</button>
+	                    <button class="btn btn-icon" type="button" id="updates-banner-toggle" aria-label="Expand update" aria-expanded="false" title="Expand">
+	                        <svg class="ui-icon" aria-hidden="true"><use href="#i-chevron-down"></use></svg>
+	                    </button>
+	                    <button class="btn btn-icon" type="button" id="updates-banner-dismiss" aria-label="Dismiss update" title="Dismiss">
+	                        <svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg>
+	                    </button>
+	                </div>
+	            </div>
+	        </section>
+
+	        <!-- Main Content -->
+	        <main class="main-content" id="main-content" role="main">
             <!-- Auth View - Modern Landing -->
             <section id="auth-view" class="view">
                 <div class="auth-landing">
@@ -419,14 +461,15 @@
                                     <input type="email" id="onboard-email" class="onboard-input" placeholder="you@example.com">
                                     <span class="form-error" id="email-error"></span>
                                 </div>
-                                <div class="form-group">
-                                    <label for="onboard-password">Create Password</label>
-                                    <input type="password" id="onboard-password" class="onboard-input" placeholder="Min 6 characters" minlength="6">
-                                    <div class="password-strength" id="password-strength">
-                                        <div class="strength-bar"></div>
-                                        <span class="strength-text"></span>
-                                    </div>
-                                </div>
+	                                <div class="form-group">
+	                                    <label for="onboard-password">Create Password</label>
+	                                    <input type="password" id="onboard-password" class="onboard-input" placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6" maxlength="4096">
+	                                    <div class="password-strength" id="password-strength">
+	                                        <div class="strength-bar"></div>
+	                                        <span class="strength-text"></span>
+	                                    </div>
+	                                    <span class="form-error" id="password-error"></span>
+	                                </div>
                                 <div class="form-group">
                                     <label for="onboard-confirm">Confirm Password</label>
                                     <input type="password" id="onboard-confirm" class="onboard-input" placeholder="Type password again" minlength="6">
@@ -566,10 +609,10 @@
                                 <p class="reset-email" id="reset-email-display"></p>
                             </div>
                             <form id="reset-confirm-form" class="auth-form">
-                                <div class="form-group">
-                                    <label for="reset-new-password">New password</label>
-                                    <input type="password" id="reset-new-password" placeholder="At least 6 characters" minlength="6" required>
-                                </div>
+	                                <div class="form-group">
+	                                    <label for="reset-new-password">New password</label>
+	                                    <input type="password" id="reset-new-password" placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6" maxlength="4096" required>
+	                                </div>
                                 <div class="form-group">
                                     <label for="reset-confirm-password">Confirm password</label>
                                     <input type="password" id="reset-confirm-password" placeholder="Repeat password" minlength="6" required>
@@ -610,25 +653,29 @@
 	                            <h3 class="section-title"><svg class="ui-icon" aria-hidden="true"><use href="#i-controller"></use></svg>Choose Your Mode</h3>
 	                            <div class="game-mode-grid">
 	                                <!-- Single Player Card -->
-	                                <div class="game-card single-card">
-	                                    <div class="card-badge">Solo</div>
-	                                    <div class="card-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-grid"></use></svg></div>
-	                                    <div class="card-content">
-	                                        <h4>Classic Sudoku</h4>
-	                                        <p>Train your skills at your own pace</p>
-	                                        <div class="difficulty-buttons">
-	                                            <button class="diff-btn easy" data-difficulty="easy">
-	                                                <span class="diff-dot diff-dot-easy" aria-hidden="true"></span> Easy
-	                                            </button>
-	                                            <button class="diff-btn medium" data-difficulty="medium">
-	                                                <span class="diff-dot diff-dot-medium" aria-hidden="true"></span> Medium
-	                                            </button>
-	                                            <button class="diff-btn hard" data-difficulty="hard">
-	                                                <span class="diff-dot diff-dot-hard" aria-hidden="true"></span> Hard
-	                                            </button>
-	                                        </div>
-	                                    </div>
-	                                </div>
+		                                <div class="game-card single-card">
+		                                    <div class="card-badge">Solo</div>
+		                                    <div class="card-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-grid"></use></svg></div>
+		                                    <div class="card-content">
+		                                        <h4>Classic Sudoku</h4>
+		                                        <p>Train your skills at your own pace</p>
+		                                        <div class="difficulty-buttons">
+		                                            <button class="diff-btn easy" data-difficulty="easy">
+		                                                <span class="diff-dot diff-dot-easy" aria-hidden="true"></span> Easy
+		                                            </button>
+		                                            <button class="diff-btn medium" data-difficulty="medium">
+		                                                <span class="diff-dot diff-dot-medium" aria-hidden="true"></span> Medium
+		                                            </button>
+		                                            <button class="diff-btn hard" data-difficulty="hard">
+		                                                <span class="diff-dot diff-dot-hard" aria-hidden="true"></span> Hard
+		                                            </button>
+		                                        </div>
+		                                        <button class="btn btn-outline btn-block" type="button" id="open-custom-sudoku">
+		                                            <span class="btn-icon-inline" aria-hidden="true"><svg class="ui-icon"><use href="#i-gear"></use></svg></span>
+		                                            Custom Sudoku
+		                                        </button>
+		                                    </div>
+		                                </div>
 
                                 <!-- Versus Card -->
 	                                <div class="game-card versus-card">
@@ -674,26 +721,41 @@
                             </div>
 
 	                            <!-- Online Players -->
-	                            <div class="players-card">
-	                                <h3 class="section-title">
-	                                    <svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>
-	                                    Players Online
+		                            <div class="players-card">
+		                                <h3 class="section-title">
+		                                    <svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>
+		                                    Players Online
 	                                    <span class="players-count-pill" aria-label="Players online">
 	                                        <span class="pulse-dot" aria-hidden="true"></span>
 	                                        <span id="online-count">0</span>
 	                                    </span>
 	                                </h3>
-	                                <div class="players-list" id="players-list">
-	                                    <div class="empty-players">
-	                                        <span class="empty-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-users"></use></svg></span>
-	                                        <span>No players online</span>
-	                                    </div>
-	                                </div>
-	                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+		                                <div class="players-list" id="players-list">
+		                                    <div class="empty-players">
+		                                        <span class="empty-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-users"></use></svg></span>
+		                                        <span>No players online</span>
+		                                    </div>
+		                                </div>
+		                            </div>
+		                            <!-- Friends (registered users only) -->
+		                            <div class="friends-card" id="friends-card" style="display: none;">
+		                                <h3 class="section-title">
+		                                    <svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>
+		                                    Friends
+		                                </h3>
+		                                <div class="friends-section" id="friend-requests-section">
+		                                    <div class="friends-section-title">Requests</div>
+		                                    <div class="friends-list" id="friend-requests-list"></div>
+		                                </div>
+		                                <div class="friends-section" id="friends-list-section">
+		                                    <div class="friends-section-title">Your friends</div>
+		                                    <div class="friends-list" id="friends-list"></div>
+		                                </div>
+		                            </div>
+		                        </div>
+	                    </div>
+	                </div>
+	            </section>
 
             <!-- Waiting Room View (Waiting for opponent to join) -->
             <section id="waiting-view" class="view" style="display: none;">
@@ -773,21 +835,8 @@
                         </button>
                     </div>
                     
-                    <!-- Pre-game Chat -->
-                    <div class="pregame-chat">
-	                    <div class="pregame-chat-header">
-	                            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg>Chat</span>
-	                        </div>
-                        <div class="pregame-chat-messages" id="pregame-chat-messages">
-                            <div class="chat-system-msg">Say hello to your opponent!</div>
-                        </div>
-                        <form class="pregame-chat-form" id="pregame-chat-form">
-                            <input type="text" id="pregame-chat-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
-                            <button type="submit" class="btn btn-primary btn-sm">Send</button>
-                        </form>
-                    </div>
-                </div>
-            </section>
+	                </div>
+	            </section>
 
             <!-- Game View -->
             <section id="game-view" class="view" style="display: none;">
@@ -805,14 +854,6 @@
                                 </div>
                             </div>
                         </div>
-
-                    <!-- Single-player header (timer placement for solo) -->
-                    <div class="game-header-single" id="game-header-single" style="display: none;">
-                        <div class="game-status">
-                            <span class="game-timer" id="game-timer">0:00</span>
-                            <span class="game-mode-label">Solo Mode</span>
-                        </div>
-                    </div>
                         <div class="game-status">
                             <span class="game-timer" id="game-timer-versus">00:00</span>
                             <span class="game-mode-label">Versus Mode</span>
@@ -827,6 +868,14 @@
                                     <span class="life-heart">❤️</span>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Single-player header (timer placement for solo) -->
+                    <div class="game-header-single" id="game-header-single" style="display: none;">
+                        <div class="game-status">
+                            <span class="game-timer" id="game-timer">0:00</span>
+                            <span class="game-mode-label">Solo Mode</span>
                         </div>
                     </div>
 
@@ -949,12 +998,12 @@
                                         <span class="mistake-dot empty"></span>
                                     </div>
                                 </div>
-                                <div class="game-info-item">
-                                    <span class="game-info-label">Time</span>
-                                    <span class="game-info-value">—</span>
-                                </div>
-                            </div>
-                        </div>
+	                                <div class="game-info-item">
+	                                    <span class="game-info-label">Time</span>
+	                                    <span class="game-info-value" id="time-limit-value">—</span>
+	                                </div>
+	                            </div>
+	                        </div>
 
                         <!-- Action Buttons -->
                         <div class="action-buttons-card">
@@ -1200,29 +1249,187 @@
 	                            <button class="btn btn-secondary" id="profile-friend-btn"><svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg><span class="btn-label">Add Friend</span></button>
 	                            <button class="btn btn-accent" id="profile-dm-btn"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg><span class="btn-label">Message</span></button>
 	                        </div>
-                    </div>
-                </div>
-            </section>
+	                    </div>
+	                </div>
+	            </section>
 
-            <!-- Challenge Modal -->
-            <div id="challenge-modal" class="modal" style="display: none;">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2>Challenge Received!</h2>
-                    </div>
-                    <div class="modal-body">
-                        <p><strong id="challenger-name">Player</strong> has challenged you to a match!</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-primary" id="accept-challenge">Accept</button>
-                        <button class="btn btn-secondary" id="decline-challenge">Decline</button>
-                    </div>
-                </div>
-            </div>
+	            <!-- Updates / Community Feed -->
+		            <section id="updates-view" class="view" style="display: none;">
+		                <div class="updates-page">
+	                    <div class="updates-page-header">
+	                        <h2 class="section-title"><svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg>Updates</h2>
+	                        <div class="updates-page-actions">
+	                            <button type="button" class="btn btn-secondary btn-sm" id="updates-back-btn">← Back</button>
+	                        </div>
+	                    </div>
+	                    <div class="updates-page-subtitle">News, planned works, and status changes.</div>
+		                    <div class="updates-feed" id="updates-feed" aria-live="polite">
+		                        <!-- Update items rendered by app.js -->
+		                    </div>
+		                </div>
+		            </section>
 
-            <!-- Hover Profile Tooltip -->
-            <div id="hover-profile" class="hover-profile" style="display: none;">
-                <div class="hover-profile-header">
+		            <!-- Admin Console -->
+		            <section id="admin-view" class="view" style="display: none;">
+		                <div class="admin-page">
+		                    <div class="admin-page-header">
+		                        <h2 class="section-title"><svg class="ui-icon" aria-hidden="true"><use href="#i-gear"></use></svg>Admin Console</h2>
+		                        <div class="admin-page-actions">
+		                            <button type="button" class="btn btn-secondary btn-sm" id="admin-back-btn">← Back</button>
+		                        </div>
+		                    </div>
+		                    <div class="admin-grid">
+		                        <div class="admin-card">
+		                            <h3 class="admin-card-title">Post update</h3>
+		                            <form id="admin-update-form" class="auth-form">
+		                                <div class="form-group">
+		                                    <label for="admin-update-title">Title</label>
+		                                    <input type="text" id="admin-update-title" required maxlength="120" autocomplete="off">
+		                                </div>
+		                                <div class="form-group">
+		                                    <label for="admin-update-body">Body</label>
+		                                    <textarea id="admin-update-body" rows="5" required maxlength="1200"></textarea>
+		                                </div>
+		                                <div class="form-group">
+		                                    <label for="admin-update-kind">Kind</label>
+		                                    <select id="admin-update-kind">
+		                                        <option value="update" selected>Update</option>
+		                                        <option value="status">Status</option>
+		                                        <option value="maintenance">Maintenance</option>
+		                                    </select>
+		                                </div>
+		                                <div class="form-group">
+		                                    <label for="admin-update-severity">Severity</label>
+		                                    <select id="admin-update-severity">
+		                                        <option value="info" selected>Info</option>
+		                                        <option value="warn">Warn</option>
+		                                        <option value="critical">Critical</option>
+		                                    </select>
+		                                </div>
+		                                <div class="form-group admin-flags">
+		                                    <label class="setting-row">
+		                                        <span class="setting-label">Show in banner</span>
+		                                        <span class="toggle-switch">
+		                                            <input type="checkbox" id="admin-update-banner" checked>
+		                                            <span class="toggle-slider"></span>
+		                                        </span>
+		                                    </label>
+		                                    <label class="setting-row">
+		                                        <span class="setting-label">Pinned</span>
+		                                        <span class="toggle-switch">
+		                                            <input type="checkbox" id="admin-update-pinned">
+		                                            <span class="toggle-slider"></span>
+		                                        </span>
+		                                    </label>
+		                                </div>
+		                                <div class="admin-form-actions">
+		                                    <button class="btn btn-primary" type="submit">Publish</button>
+		                                </div>
+		                            </form>
+		                            <div class="form-error" id="admin-update-status"></div>
+		                        </div>
+		                        <div class="admin-card">
+		                            <h3 class="admin-card-title">Manage updates</h3>
+		                            <div class="admin-updates-list" id="admin-updates-list" aria-live="polite"></div>
+		                        </div>
+		                    </div>
+		                </div>
+		            </section>
+
+	            <!-- Challenge Modal -->
+		            <div id="challenge-modal" class="modal" style="display: none;">
+	                <div class="modal-content">
+	                    <div class="modal-header">
+	                        <h2>Challenge Received!</h2>
+	                    </div>
+	                    <div class="modal-body">
+	                        <p><strong id="challenger-name">Player</strong> has challenged you to a match!</p>
+	                    </div>
+	                    <div class="modal-footer">
+	                        <button class="btn btn-primary" id="accept-challenge">Accept</button>
+	                        <button class="btn btn-secondary" id="decline-challenge">Decline</button>
+	                    </div>
+	                </div>
+	            </div>
+
+	            <!-- Custom Sudoku Modal -->
+		            <div id="custom-sudoku-modal" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="custom-sudoku-title">
+		                <div class="modal-content">
+	                    <div class="modal-header">
+	                        <h2 id="custom-sudoku-title">Custom Sudoku</h2>
+	                    </div>
+	                    <div class="modal-body">
+	                        <form id="custom-sudoku-form" class="auth-form">
+	                            <div class="form-group">
+	                                <label for="custom-difficulty">Difficulty</label>
+	                                <select id="custom-difficulty">
+	                                    <option value="easy">Easy</option>
+	                                    <option value="medium" selected>Medium</option>
+	                                    <option value="hard">Hard</option>
+	                                </select>
+	                            </div>
+	                            <div class="form-group">
+	                                <label for="custom-time-limit">Time limit</label>
+	                                <select id="custom-time-limit">
+	                                    <option value="0" selected>None</option>
+	                                    <option value="300">5 minutes</option>
+	                                    <option value="600">10 minutes</option>
+	                                    <option value="900">15 minutes</option>
+	                                </select>
+	                                <p class="form-hint">Sets a deadline; the header timer still shows elapsed time.</p>
+	                            </div>
+	                            <div class="form-group">
+	                                <label for="custom-mistakes">Mistake limit</label>
+	                                <select id="custom-mistakes">
+	                                    <option value="3" selected>3 mistakes</option>
+	                                    <option value="5">5 mistakes</option>
+	                                </select>
+	                            </div>
+	                            <div class="form-group">
+	                                <label class="setting-row" style="justify-content: space-between;">
+	                                    <span class="setting-label">Auto-check</span>
+	                                    <span class="toggle-switch">
+	                                        <input type="checkbox" id="custom-auto-check" checked>
+	                                        <span class="toggle-slider"></span>
+	                                    </span>
+	                                </label>
+	                                <p class="form-hint">If off, entries aren’t revealed immediately, but mistakes still count.</p>
+	                            </div>
+	                        </form>
+	                    </div>
+	                    <div class="modal-footer">
+	                        <button class="btn btn-primary" type="submit" form="custom-sudoku-form" id="custom-sudoku-start">Start</button>
+	                        <button class="btn btn-secondary" type="button" id="custom-sudoku-cancel">Cancel</button>
+	                    </div>
+		                </div>
+		            </div>
+
+		            <!-- Start DM Modal -->
+		            <div id="dm-start-modal" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="dm-start-title">
+		                <div class="modal-content">
+		                    <div class="modal-header">
+		                        <h2 id="dm-start-title">Start a direct message</h2>
+		                    </div>
+		                    <div class="modal-body">
+		                        <form id="dm-start-form" class="auth-form">
+		                            <div class="form-group">
+		                                <label for="dm-start-username">Username</label>
+		                                <input type="text" id="dm-start-username" placeholder="Search username…" autocomplete="off">
+		                                <span class="form-hint">DMs are available to registered users.</span>
+		                            </div>
+		                        </form>
+		                        <div class="dm-start-results" id="dm-start-results" aria-live="polite"></div>
+		                    </div>
+		                    <div class="modal-footer">
+		                        <button class="btn btn-primary" type="submit" form="dm-start-form" id="dm-start-open">Open</button>
+		                        <button class="btn btn-secondary" type="button" id="dm-start-cancel">Cancel</button>
+		                    </div>
+		                </div>
+		            </div>
+
+		            <!-- Hover Profile Tooltip -->
+		            <div id="hover-profile" class="hover-profile" style="display: none;">
+	                <div class="hover-profile-header">
                     <span class="hover-profile-status"></span>
                     <span class="hover-profile-name">Player</span>
                 </div>
@@ -1290,15 +1497,15 @@
 	            </div>
             <div class="chat-widget-body">
                 <!-- DM List (shown when DMs tab active) -->
-	                <div class="dm-list" id="dm-list" style="display: none;">
-	                    <div class="dm-list-header">
-	                        <span>Direct Messages</span>
-	                        <button class="btn btn-sm btn-icon" id="new-dm-btn" title="Start new conversation" aria-label="Start new conversation"><svg class="ui-icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+		                <div class="dm-list" id="dm-list" style="display: none;">
+		                    <div class="dm-list-header">
+		                        <span>Direct Messages</span>
+		                        <button class="widget-btn" type="button" id="new-dm-btn" title="Start new conversation" aria-label="Start new conversation"><svg class="ui-icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+		                    </div>
+	                    <div class="dm-conversations" id="dm-conversations">
+	                        <div class="dm-empty">No conversations yet. Start one from a profile or the + button.</div>
 	                    </div>
-                    <div class="dm-conversations" id="dm-conversations">
-                        <div class="dm-empty">No conversations yet. Start a chat by clicking a player's name or using @whisper username message</div>
-                    </div>
-                </div>
+	                </div>
                 <div class="chat-widget-messages" id="chat-widget-messages"></div>
                 <div class="emoji-picker-widget" id="emoji-picker-widget" style="display: none;">
                     <div class="emoji-grid">
@@ -1328,10 +1535,10 @@
                         <button type="button" class="emoji-btn">🤝</button>
                     </div>
 	                </div>
-	                <div class="chat-hint" id="chat-hint">
-	                    <svg class="ui-icon" aria-hidden="true"><use href="#i-bulb"></use></svg>
-	                    Tip: Use @whisper username message to send private messages
-                </div>
+		                <div class="chat-hint" id="chat-hint">
+		                    <svg class="ui-icon" aria-hidden="true"><use href="#i-bulb"></use></svg>
+		                    <span id="chat-hint-text">Tip: Use @whisper username message to send private messages</span>
+	                </div>
                 <form class="chat-widget-form" id="chat-widget-form">
                     <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle" aria-label="Emoji picker"><svg class="ui-icon" aria-hidden="true"><use href="#i-smile"></use></svg></button>
                     <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200" autocomplete="off">

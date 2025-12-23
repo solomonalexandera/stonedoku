@@ -11,12 +11,17 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
     // User profiles: public readable, writable only by owner
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
-      allow delete: if false; // No user deletion for now
+      // Only allow anonymous accounts to delete themselves (used for guest cleanup).
+      allow delete: if isOwner(userId) && request.auth.token.firebase.sign_in_provider == 'anonymous';
     }
     
     // Usernames: used for unique username constraints
@@ -64,6 +69,18 @@ service cloud.firestore {
       // Do not expose logs publicly by default
       allow read: if false;
       allow update, delete: if false;
+    }
+
+    // Admin allowlist (seeded manually in console: admins/{uid})
+    match /admins/{uid} {
+      allow read: if isOwner(uid);
+      allow create, update, delete: if false;
+    }
+
+    // Community updates / status feed (public read, write via console/admin tooling)
+    match /updates/{updateId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
   }
 }
