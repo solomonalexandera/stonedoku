@@ -14,7 +14,10 @@
       "tmp_assets/**",
       "firebase/**",
       "public/**",
-      "README.md"
+      "README.md",
+      "**/*.md",
+      "package*.json",
+      "apphosting.yaml"
     ],
     "headers": [
       {
@@ -71,8 +74,7 @@
           }
         ]
       }
-    ]
-    ,
+    ],
     "rewrites": [
       {
         "source": "/profile/**",
@@ -81,11 +83,14 @@
       {
         "source": "/u/**",
         "function": "vanityLookup"
-      }
-      ,
+      },
       {
         "source": "/api/**",
         "function": "api"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
       }
     ]
   },
@@ -105,12 +110,6 @@
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"
-      ],
-      "rewrites": [
-        {
-          "source": "**",
-          "destination": "/index.html"
-        }
       ],
       "predeploy": [
         "npm --prefix \"$RESOURCE_DIR\" run build"
@@ -133,8 +132,7 @@
   ],
   "database": {
     "rules": "firebase/database.rules.json"
-  }
-  ,
+  },
   "storage": {
     "rules": "firebase/storage.rules"
   }

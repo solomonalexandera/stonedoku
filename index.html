@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Stonedoku</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="apple-touch-icon" href="/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20251223A">
+    <link rel="apple-touch-icon" href="/favicon.svg?v=20251223A">
     <meta name="theme-color" content="#111317">
     <meta name="description" content="Compete in real-time 1v1 Sudoku battles with players around the world">
     <!-- Security & Privacy -->
@@ -36,6 +36,31 @@
             <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z"></path>
             <path d="M16 9l5 6"></path>
             <path d="M21 9l-5 6"></path>
+        </symbol>
+        <symbol id="i-mail" viewBox="0 0 24 24">
+            <path d="M4 6h16v12H4z"></path>
+            <path d="m4 7 8 6 8-6"></path>
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            <path d="M6 11h12v10H6z"></path>
+        </symbol>
+        <symbol id="i-smile" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9"></circle>
+            <circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"></circle>
+            <circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"></circle>
+            <path d="M8 15c1.2 1 2.6 1.5 4 1.5s2.8-.5 4-1.5"></path>
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 24 24">
+            <path d="M2 4h7a4 4 0 0 1 4 4v14a4 4 0 0 0-4-4H2z"></path>
+            <path d="M22 4h-7a4 4 0 0 0-4 4v14a4 4 0 0 1 4-4h7z"></path>
+        </symbol>
+        <symbol id="i-award" viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="6"></circle>
+            <path d="M15.5 12.9 17 22l-5-3-5 3 1.5-9.1"></path>
+        </symbol>
+        <symbol id="i-crown" viewBox="0 0 24 24">
+            <path d="M3 7l4 4 5-7 5 7 4-4v13H3V7z"></path>
         </symbol>
         <symbol id="i-user" viewBox="0 0 24 24">
             <path d="M20 21a8 8 0 0 0-16 0"></path>
@@ -309,7 +334,7 @@
                             </div>
                             
                             <button type="button" id="anonymous-login" class="btn btn-guest btn-block">
-                                <span class="guest-icon">👤</span>
+                                <span class="guest-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></span>
                                 Play as Guest
                             </button>
                             <p class="guest-note">No account needed • Progress saved locally</p>
@@ -320,7 +345,7 @@
                             <div class="signup-intro">
                                 <p class="signup-intro-text">Ready to join the community? Let's get you set up!</p>
                                 <button type="button" id="start-onboarding" class="btn btn-primary btn-lg btn-block">
-                                    <span>✨</span> Let's Go
+                                    Begin Registration
                                 </button>
                             </div>
                             <p class="auth-terms">By signing up, you agree to our <button type="button" class="link-btn-inline" id="auth-terms-link">Terms of Service</button> and <button type="button" class="link-btn-inline" id="auth-privacy-link">Privacy Policy</button></p>
@@ -335,22 +360,22 @@
                     <!-- Progress indicator -->
                     <div class="onboarding-progress">
                         <div class="progress-step active" data-step="1">
-                            <div class="step-circle">1</div>
+                            <div class="step-circle"><span class="step-number">1</span></div>
                             <span class="step-label">Name</span>
                         </div>
                         <div class="progress-line"></div>
                         <div class="progress-step" data-step="2">
-                            <div class="step-circle">2</div>
+                            <div class="step-circle"><span class="step-number">2</span></div>
                             <span class="step-label">Account</span>
                         </div>
                         <div class="progress-line"></div>
                         <div class="progress-step" data-step="3">
-                            <div class="step-circle">3</div>
+                            <div class="step-circle"><span class="step-number">3</span></div>
                             <span class="step-label">Profile</span>
                         </div>
                         <div class="progress-line"></div>
                         <div class="progress-step" data-step="4">
-                            <div class="step-circle">4</div>
+                            <div class="step-circle"><span class="step-number">4</span></div>
                             <span class="step-label">Done!</span>
                         </div>
                     </div>
@@ -358,8 +383,8 @@
                     <!-- Step 1: Username -->
                     <div class="onboarding-step active" id="onboarding-step-1">
                         <div class="onboarding-card">
-                            <div class="onboarding-emoji">👋</div>
-                            <h2 class="onboarding-title">Hey there!</h2>
+                            <div class="onboarding-emoji" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-user"></use></svg></div>
+                            <h2 class="onboarding-title">Your name</h2>
                             <p class="onboarding-subtitle">Nice to meet you. What would you like to be called?</p>
                             
                             <div class="onboarding-form">
@@ -384,9 +409,9 @@
                     <!-- Step 2: Email & Password -->
                     <div class="onboarding-step" id="onboarding-step-2">
                         <div class="onboarding-card">
-                            <div class="onboarding-emoji">📧</div>
-                            <h2 class="onboarding-title">Great choice, <span id="onboard-display-name">Player</span>!</h2>
-                            <p class="onboarding-subtitle">Now let's secure your account</p>
+                            <div class="onboarding-emoji" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-mail"></use></svg></div>
+                            <h2 class="onboarding-title">Account</h2>
+                            <p class="onboarding-subtitle">Secure your access, <span id="onboard-display-name">Player</span>.</p>
                             
                             <div class="onboarding-form">
                                 <div class="form-group">
@@ -459,17 +484,17 @@
                     <div class="onboarding-step" id="onboarding-step-4">
                         <div class="onboarding-card onboarding-final">
                             <div class="onboarding-confetti" id="onboarding-confetti"></div>
-                            <div class="onboarding-emoji">🎉</div>
-                            <h2 class="onboarding-title">Welcome to Stonedoku!</h2>
-                            <p class="onboarding-subtitle">Your account is all set up. Ready to explore?</p>
+                            <div class="onboarding-emoji" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-check"></use></svg></div>
+                            <h2 class="onboarding-title">Registration complete</h2>
+                            <p class="onboarding-subtitle">Your account is set. Begin orientation?</p>
                             
                             <div class="tour-offer">
                                 <div class="tour-card">
-                                    <div class="tour-icon">🗺️</div>
-                                    <h3>Take a Quick Tour</h3>
-                                    <p>Learn where everything is in just 30 seconds</p>
+                                    <div class="tour-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-globe"></use></svg></div>
+                                    <h3>Orientation</h3>
+                                    <p>A brief guided walk through the interface</p>
                                     <button type="button" class="btn btn-primary btn-lg" id="start-tour">
-                                        Show Me Around
+                                        Begin
                                     </button>
                                 </div>
                                 
@@ -511,11 +536,11 @@
             <!-- Password Reset View -->
             <section id="reset-view" class="view" style="display: none;">
                 <div class="reset-container">
-                    <div class="reset-hero">
-                        <div class="hero-badge">
-                            <span class="badge-icon">🔐</span>
-                            <span>Account recovery</span>
-                        </div>
+                        <div class="reset-hero">
+                            <div class="hero-badge">
+                                <span class="badge-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-lock"></use></svg></span>
+                                <span>Account recovery</span>
+                            </div>
                         <h2>Reset your password</h2>
                         <p>Enter your email to get a reset link, then set a new password.</p>
                     </div>
@@ -1306,12 +1331,12 @@
 	                <div class="chat-hint" id="chat-hint">
 	                    <svg class="ui-icon" aria-hidden="true"><use href="#i-bulb"></use></svg>
 	                    Tip: Use @whisper username message to send private messages
-	                </div>
-	                <form class="chat-widget-form" id="chat-widget-form">
-	                    <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle">😊</button>
-	                    <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
-	                    <button type="submit" class="send-btn" aria-label="Send message"><svg class="ui-icon" aria-hidden="true"><use href="#i-send"></use></svg></button>
-	                </form>
+                </div>
+                <form class="chat-widget-form" id="chat-widget-form">
+                    <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle" aria-label="Emoji picker"><svg class="ui-icon" aria-hidden="true"><use href="#i-smile"></use></svg></button>
+                    <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
+                    <button type="submit" class="send-btn" aria-label="Send message"><svg class="ui-icon" aria-hidden="true"><use href="#i-send"></use></svg></button>
+                </form>
 	            </div>
 	        </div>
 

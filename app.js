@@ -484,7 +484,8 @@ const MotionSystem = {
             ]
         };
         const frames = keyframesByType[type] || keyframesByType.view;
-        el.animate(frames, { duration: 220, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'both' });
+        const duration = type === 'modal' ? 420 : 360;
+        el.animate(frames, { duration, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'both' });
     },
     animateOut(el, type = 'view') {
         if (!el || this.prefersReducedMotion() || !el.animate) return Promise.resolve();
@@ -499,8 +500,115 @@ const MotionSystem = {
             ]
         };
         const frames = keyframesByType[type] || keyframesByType.view;
-        const anim = el.animate(frames, { duration: 160, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'both' });
+        const duration = type === 'modal' ? 320 : 260;
+        const anim = el.animate(frames, { duration, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'both' });
         return anim.finished.catch(() => {});
+    }
+};
+
+// ===========================================
+// Architectural State System (Clash of Worlds)
+// ===========================================
+const ArchitecturalStateSystem = {
+    _state: 'calm',
+    _mistakeChain: 0,
+    _timers: new Set(),
+    _idleTimer: null,
+    _idleInit: false,
+    _lastInteraction: Date.now(),
+    prefersReducedMotion() {
+        return typeof MotionSystem?.prefersReducedMotion === 'function' && MotionSystem.prefersReducedMotion();
+    },
+    _clearTimers() {
+        for (const t of this._timers) clearTimeout(t);
+        this._timers.clear();
+    },
+    _apply(state) {
+        this._state = state;
+        const targets = [document.body, document.getElementById('app')].filter(Boolean);
+        const all = ['state--calm', 'state--strain', 'state--collapse', 'state--restore'];
+        targets.forEach((el) => {
+            all.forEach((c) => el.classList.remove(c));
+            el.classList.add(`state--${state}`);
+        });
+    },
+    reset() {
+        this._mistakeChain = 0;
+        this._clearTimers();
+        if (this._idleTimer) clearTimeout(this._idleTimer);
+        this._idleTimer = null;
+        this._apply('calm');
+    },
+    startIdleWatch() {
+        if (this._idleInit) {
+            this._scheduleIdle();
+            return;
+        }
+        this._idleInit = true;
+
+        const bump = () => {
+            this._lastInteraction = Date.now();
+            this._scheduleIdle();
+        };
+
+        ['pointerdown', 'keydown', 'touchstart'].forEach((evt) => {
+            document.addEventListener(evt, bump, { passive: true });
+        });
+
+        bump();
+    },
+    _scheduleIdle() {
+        if (this._idleTimer) clearTimeout(this._idleTimer);
+        this._idleTimer = setTimeout(() => {
+            const shouldRun = AppState?.currentView === 'game' && !this.prefersReducedMotion() && this._state === 'calm';
+            if (shouldRun) this.pulseStrain(900);
+            this._scheduleIdle();
+        }, 150000);
+    },
+    noteCorrect() {
+        this._mistakeChain = 0;
+        // Let existing sequences finish; otherwise ensure we return to calm quickly.
+        if (this._state === 'strain') {
+            this._clearTimers();
+            const t = setTimeout(() => this._apply('calm'), 550);
+            this._timers.add(t);
+        }
+    },
+    pulseStrain(durationMs = 1100) {
+        if (this.prefersReducedMotion()) return;
+        this._clearTimers();
+        this._apply('strain');
+        const t = setTimeout(() => this._apply('calm'), durationMs);
+        this._timers.add(t);
+    },
+    collapseSequence() {
+        if (this.prefersReducedMotion()) return;
+        this._clearTimers();
+        this._apply('collapse');
+        const t1 = setTimeout(() => this._apply('restore'), 2800);
+        const t2 = setTimeout(() => this._apply('calm'), 4600);
+        this._timers.add(t1);
+        this._timers.add(t2);
+    },
+    noteMistake() {
+        this._mistakeChain += 1;
+        if (this._mistakeChain >= 2) {
+            this.pulseStrain(1600);
+        } else {
+            this.pulseStrain(950);
+        }
+    },
+    onVictory({ perfect = false } = {}) {
+        this._mistakeChain = 0;
+        if (perfect) {
+            this.collapseSequence();
+            return;
+        }
+        if (this.prefersReducedMotion()) return;
+        this._clearTimers();
+        this._apply('restore');
+        const t = setTimeout(() => this._apply('calm'), 1200);
+        this._timers.add(t);
     }
 };
 
@@ -510,6 +618,11 @@ const ViewManager = {
     show(viewName) {
         const prev = AppState.currentView;
         if (prev === viewName) return;
+
+        // Keep architectural effects scoped to gameplay.
+        if (viewName !== 'game') {
+            ArchitecturalStateSystem.reset();
+        }
 
         const nextEl = document.getElementById(`${viewName}-view`);
         const prevEl = prev ? document.getElementById(`${prev}-view`) : null;
@@ -1913,44 +2026,51 @@ const OnboardingSystem = {
     showConfetti() {
         const container = document.getElementById('onboarding-confetti');
         if (!container) return;
-        
-        const colors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#22d3ee', '#a78bfa'];
-        
-        for (let i = 0; i < 50; i++) {
-            const confetti = document.createElement('div');
-            confetti.style.cssText = `
+
+        // Respect reduced motion — onboarding should stay calm and dignified.
+        if (typeof MotionSystem?.prefersReducedMotion === 'function' && MotionSystem.prefersReducedMotion()) return;
+
+        const colors = ['#d8d1c5', '#c6c1b6', '#9c7b45', '#3f5543', '#0e0f12'];
+
+        for (let i = 0; i < 28; i++) {
+            const chip = document.createElement('div');
+            const w = 3 + Math.random() * 5;
+            const h = 3 + Math.random() * 10;
+            const drift = (Math.random() - 0.5) * 80;
+
+            chip.style.cssText = `
                 position: absolute;
-                width: 10px;
-                height: 10px;
+                width: ${w.toFixed(1)}px;
+                height: ${h.toFixed(1)}px;
                 background: ${colors[Math.floor(Math.random() * colors.length)]};
                 left: ${Math.random() * 100}%;
-                top: -10px;
-                border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
-                animation: confettiFall ${2 + Math.random() * 2}s linear forwards;
-                animation-delay: ${Math.random() * 0.5}s;
+                top: -16px;
+                opacity: ${0.25 + Math.random() * 0.35};
+                transform: translateX(0);
+                animation: onboardingDustFall ${3.2 + Math.random() * 2.4}s cubic-bezier(0.2, 0, 0, 1) forwards;
+                animation-delay: ${Math.random() * 0.6}s;
             `;
-            container.appendChild(confetti);
+            chip.style.setProperty('--dust-drift', `${drift.toFixed(1)}px`);
+            container.appendChild(chip);
         }
-        
-        // Add confetti animation if not exists
-        if (!document.getElementById('confetti-style')) {
+
+        if (!document.getElementById('onboarding-dust-style')) {
             const style = document.createElement('style');
-            style.id = 'confetti-style';
+            style.id = 'onboarding-dust-style';
             style.textContent = `
-                @keyframes confettiFall {
+                @keyframes onboardingDustFall {
                     to {
-                        transform: translateY(500px) rotate(720deg);
+                        transform: translateY(520px) translateX(var(--dust-drift, 0px));
                         opacity: 0;
                     }
                 }
             `;
             document.head.appendChild(style);
         }
-        
-        // Clean up after animation
+
         setTimeout(() => {
             container.innerHTML = '';
-        }, 4000);
+        }, 5200);
     },
     
     // Complete onboarding and properly initialize the user session
@@ -2362,12 +2482,12 @@ const TourSystem = {
         modal.id = 'tutorial-offer-modal';
         modal.innerHTML = `
             <div class="tutorial-offer-card">
-                <div class="modal-emoji">🎓</div>
-                <h3>Learn How to Play?</h3>
-                <p>Would you like a quick tutorial on how Sudoku works and some tips for competing?</p>
+                <div class="modal-emoji" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-book"></use></svg></div>
+                <h3>Orientation</h3>
+                <p>A brief primer on the rules, the interface, and competitive play.</p>
                 <div class="tutorial-offer-actions">
-                    <button class="btn btn-primary btn-lg" id="start-tutorial">Yes, Show Me!</button>
-                    <button class="btn btn-outline" id="skip-tutorial">I Know How to Play</button>
+                    <button class="btn btn-primary btn-lg" id="start-tutorial">Begin</button>
+                    <button class="btn btn-outline" id="skip-tutorial">Skip</button>
                 </div>
             </div>
         `;
@@ -2777,19 +2897,26 @@ const UI = {
             badgesContainer.innerHTML = '<div class="badge-empty">No badges yet. Keep playing to earn badges!</div>';
         } else {
             const badgeInfo = {
-                'veteran': { icon: '🎖️', name: 'Veteran' },
-                'winner': { icon: '🏆', name: 'Winner' },
-                'champion': { icon: '👑', name: 'Champion' },
-                'speedster': { icon: '⚡', name: 'Speedster' }
+                veteran: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Veteran' },
+                winner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: 'Winner' },
+                champion: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Champion' },
+                speedster: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>', name: 'Speedster' }
             };
             badges.forEach(badge => {
-                const info = badgeInfo[badge] || { icon: '🏅', name: badge };
+                const info = badgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: String(badge) };
                 const badgeEl = document.createElement('div');
                 badgeEl.className = 'badge-item';
-                badgeEl.innerHTML = `
-                    <span class="badge-icon">${info.icon}</span>
-                    <span class="badge-name">${info.name}</span>
-                `;
+                const iconEl = document.createElement('span');
+                iconEl.className = 'badge-icon';
+                iconEl.setAttribute('aria-hidden', 'true');
+                iconEl.innerHTML = info.iconHtml;
+
+                const nameEl = document.createElement('span');
+                nameEl.className = 'badge-name';
+                nameEl.textContent = info.name;
+
+                badgeEl.appendChild(iconEl);
+                badgeEl.appendChild(nameEl);
                 badgesContainer.appendChild(badgeEl);
             });
         }
@@ -2891,7 +3018,7 @@ const UI = {
         // Show loading state
         miniProfile.innerHTML = `
             <div class="mini-profile-header">
-                <div class="mini-profile-avatar">👤</div>
+                <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
                 <div class="mini-profile-name">${this.escapeHtml(displayName)}</div>
             </div>
             <div class="mini-profile-loading">Loading...</div>
@@ -2917,7 +3044,7 @@ const UI = {
                 
                 miniProfile.innerHTML = `
                     <div class="mini-profile-header">
-                        <div class="mini-profile-avatar">👤</div>
+                        <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
                         <div class="mini-profile-info">
                             <div class="mini-profile-name">${this.escapeHtml(displayName)}</div>
                             <div class="mini-profile-status ${statusClass}">
@@ -3426,12 +3553,14 @@ const GameUI = {
                         CreativeFeatures.incrementStreak();
                         CreativeFeatures.animateCellComplete(row, col);
                         CreativeFeatures.checkGroupCompletion(AppState.puzzle, row, col);
+                        ArchitecturalStateSystem.noteCorrect();
                     } else {
                         AudioManager.playError();
                         cell.classList.add('error');
                         
                         // Reset streak on wrong answer
                         CreativeFeatures.resetStreak();
+                        ArchitecturalStateSystem.noteMistake();
                         
                         // Increment mistakes
                         AppState.mistakes++;
@@ -3460,6 +3589,7 @@ const GameUI = {
                     cell.classList.add('player-fill');
 
                     if (!isCorrect) {
+                        ArchitecturalStateSystem.noteMistake();
                         AppState.mistakes++;
                         GameHelpers.updateMistakesDisplay();
 
@@ -3546,8 +3676,10 @@ const GameUI = {
         if (won) {
             AudioManager.playVictory();
             CreativeFeatures.showConfetti();
+            ArchitecturalStateSystem.onVictory({ perfect: AppState.mistakes === 0 });
         } else {
             AudioManager.playDefeat();
+            ArchitecturalStateSystem.pulseStrain(1400);
         }
 
         ViewManager.showModal('game-over-modal');
@@ -3586,9 +3718,11 @@ const GameUI = {
         if (isWinner) {
             AudioManager.playVictory();
             CreativeFeatures.showConfetti();
+            ArchitecturalStateSystem.onVictory({ perfect: false });
             ProfileManager.updateStats(userId, true);
         } else if (isWinner === false) {
             AudioManager.playDefeat();
+            ArchitecturalStateSystem.pulseStrain(1400);
             ProfileManager.updateStats(userId, false);
         }
 
@@ -4560,11 +4694,11 @@ function generateShareText() {
     const losses = profile.stats?.losses || profile.losses || 0;
     const badges = Array.isArray(profile.badges) ? profile.badges.length : 0;
     
-    return `🎮 My Stonedoku Stats!\n` +
-           `🏆 Wins: ${wins}\n` +
-           `📊 Win Rate: ${wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0}%\n` +
-           `🎖️ Badges: ${badges}\n` +
-           `Play now: https://stone-doku.web.app`;
+    return `Stonedoku — Player Record\n` +
+           `Wins: ${wins}\n` +
+           `Win Rate: ${wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0}%\n` +
+           `Badges: ${badges}\n` +
+           `Play: https://stone-doku.web.app`;
 }
 
 function shareToSocial(platform) {
@@ -5086,7 +5220,7 @@ const CreativeFeatures = {
     
     showStreak() {
         const indicator = document.querySelector('.streak-indicator') || this.createStreakIndicator();
-        indicator.textContent = `${this.streak} in a row!`;
+        indicator.textContent = `Integrity: ${this.streak}`;
         indicator.classList.add('visible');
         
         setTimeout(() => {
@@ -5113,20 +5247,29 @@ const CreativeFeatures = {
     },
     
     showConfetti() {
-        const colors = ['#22c55e', '#6366f1', '#f59e0b', '#ef4444', '#a78bfa', '#22d3ee'];
-        
-        for (let i = 0; i < 50; i++) {
+        if (typeof MotionSystem?.prefersReducedMotion === 'function' && MotionSystem.prefersReducedMotion()) return;
+
+        const colors = ['#d8d1c5', '#c6c1b6', '#9c7b45', '#3f5543', '#0e0f12'];
+
+        for (let i = 0; i < 26; i++) {
             setTimeout(() => {
-                const confetti = document.createElement('div');
-                confetti.className = 'confetti';
-                confetti.style.left = `${Math.random() * 100}vw`;
-                confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
-                confetti.style.animationDuration = `${2 + Math.random() * 2}s`;
-                confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
-                document.body.appendChild(confetti);
-                
-                setTimeout(() => confetti.remove(), 4000);
-            }, i * 30);
+                const chip = document.createElement('div');
+                const w = 3 + Math.random() * 5;
+                const h = 3 + Math.random() * 10;
+                const drift = (Math.random() - 0.5) * 120;
+
+                chip.className = 'dust-chip';
+                chip.style.left = `${Math.random() * 100}vw`;
+                chip.style.width = `${w.toFixed(1)}px`;
+                chip.style.height = `${h.toFixed(1)}px`;
+                chip.style.background = colors[Math.floor(Math.random() * colors.length)];
+                chip.style.opacity = `${0.2 + Math.random() * 0.35}`;
+                chip.style.setProperty('--dust-drift', `${drift.toFixed(1)}px`);
+                chip.style.animationDuration = `${3.6 + Math.random() * 2.2}s`;
+                document.body.appendChild(chip);
+
+                setTimeout(() => chip.remove(), 6500);
+            }, i * 45);
         }
     },
     
@@ -5228,6 +5371,8 @@ function startSinglePlayerGame(difficulty) {
     
     // Reset QOL state
     GameHelpers.resetGameState();
+    ArchitecturalStateSystem.reset();
+    ArchitecturalStateSystem.startIdleWatch();
     
     const { puzzle, solution } = SudokuGenerator.createPuzzle(difficulty);
     AppState.puzzle = puzzle.map(row => [...row]);
@@ -5265,6 +5410,8 @@ async function startVersusGame(roomData) {
     AppState.selectedCell = null;
     // Reset UI/game helper state for a fresh versus match
     GameHelpers.resetGameState();
+    ArchitecturalStateSystem.reset();
+    ArchitecturalStateSystem.startIdleWatch();
     AppState.isGameOver = false;
     // Ensure lives display is clean
     GameUI.resetLivesDisplay();
