@@ -134,8 +134,8 @@
     --chat-leather-1: #1f3f2e;
     --chat-leather-2: #2b5b3f;
     --chat-leather-edge: rgba(0, 0, 0, 0.6);
-    --chat-accent: #2b5b3f;
-    --chat-accent-strong: #1f4a33;
+    --chat-accent: #b9e2c7;
+    --chat-accent-strong: #d1f2dc;
     --chat-text-on: #f3efe5;
     --chat-text-muted: rgba(243, 239, 229, 0.78);
     --chat-surface: rgba(255, 255, 255, 0.16);
@@ -310,6 +310,16 @@ h1, h2, h3, h4 {
     position: relative;
 }
 
+.app-header .btn-icon,
+.app-header .btn-header {
+    min-height: 34px;
+}
+
+.app-header .btn-icon {
+    width: 34px;
+    height: 34px;
+}
+
 .btn-header {
     padding: 0.42rem 0.8rem;
     font-size: 0.78rem;
@@ -347,6 +357,77 @@ h1, h2, h3, h4 {
     border: 1px solid var(--color-grid-border);
     border-radius: var(--border-radius);
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+    min-height: 34px;
+}
+
+#logout-btn.btn-header {
+    padding: 0.35rem 0.65rem;
+    min-height: 34px;
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+}
+
+/* Tooltip labels for icon buttons */
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 10px);
+    transform: translateX(-50%);
+    background: var(--color-card-bg-solid);
+    color: var(--color-text);
+    border: 1px solid var(--color-grid-border);
+    padding: 0.3rem 0.45rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 2500;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+    opacity: 1;
+}
+
+/* Toasts */
+#toast-container {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 4000;
+    pointer-events: none;
+}
+
+.toast {
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.22));
+    border: 1px solid var(--color-grid-border);
+    box-shadow: var(--shadow-md);
+    color: var(--color-text);
+    padding: 0.6rem 0.8rem;
+    max-width: min(420px, calc(100vw - 32px));
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+}
+
+.toast-success { border-left: 3px solid rgba(63, 85, 67, 0.95); }
+.toast-error { border-left: 3px solid rgba(90, 28, 31, 0.95); }
+.toast-info { border-left: 3px solid rgba(var(--color-primary-rgb), 0.85); }
+
+.toast-hide {
+    opacity: 0;
+    transition: opacity 0.25s ease;
 }
 
 .user-status {
@@ -362,40 +443,41 @@ h1, h2, h3, h4 {
     letter-spacing: 0.02em;
 }
 
-/* Only collapse header actions when truly cramped */
-@media (max-width: 520px) {
-    .header-menu-toggle {
-        display: inline-flex;
-    }
+body.header-compact .header-menu-toggle {
+    display: inline-flex;
+}
 
-    .header-menu {
-        position: absolute;
-        top: calc(100% + 0.65rem);
-        right: 0;
-        min-width: 240px;
-        max-width: calc(100vw - 2rem);
-        padding: 0.6rem;
-        display: none;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.6rem;
-        background: var(--color-card-bg-solid);
-        border: 1px solid var(--color-grid-border);
-        box-shadow: var(--shadow-panel);
-        z-index: 200;
-    }
+body.header-compact .header-menu {
+    position: absolute;
+    top: calc(100% + 0.65rem);
+    right: 0;
+    min-width: 240px;
+    max-width: calc(100vw - 2rem);
+    padding: 0.6rem;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    background: var(--color-card-bg-solid);
+    border: 1px solid var(--color-grid-border);
+    box-shadow: var(--shadow-panel);
+    z-index: 200;
+}
 
-    .header-menu.is-open {
-        display: flex;
-    }
+body.header-compact .header-menu.is-open {
+    display: flex;
+}
 
-    .header-menu .user-info {
-        width: 100%;
-        justify-content: space-between;
-        padding: 0.55rem 0.75rem;
-    }
+body.header-compact .header-menu .user-info {
+    width: 100%;
+    justify-content: space-between;
+    padding: 0.55rem 0.75rem;
+}
 
-    .header-menu .header-updates-btn { display: none; }
+body.header-compact .header-menu .header-updates-btn { display: none; }
+
+body:not(.header-compact) .header-menu-toggle {
+    display: none !important;
 }
 
 .header-updates-btn,
@@ -798,6 +880,7 @@ h1, h2, h3, h4 {
     color: var(--color-text);
     font-size: 0.9rem;
     border: 1px solid var(--btn-icon-border);
+    position: relative;
 }
 
 .btn-icon:hover {
@@ -1753,12 +1836,19 @@ body:not(.light-theme) .diff-dot {
 }
 
 .stats-card,
-.players-card {
+.players-card,
+.friends-card {
     background: var(--color-card-bg);
     backdrop-filter: blur(10px);
     border-radius: var(--border-radius-lg);
     padding: 1.25rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.light-theme .stats-card,
+body.light-theme .players-card,
+body.light-theme .friends-card {
+    border-color: rgba(0, 0, 0, 0.12);
 }
 
 .stats-row {
@@ -1817,8 +1907,9 @@ body:not(.light-theme) .diff-dot {
 }
 
 /* Friends Panel */
-.friends-card {
-    margin-top: 1.5rem;
+body.light-theme .player-item {
+    background: rgba(0, 0, 0, 0.035);
+    border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .friends-section {
@@ -1866,6 +1957,11 @@ body:not(.light-theme) .diff-dot {
     font-size: 0.9rem;
 }
 
+body.light-theme .friend-item {
+    background: rgba(0, 0, 0, 0.035);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
 .friend-name {
     font-weight: 600;
     overflow: hidden;
@@ -1889,6 +1985,27 @@ body:not(.light-theme) .diff-dot {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+.player-item-name {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.player-item-activity {
+    max-width: 44%;
+    text-align: right;
+    line-height: 1.15;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
 .players-list:empty::after {
@@ -2279,11 +2396,16 @@ body:not(.light-theme) .difficulty-btn.btn-daily {
 }
 
 .toggle-switch input:checked + .toggle-slider {
-    background: var(--color-primary);
+    background: var(--color-success-light);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
     transform: translateX(24px);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid rgba(var(--color-primary-rgb), 0.55);
+    outline-offset: 2px;
 }
 
 .leaderboard-btn {
@@ -2371,6 +2493,15 @@ body:not(.light-theme) .difficulty-btn.btn-daily {
     text-shadow: 0 1px 0 rgba(255,255,255,0.4), 0 -1px 0 rgba(0,0,0,0.1);
 }
 
+.cell-value {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
 .sudoku-cell:hover:not(.given) {
     background: var(--color-cell-highlight);
 }
@@ -2417,12 +2548,25 @@ body:not(.light-theme) .difficulty-btn.btn-daily {
     height: 100%;
     font-size: 0.5rem;
     color: var(--color-text-muted);
+    position: absolute;
+    inset: 3px;
+    z-index: 1;
 }
 
 .cell-notes span {
     display: flex;
     align-items: center;
     justify-content: center;
+    opacity: 0;
+}
+
+.cell-notes span.on {
+    opacity: 1;
+    color: rgba(0, 0, 0, 0.55);
+}
+
+body:not(.light-theme) .cell-notes span.on {
+    color: rgba(255, 255, 255, 0.55);
 }
 
 /* Grid thick lines */
@@ -2775,6 +2919,14 @@ body:not(.light-theme) .difficulty-btn.btn-daily {
 
 .game-status {
     text-align: center;
+}
+
+#resign-btn {
+    margin-top: 0.35rem;
+    padding: 0.3rem 0.55rem;
+    min-height: 28px;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
 }
 
 .game-timer {
@@ -3158,8 +3310,13 @@ body:not(.light-theme) .difficulty-btn.btn-daily {
     }
     
     .stats-card,
-    .players-card {
+    .players-card,
+    .friends-card {
         flex: 1;
+    }
+
+    .friends-card {
+        margin-top: 0;
     }
 }
 
@@ -3323,6 +3480,7 @@ body:not(.light-theme) .difficulty-btn.btn-daily {
     border: 1px solid var(--chat-leather-edge);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     transform-origin: bottom right;
+    color: var(--chat-text-on);
 }
 
 .chat-widget.minimized {
@@ -3488,6 +3646,7 @@ body:not(.light-theme) .difficulty-btn.btn-daily {
     display: block;
     line-height: 1.5;
     word-break: break-word;
+    color: var(--chat-text-on);
 }
 
 @keyframes messageSlide {

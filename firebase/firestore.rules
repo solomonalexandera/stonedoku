@@ -39,6 +39,45 @@ service cloud.firestore {
         allow delete: if isOwner(userId) || isOwner(friendId); // Either user can unfriend
     }
 
+    function isRegisteredUser() {
+      return isSignedIn() && request.auth.token.email != null;
+    }
+
+    // Friend requests (used for consented friendships)
+    match /friendRequests/{requestId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+
+      allow create: if isRegisteredUser()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid is string
+        && request.resource.data.status == 'pending';
+
+      allow update: if isSignedIn()
+        && (
+          // Recipient can accept/decline a pending request.
+          (request.auth.uid == resource.data.toUid
+            && resource.data.status == 'pending'
+            && request.resource.data.status in ['accepted', 'declined'])
+          ||
+          // Sender can cancel a pending request.
+          (request.auth.uid == resource.data.fromUid
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'cancelled')
+        );
+
+      allow delete: if isSignedIn()
+        && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+    }
+
+    // Friend removals are a write-only queue that Cloud Functions consumes to
+    // symmetrically remove friendships from both user documents.
+    match /friendRemovals/{docId} {
+      allow create: if isRegisteredUser()
+        && request.resource.data.users.size() == 2
+        && request.auth.uid in request.resource.data.users;
+      allow read, update, delete: if false;
+    }
+
     // Match history - read access for participants
     match /matchHistory/{matchId} {
       allow read: if isSignedIn() && request.auth.uid in resource.data.players;

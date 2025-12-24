@@ -311,6 +311,12 @@ const AppState = {
     notesMode: false,
     notes: {}, // cellIndex -> Set of numbers
     moveHistory: [], // for undo
+    toolLimits: {
+        undoMax: 0,
+        eraseMax: 0,
+        undoLeft: 0,
+        eraseLeft: 0,
+    },
     currentDifficulty: 'medium',
     widgetChatMode: 'global', // 'global', 'game', or 'dm_[userId]'
     widgetGameChatContext: null, // 'lobby:<code>' | 'match:<id>'
@@ -1072,12 +1078,13 @@ const ProfileManager = {
         const profile = await getDoc(profileRef);
         
         if (profile.exists()) {
-            const stats = profile.data().stats || { wins: 0, losses: 0 };
-            if (won) {
+            const stats = profile.data().stats || { wins: 0, losses: 0, gamesPlayed: 0 };
+            if (won === true) {
                 stats.wins++;
-            } else {
+            } else if (won === false) {
                 stats.losses++;
             }
+            stats.gamesPlayed = (stats.gamesPlayed || 0) + 1;
             
             await updateDoc(profileRef, { stats });
             
@@ -1141,52 +1148,83 @@ const ProfileManager = {
     
     // Friend system
     async sendFriendRequest(fromUserId, toUserId) {
-        const toProfileRef = doc(firestore, 'users', toUserId);
-        await updateDoc(toProfileRef, {
-            friendRequests: arrayUnion({
+        if (!fromUserId || !toUserId) return;
+        const requestId = `${fromUserId}_${toUserId}`;
+        const reqRef = doc(firestore, 'friendRequests', requestId);
+        await setDoc(reqRef, {
+            fromUid: fromUserId,
+            toUid: toUserId,
+            status: 'pending',
+            createdAt: Timestamp.now()
+        }, { merge: true });
+        // Notify recipient in RTDB (used by notification listener for toast/UI)
+        try {
+            await set(ref(rtdb, `notifications/${toUserId}/friend_${fromUserId}`), {
+                type: 'friend_request',
                 from: fromUserId,
-                timestamp: Timestamp.now()
-            })
-        });
+                timestamp: serverTimestamp()
+            });
+        } catch (e) {
+            console.warn('Failed to write friend request notification', e);
+        }
     },
     
     async acceptFriendRequest(userId, friendId) {
+        if (!userId || !friendId) return;
+        const requestId = `${friendId}_${userId}`;
+        const reqRef = doc(firestore, 'friendRequests', requestId);
+        await updateDoc(reqRef, {
+            status: 'accepted',
+            respondedAt: Timestamp.now()
+        });
         const userRef = doc(firestore, 'users', userId);
         const friendRef = doc(firestore, 'users', friendId);
-        
-        // Add each other as friends
-        await updateDoc(userRef, {
-            friends: arrayUnion(friendId)
-        });
-        await updateDoc(friendRef, {
-            friends: arrayUnion(userId)
-        });
-        
-        // Remove the friend request
-        const userDoc = await getDoc(userRef);
-        const requests = userDoc.data().friendRequests || [];
-        const updatedRequests = requests.filter(r => r.from !== friendId);
-        await updateDoc(userRef, { friendRequests: updatedRequests });
+        await Promise.all([
+            updateDoc(userRef, { friends: arrayUnion(friendId) }),
+            updateDoc(friendRef, { friends: arrayUnion(userId) })
+        ]);
+        try {
+            await set(ref(rtdb, `notifications/${friendId}/friend_${userId}`), {
+                type: 'friend_accept',
+                from: userId,
+                timestamp: serverTimestamp()
+            });
+        } catch (e) {
+            console.warn('Failed to write friend acceptance notification', e);
+        }
     },
     
     async declineFriendRequest(userId, friendId) {
-        const userRef = doc(firestore, 'users', userId);
-        const userDoc = await getDoc(userRef);
-        const requests = userDoc.data().friendRequests || [];
-        const updatedRequests = requests.filter(r => r.from !== friendId);
-        await updateDoc(userRef, { friendRequests: updatedRequests });
+        if (!userId || !friendId) return;
+        const requestId = `${friendId}_${userId}`;
+        const reqRef = doc(firestore, 'friendRequests', requestId);
+        await updateDoc(reqRef, {
+            status: 'declined',
+            respondedAt: Timestamp.now()
+        });
+        try {
+            await set(ref(rtdb, `notifications/${friendId}/friend_${userId}`), {
+                type: 'friend_decline',
+                from: userId,
+                timestamp: serverTimestamp()
+            });
+        } catch (e) {
+            console.warn('Failed to write friend decline notification', e);
+        }
     },
     
     async removeFriend(userId, friendId) {
+        if (!userId || !friendId) return;
         const userRef = doc(firestore, 'users', userId);
         const friendRef = doc(firestore, 'users', friendId);
-        
-        await updateDoc(userRef, {
-            friends: arrayRemove(friendId)
-        });
-        await updateDoc(friendRef, {
-            friends: arrayRemove(userId)
-        });
+        await Promise.all([
+            updateDoc(userRef, { friends: arrayRemove(friendId) }),
+            updateDoc(friendRef, { friends: arrayRemove(userId) }),
+            addDoc(collection(firestore, 'friendRemovals'), {
+                users: [userId, friendId],
+                createdAt: Timestamp.now()
+            })
+        ]);
     },
     
     async getFriends(userId) {
@@ -1238,8 +1276,20 @@ const FriendsPanel = {
         }
         card.style.display = 'block';
 
-        const requests = Array.isArray(AppState.profile?.friendRequests) ? AppState.profile.friendRequests : [];
         const friends = Array.isArray(AppState.friends) ? AppState.friends : [];
+        let incomingRequests = [];
+        try {
+            const reqQ = query(
+                collection(firestore, 'friendRequests'),
+                where('toUid', '==', AppState.currentUser.uid),
+                where('status', '==', 'pending'),
+                limit(30)
+            );
+            const snap = await getDocs(reqQ);
+            incomingRequests = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+        } catch (e) {
+            console.warn('Failed to load incoming friend requests', e);
+        }
 
         const loadProfiles = async (ids) => {
             const unique = Array.from(new Set(ids.filter(Boolean)));
@@ -1256,7 +1306,7 @@ const FriendsPanel = {
         };
 
         // Requests
-        const requestIds = requests.map((r) => r?.from).filter(Boolean);
+        const requestIds = incomingRequests.map((r) => r?.fromUid).filter(Boolean);
         const requestProfiles = await loadProfiles(requestIds);
         requestsList.innerHTML = '';
         if (requestProfiles.length === 0) {
@@ -1864,6 +1914,27 @@ const MatchManager = {
         await update(ref(rtdb, `matches/${matchId}`), {
             status: 'finished',
             finishedAt: serverTimestamp()
+        });
+    }
+    ,
+
+    async resignMatch(matchId, userId) {
+        if (!matchId || !userId) return;
+        const matchRef = ref(rtdb, `matches/${matchId}`);
+        const snapshot = await get(matchRef);
+        const match = snapshot.val();
+        if (!match || match.status !== 'active') return;
+
+        const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds || [];
+        const opponentId = playerIds.find((id) => id !== userId);
+        if (!opponentId) return;
+
+        await update(matchRef, {
+            status: 'finished',
+            winner: opponentId,
+            finishedAt: serverTimestamp(),
+            winReason: 'resign',
+            resignedBy: userId
         });
     }
 };
@@ -2652,9 +2723,19 @@ const TourSystem = {
         }
     ],
     
-    start() {
-        // Make sure we're in the lobby first
-        OnboardingSystem.complete();
+    start(force = false) {
+        if (!force && typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
+            try {
+                if (localStorage.getItem('stonedoku_tour_done') === '1') {
+                    UI.showToast('Orientation already completed. Run it again from your profile.', 'info');
+                    return;
+                }
+            } catch { /* ignore */ }
+        }
+        // Make sure we're in the lobby first (tour targets live there).
+        if (AppState.currentView !== 'lobby') {
+            try { ViewManager.show('lobby'); } catch { /* ignore */ }
+        }
         
         // Small delay to let lobby render
         setTimeout(() => {
@@ -2678,13 +2759,12 @@ const TourSystem = {
             if (AppState.tour.step < this.steps.length - 1) {
                 this.showStep(AppState.tour.step + 1);
             } else {
-                this.end();
-                this.offerTutorial();
+                this.end(true);
             }
         });
         
         document.getElementById('tour-skip')?.addEventListener('click', () => {
-            this.end();
+            this.end(false);
         });
     },
     
@@ -2758,7 +2838,7 @@ const TourSystem = {
         tooltip.style.top = `${tooltipY}px`;
     },
     
-    end() {
+    end(completed = false) {
         AppState.tour.active = false;
         
         const overlay = document.getElementById('tour-overlay');
@@ -2766,44 +2846,20 @@ const TourSystem = {
             overlay.style.display = 'none';
             overlay.classList.remove('active');
         }
+
+        if (completed) {
+            UI.showToast('Orientation complete.', 'success');
+            try {
+                const uid = AppState.currentUser?.uid;
+                if (uid) {
+                    updateDoc(doc(firestore, 'users', uid), { tourCompletedAt: serverTimestamp() }).catch(() => {});
+                }
+            } catch { /* ignore */ }
+            if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
+                try { localStorage.setItem('stonedoku_tour_done', '1'); } catch { /* ignore */ }
+            }
+        }
     },
-    
-    offerTutorial() {
-        // Create and show tutorial offer modal
-        const modal = document.createElement('div');
-        modal.className = 'tutorial-offer-modal';
-        modal.id = 'tutorial-offer-modal';
-        modal.innerHTML = `
-            <div class="tutorial-offer-card">
-                <div class="modal-emoji" aria-hidden="true"><svg class="ui-icon ui-icon-xl"><use href="#i-book"></use></svg></div>
-                <h3>Orientation</h3>
-                <p>A brief primer on the rules, the interface, and competitive play.</p>
-                <div class="tutorial-offer-actions">
-                    <button class="btn btn-primary btn-lg" id="start-tutorial">Begin</button>
-                    <button class="btn btn-outline" id="skip-tutorial">Skip</button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        document.getElementById('start-tutorial')?.addEventListener('click', () => {
-            modal.remove();
-            this.startTutorial();
-        });
-        
-        document.getElementById('skip-tutorial')?.addEventListener('click', () => {
-            modal.remove();
-        });
-    },
-    
-    startTutorial() {
-        // Start an easy practice game with tutorial overlays
-        alert('Starting tutorial... (Tutorial mode would show step-by-step Sudoku instructions during an easy game)');
-        // For now, just start an easy game
-        const event = new CustomEvent('startTutorialGame');
-        document.dispatchEvent(event);
-    }
 };
 
 // ===========================================
@@ -2819,7 +2875,6 @@ const ChatManager = {
     async ensureDmParticipants(dmId, userA, userB) {
         try {
             if (!dmId || !userA || !userB) return;
-            if (!isRegisteredUser()) return;
             if (this.participantsEnsured.has(dmId)) return;
             const [a, b] = [userA, userB].sort();
             const participantsRef = ref(rtdb, `dmParticipants/${dmId}`);
@@ -3139,6 +3194,37 @@ async function handleChallengeNotification(otherUserId, notification) {
     }
 }
 
+async function handleNotification(otherUserId, notification) {
+    if (!notification) return;
+    if (notification.type === 'challenge') {
+        await handleChallengeNotification(otherUserId, notification);
+        return;
+    }
+
+    try {
+        if (notification.type === 'friend_request') {
+            FriendsPanel.refresh().catch(() => {});
+            UI.showToast('New friend request received.', 'info');
+        } else if (notification.type === 'friend_accept') {
+            FriendsPanel.refresh().catch(() => {});
+            UI.showToast('Friend request accepted.', 'success');
+        } else if (notification.type === 'friend_decline') {
+            UI.showToast('Friend request declined.', 'info');
+        }
+    } catch (e) {
+        console.warn('handleNotification failed', e);
+    } finally {
+        const currentUid = AppState.currentUser?.uid;
+        if (!currentUid) return;
+        const key = notification.type && notification.type.startsWith('friend_')
+            ? (String(otherUserId).startsWith('friend_') ? otherUserId : `friend_${otherUserId}`)
+            : otherUserId;
+        try {
+            await remove(ref(rtdb, `notifications/${currentUid}/${key}`));
+        } catch { /* ignore */ }
+    }
+}
+
 // ===========================================
 // UI Helpers
 // ===========================================
@@ -3289,6 +3375,8 @@ const UI = {
         
         const data = profile.data();
         AppState.viewingProfileId = userId;
+        const profileView = document.getElementById('profile-view');
+        if (profileView) profileView.dataset.userId = userId;
         
         // Update profile page elements
         const username = data.username || data.displayName || 'Anonymous';
@@ -3323,9 +3411,16 @@ const UI = {
         document.getElementById('profile-picture-edit').style.display = isOwnProfile ? 'block' : 'none';
         
         // Member since
-        const memberDate = data.memberSince?.toDate?.();
-        document.getElementById('profile-page-member-since').textContent = 
-            memberDate ? memberDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Unknown';
+        let memberDate = null;
+        try {
+            if (data.memberSince?.toDate) memberDate = data.memberSince.toDate();
+            else if (typeof data.memberSince === 'number') memberDate = new Date(data.memberSince);
+            else if (typeof data.memberSince === 'string') memberDate = new Date(data.memberSince);
+        } catch { /* ignore */ }
+        const memberText = memberDate && !Number.isNaN(memberDate.getTime())
+            ? memberDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+            : 'Unknown';
+        document.getElementById('profile-page-member-since').textContent = memberText;
         
         // Vanity URL - show only for registered users (not anonymous guest accounts)
         const vanityEl = document.getElementById('profile-vanity-url');
@@ -3388,39 +3483,52 @@ const UI = {
         document.getElementById('profile-own-actions').style.display = isOwnProfile ? 'flex' : 'none';
         document.getElementById('profile-other-actions').style.display = isOwnProfile ? 'none' : 'flex';
         
-        // Check friend status if viewing other profile
-        if (!isOwnProfile) {
-            const isFriend = AppState.friends.includes(userId);
-            const friendBtn = document.getElementById('profile-friend-btn');
-            const labelEl = friendBtn?.querySelector('.btn-label');
-            const dmBtn = document.getElementById('profile-dm-btn');
-            const socialEnabled = isRegisteredUser();
+	        // Check friend status if viewing other profile
+	        if (!isOwnProfile) {
+	            const isFriend = AppState.friends.includes(userId);
+	            const friendBtn = document.getElementById('profile-friend-btn');
+	            const labelEl = friendBtn?.querySelector('.btn-label');
+	            const dmBtn = document.getElementById('profile-dm-btn');
+	            const socialEnabled = isRegisteredUser();
 
-            if (!socialEnabled) {
-                if (friendBtn) friendBtn.style.display = 'none';
-                if (dmBtn) dmBtn.style.display = 'none';
-            } else {
-                if (friendBtn) friendBtn.style.display = '';
-                if (dmBtn) dmBtn.style.display = '';
+	            if (!socialEnabled) {
+	                if (friendBtn) friendBtn.style.display = 'none';
+	                if (dmBtn) dmBtn.style.display = 'none';
+	            } else {
+	                if (friendBtn) friendBtn.style.display = '';
+	                if (dmBtn) dmBtn.style.display = '';
 
-                const requests = Array.isArray(AppState.profile?.friendRequests) ? AppState.profile.friendRequests : [];
-                const hasIncomingRequest = requests.some((r) => r && r.from === userId);
+	                let hasIncomingRequest = false;
+	                let hasOutgoingRequest = false;
+	                try {
+	                    const incomingRef = doc(firestore, 'friendRequests', `${userId}_${AppState.currentUser.uid}`);
+	                    const outgoingRef = doc(firestore, 'friendRequests', `${AppState.currentUser.uid}_${userId}`);
+	                    const [incomingSnap, outgoingSnap] = await Promise.all([getDoc(incomingRef), getDoc(outgoingRef)]);
+	                    hasIncomingRequest = incomingSnap.exists() && incomingSnap.data()?.status === 'pending';
+	                    hasOutgoingRequest = outgoingSnap.exists() && outgoingSnap.data()?.status === 'pending';
+	                } catch (e) {
+	                    console.warn('Failed to check friend request state', e);
+	                }
 
-                if (hasIncomingRequest) {
-                    if (labelEl) labelEl.textContent = 'Accept Request';
-                    else if (friendBtn) friendBtn.textContent = 'Accept Request';
-                    if (friendBtn) friendBtn.disabled = false;
-                } else if (isFriend) {
-                    if (labelEl) labelEl.textContent = 'Friends';
-                    else if (friendBtn) friendBtn.textContent = 'Friends';
-                    if (friendBtn) friendBtn.disabled = true;
-                } else {
-                    if (labelEl) labelEl.textContent = 'Add Friend';
-                    else if (friendBtn) friendBtn.textContent = 'Add Friend';
-                    if (friendBtn) friendBtn.disabled = false;
-                }
-            }
-        }
+	                if (hasIncomingRequest) {
+	                    if (labelEl) labelEl.textContent = 'Accept Request';
+	                    else if (friendBtn) friendBtn.textContent = 'Accept Request';
+	                    if (friendBtn) friendBtn.disabled = false;
+	                } else if (hasOutgoingRequest) {
+	                    if (labelEl) labelEl.textContent = 'Request Sent';
+	                    else if (friendBtn) friendBtn.textContent = 'Request Sent';
+	                    if (friendBtn) friendBtn.disabled = true;
+	                } else if (isFriend) {
+	                    if (labelEl) labelEl.textContent = 'Remove Friend';
+	                    else if (friendBtn) friendBtn.textContent = 'Remove Friend';
+	                    if (friendBtn) friendBtn.disabled = false;
+	                } else {
+	                    if (labelEl) labelEl.textContent = 'Add Friend';
+	                    else if (friendBtn) friendBtn.textContent = 'Add Friend';
+	                    if (friendBtn) friendBtn.disabled = false;
+	                }
+	            }
+	        }
         
         ViewManager.show('profile');
     },
@@ -3508,26 +3616,27 @@ const UI = {
         
         // Fetch profile data and presence status
         try {
-            const [profile, presenceSnapshot] = await Promise.all([
+            const [profileSnap, presenceSnapshot] = await Promise.all([
                 ProfileManager.getProfile(userId),
                 get(ref(rtdb, `presence/${userId}`))
             ]);
             
             const presenceData = presenceSnapshot.val();
             const isOnline = presenceData?.status === 'online';
+            const profileData = profileSnap?.data?.() || {};
+            const stats = profileData.stats || { wins: 0, losses: 0 };
+            const total = stats.wins + stats.losses;
+            const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
+            const statusClass = isOnline ? 'online' : 'offline';
+            const statusText = isOnline ? 'Online' : 'Offline';
+            const name = profileData.username || profileData.displayName || displayName;
             
-            if (profile && miniProfile.classList.contains('visible')) {
-                const stats = profile.stats || { wins: 0, losses: 0 };
-                const total = stats.wins + stats.losses;
-                const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
-                const statusClass = isOnline ? 'online' : 'offline';
-                const statusText = isOnline ? 'Online' : 'Offline';
-                
+            if (miniProfile.classList.contains('visible')) {
                 miniProfile.innerHTML = `
                     <div class="mini-profile-header">
                         <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
                         <div class="mini-profile-info">
-                            <div class="mini-profile-name">${this.escapeHtml(displayName)}</div>
+                            <div class="mini-profile-name">${this.escapeHtml(name)}</div>
                             <div class="mini-profile-status ${statusClass}">
                                 <span class="status-dot"></span>
                                 ${statusText}
@@ -3536,11 +3645,11 @@ const UI = {
                     </div>
                     <div class="mini-profile-stats">
                         <div class="mini-stat">
-                            <span class="mini-stat-value">${stats.wins}</span>
+                            <span class="mini-stat-value">${stats.wins || 0}</span>
                             <span class="mini-stat-label">Wins</span>
                         </div>
                         <div class="mini-stat">
-                            <span class="mini-stat-value">${stats.losses}</span>
+                            <span class="mini-stat-value">${stats.losses || 0}</span>
                             <span class="mini-stat-label">Losses</span>
                         </div>
                         <div class="mini-stat">
@@ -3584,6 +3693,30 @@ const UI = {
             badgeEl.textContent = badge;
             container.appendChild(badgeEl);
         });
+    },
+
+    showToast(message, type = 'info') {
+        const text = String(message || '').trim();
+        if (!text) return;
+
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.setAttribute('aria-live', 'polite');
+            container.setAttribute('aria-atomic', 'true');
+            document.body.appendChild(container);
+        }
+
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.textContent = text;
+        container.appendChild(el);
+
+        setTimeout(() => {
+            el.classList.add('toast-hide');
+            setTimeout(() => el.remove(), 350);
+        }, 2400);
     },
     
     formatTime(seconds) {
@@ -3703,6 +3836,60 @@ const BoardIntegritySystem = {
 // Game UI Helper Functions
 // ===========================================
 const GameHelpers = {
+    toolLimitForDifficulty(difficulty) {
+        const d = String(difficulty || '').toLowerCase();
+        if (d === 'easy') return 4;
+        if (d === 'medium') return 3;
+        if (d === 'hard') return 0;
+        // Daily/custom default to medium-like.
+        return 3;
+    },
+
+    resetToolLimits(difficulty) {
+        const max = this.toolLimitForDifficulty(difficulty);
+        AppState.toolLimits.undoMax = max;
+        AppState.toolLimits.eraseMax = max;
+        AppState.toolLimits.undoLeft = max;
+        AppState.toolLimits.eraseLeft = max;
+        this.updateToolUi();
+    },
+
+    updateToolUi() {
+        const el = document.getElementById('tool-uses-value');
+        if (!el) return;
+        const { undoLeft, eraseLeft, undoMax, eraseMax } = AppState.toolLimits;
+        if (undoMax === 0 && eraseMax === 0) {
+            el.textContent = 'Locked';
+        } else {
+            el.textContent = `Undo ${undoLeft}/${undoMax} · Erase ${eraseLeft}/${eraseMax}`;
+        }
+        const undoBtn = document.getElementById('undo-btn');
+        const eraseBtn = document.getElementById('erase-btn');
+        if (undoBtn) undoBtn.disabled = (undoMax === 0) || (AppState.gameMode === 'single' && undoLeft <= 0);
+        if (eraseBtn) eraseBtn.disabled = (eraseMax === 0) || (AppState.gameMode === 'single' && eraseLeft <= 0);
+    },
+
+    tryUndo() {
+        if (AppState.gameMode === 'single') {
+            if (AppState.toolLimits.undoLeft <= 0) return false;
+            const did = this.undo();
+            if (did) {
+                AppState.toolLimits.undoLeft = Math.max(0, AppState.toolLimits.undoLeft - 1);
+                this.updateToolUi();
+            }
+            return did;
+        }
+        return this.undo();
+    },
+
+    consumeEraseIfNeeded(changedSomething) {
+        if (!changedSomething) return;
+        if (AppState.gameMode !== 'single') return;
+        if (AppState.toolLimits.eraseLeft <= 0) return;
+        AppState.toolLimits.eraseLeft = Math.max(0, AppState.toolLimits.eraseLeft - 1);
+        this.updateToolUi();
+    },
+
     // Count how many of each number are placed
     countNumbers() {
         const counts = {};
@@ -3787,7 +3974,9 @@ const GameHelpers = {
         if (!AppState.settings.highlightSameNumbers || num === 0) return;
         
         document.querySelectorAll('.sudoku-cell').forEach(cell => {
-            if (cell.textContent === String(num)) {
+            const valueEl = cell.querySelector('.cell-value');
+            const valueText = valueEl ? valueEl.textContent : cell.textContent;
+            if (valueText === String(num)) {
                 cell.classList.add('same-number');
             }
         });
@@ -3849,7 +4038,9 @@ const GameHelpers = {
             `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
         );
         if (cell) {
-            cell.textContent = oldValue !== 0 ? oldValue : '';
+            const valueEl = cell.querySelector('.cell-value');
+            if (valueEl) valueEl.textContent = oldValue !== 0 ? oldValue : '';
+            else cell.textContent = oldValue !== 0 ? oldValue : '';
         }
         
         this.updateRemainingCounts();
@@ -3881,6 +4072,7 @@ const GameHelpers = {
         
         const notesBtn = document.getElementById('notes-btn');
         if (notesBtn) notesBtn.classList.remove('active');
+        this.updateToolUi();
     }
 };
 // ===========================================
@@ -3905,6 +4097,16 @@ const GameUI = {
                 cell.dataset.row = row;
                 cell.dataset.col = col;
                 BoardIntegritySystem.registerCell(cell, row, col);
+
+                const valueEl = document.createElement('span');
+                valueEl.className = 'cell-value';
+                valueEl.setAttribute('aria-hidden', 'true');
+                cell.appendChild(valueEl);
+
+                const notesEl = document.createElement('div');
+                notesEl.className = 'cell-notes';
+                notesEl.setAttribute('aria-hidden', 'true');
+                cell.appendChild(notesEl);
                 
                 // Accessibility attributes
                 cell.setAttribute('role', 'gridcell');
@@ -3958,8 +4160,19 @@ const GameUI = {
                     // A cell is "given" if it was part of the original puzzle
                     isGiven = AppState.originalPuzzle?.[row]?.[col] !== 0;
                 }
-                
-                cell.textContent = value !== 0 ? value : '';
+                const valueEl = cell.querySelector('.cell-value');
+                const notesEl = cell.querySelector('.cell-notes');
+                if (valueEl) valueEl.textContent = value !== 0 ? String(value) : '';
+                else cell.textContent = value !== 0 ? String(value) : '';
+
+                // Notes only exist in single player mode and only for empty (non-given) cells.
+                if (!board && !isGiven && value === 0 && notesEl) {
+                    const key = `${row}_${col}`;
+                    const set = AppState.notes?.[key];
+                    this.renderNotesForCell(notesEl, set);
+                } else if (notesEl) {
+                    notesEl.innerHTML = '';
+                }
                 
                 // Update ARIA label for accessibility
                 let ariaLabel = `Row ${row + 1}, Column ${col + 1}`;
@@ -3998,6 +4211,19 @@ const GameUI = {
         // Store puzzle state for versus mode
         if (board) {
             AppState.puzzle = puzzle;
+        }
+    },
+
+    renderNotesForCell(notesEl, set) {
+        if (!notesEl) return;
+        const nums = Array.isArray(set) ? set : (set instanceof Set ? Array.from(set) : []);
+        const sorted = nums.map(n => Number(n)).filter(n => n >= 1 && n <= 9).sort((a, b) => a - b);
+        notesEl.innerHTML = '';
+        for (let i = 1; i <= 9; i++) {
+            const s = document.createElement('span');
+            s.textContent = String(i);
+            s.className = sorted.includes(i) ? 'on' : '';
+            notesEl.appendChild(s);
         }
     },
     
@@ -4051,14 +4277,39 @@ const GameUI = {
             console.log('Cell is a given number, cannot modify');
             return;
         }
+
+        // Notes mode (single player only): toggles pencil marks instead of setting the cell.
+        if (AppState.gameMode === 'single') {
+            const currentValue = AppState.puzzle?.[row]?.[col] || 0;
+            const key = `${row}_${col}`;
+            const notesEl = cell.querySelector('.cell-notes');
+
+            if (AppState.notesMode && num >= 1 && num <= 9 && currentValue === 0) {
+                const existing = AppState.notes[key] instanceof Set ? AppState.notes[key] : new Set(Array.isArray(AppState.notes[key]) ? AppState.notes[key] : []);
+                if (existing.has(num)) existing.delete(num);
+                else existing.add(num);
+                AppState.notes[key] = existing;
+                if (notesEl) this.renderNotesForCell(notesEl, existing);
+                AudioManager.playCellFill();
+                return;
+            }
+
+            if (num === 0 && AppState.notesMode) {
+                delete AppState.notes[key];
+                if (notesEl) notesEl.innerHTML = '';
+                AudioManager.playCellFill();
+                return;
+            }
+        }
         
         // In versus mode, check if cell is already filled by checking classes AND content
         if (AppState.gameMode === 'versus') {
             const hasPlayerFill = cell.classList.contains('player-fill');
             const hasOpponentFill = cell.classList.contains('opponent-fill');
-            const hasContent = cell.textContent.trim() !== '';
+            const valueEl = cell.querySelector('.cell-value');
+            const hasContent = (valueEl ? valueEl.textContent : cell.textContent).trim() !== '';
             
-            console.log('Cell state check:', { hasPlayerFill, hasOpponentFill, hasContent, content: cell.textContent });
+            console.log('Cell state check:', { hasPlayerFill, hasOpponentFill, hasContent, content: (valueEl ? valueEl.textContent : cell.textContent) });
             
             // Only block if marked as filled by a player
             if (hasPlayerFill || hasOpponentFill) {
@@ -4098,7 +4349,11 @@ const GameUI = {
                         AudioManager.playCorrect();
                         cell.classList.add('correct');
                         cell.classList.add('player-fill');
-                        cell.textContent = num;
+                        {
+                            const valueEl = cell.querySelector('.cell-value');
+                            if (valueEl) valueEl.textContent = String(num);
+                            else cell.textContent = String(num);
+                        }
                         
                         setTimeout(() => {
                             cell.classList.remove('correct');
@@ -4107,12 +4362,18 @@ const GameUI = {
                         // Wrong guess - show error animation but don't persist
                         AudioManager.playError();
                         cell.classList.add('error');
-                        cell.textContent = num;
+                        {
+                            const valueEl = cell.querySelector('.cell-value');
+                            if (valueEl) valueEl.textContent = String(num);
+                            else cell.textContent = String(num);
+                        }
                         
                         // Clear the wrong number after animation (local only - not saved to DB)
                         setTimeout(() => {
                             cell.classList.remove('error');
-                            cell.textContent = '';
+                            const valueEl = cell.querySelector('.cell-value');
+                            if (valueEl) valueEl.textContent = '';
+                            else cell.textContent = '';
                         }, 500);
                     }
                 } else {
@@ -4128,13 +4389,25 @@ const GameUI = {
             
             if (num === 0) {
                 // Erase
-                cell.textContent = '';
+                if (AppState.toolLimits.eraseLeft <= 0) return;
+                const valueEl = cell.querySelector('.cell-value');
+                if (valueEl) valueEl.textContent = '';
+                else cell.textContent = '';
                 AppState.puzzle[row][col] = 0;
                 GameHelpers.addToHistory(row, col, oldValue, 0);
+                delete AppState.notes[`${row}_${col}`];
+                const notesEl = cell.querySelector('.cell-notes');
+                if (notesEl) notesEl.innerHTML = '';
+                GameHelpers.consumeEraseIfNeeded(oldValue !== 0);
             } else {
-                cell.textContent = num;
+                const valueEl = cell.querySelector('.cell-value');
+                if (valueEl) valueEl.textContent = String(num);
+                else cell.textContent = String(num);
                 AppState.puzzle[row][col] = num;
                 GameHelpers.addToHistory(row, col, oldValue, num);
+                delete AppState.notes[`${row}_${col}`];
+                const notesEl = cell.querySelector('.cell-notes');
+                if (notesEl) notesEl.innerHTML = '';
                 
                 // Check if correct (if auto-check is enabled)
                 const isCorrect = num === AppState.solution[row][col];
@@ -4165,7 +4438,9 @@ const GameUI = {
                         
                         // Remove wrong number after animation
                         setTimeout(() => {
-                            cell.textContent = '';
+                            const valueEl = cell.querySelector('.cell-value');
+                            if (valueEl) valueEl.textContent = '';
+                            else cell.textContent = '';
                             AppState.puzzle[row][col] = 0;
                             cell.classList.remove('error');
                             GameHelpers.updateRemainingCounts();
@@ -4286,6 +4561,12 @@ const GameUI = {
 
         ViewManager.showModal('game-over-modal');
         AppState.gameMode = 'lobby';
+
+        // Track single-player results for signed-in users.
+        const uid = AppState.currentUser?.uid;
+        if (uid) {
+            ProfileManager.updateStats(uid, !!won).catch(() => {});
+        }
     },
     
     endVersusGame(match) {
@@ -4317,7 +4598,9 @@ const GameUI = {
         const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds;
         const opponentId = playerIds?.find(id => id !== userId);
 
-        if (isWinner) {
+        if (isTie) {
+            ProfileManager.updateStats(userId, null);
+        } else if (isWinner) {
             AudioManager.playVictory();
             CreativeFeatures.showConfetti();
             ArchitecturalStateSystem.onVictory({ perfect: false });
@@ -4393,6 +4676,11 @@ function setupEventListeners() {
         const body = document.body;
         body.classList.toggle('light-theme', mode === 'light');
         body.classList.toggle('dark-theme', mode !== 'light');
+        const themeBtn = document.getElementById('theme-toggle');
+        if (themeBtn) {
+            themeBtn.setAttribute('aria-pressed', mode !== 'light' ? 'true' : 'false');
+            themeBtn.setAttribute('data-tooltip', mode === 'light' ? 'Theme: Light' : 'Theme: Dark');
+        }
         if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
             try { localStorage.setItem('stonedoku_theme', mode); } catch { /* ignore */ }
         }
@@ -4410,6 +4698,8 @@ function setupEventListeners() {
         const btn = document.getElementById('sound-toggle');
         if (!btn) return;
         btn.classList.toggle('is-muted', !AppState.soundEnabled);
+        btn.setAttribute('aria-pressed', AppState.soundEnabled ? 'true' : 'false');
+        btn.setAttribute('data-tooltip', AppState.soundEnabled ? 'Sound: On' : 'Sound: Off');
     }
 
     initTheme();
@@ -4418,6 +4708,7 @@ function setupEventListeners() {
     // Header menu (mobile)
     const headerMenuToggle = document.getElementById('header-menu-toggle');
     const headerMenu = document.getElementById('header-menu');
+    const headerCompactMql = window.matchMedia ? window.matchMedia('(max-width: 768px)') : null;
     const closeHeaderMenu = () => {
         if (!headerMenu || !headerMenuToggle) return;
         headerMenu.classList.remove('is-open');
@@ -4425,11 +4716,17 @@ function setupEventListeners() {
     };
     const toggleHeaderMenu = (ev) => {
         if (!headerMenu || !headerMenuToggle) return;
+        if (headerCompactMql && !headerCompactMql.matches) return;
         ev?.preventDefault?.();
         ev?.stopPropagation?.();
         const next = !headerMenu.classList.contains('is-open');
         headerMenu.classList.toggle('is-open', next);
         headerMenuToggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+    };
+    const syncHeaderCompactMode = () => {
+        const compact = !!(headerCompactMql && headerCompactMql.matches);
+        document.body.classList.toggle('header-compact', compact);
+        if (!compact) closeHeaderMenu();
     };
     headerMenuToggle?.addEventListener('click', toggleHeaderMenu);
     document.addEventListener('click', (e) => {
@@ -4442,6 +4739,14 @@ function setupEventListeners() {
         if (e.key === 'Escape') closeHeaderMenu();
     });
     window.addEventListener('resize', closeHeaderMenu, { passive: true });
+    syncHeaderCompactMode();
+    if (headerCompactMql) {
+        try {
+            headerCompactMql.addEventListener('change', syncHeaderCompactMode);
+        } catch {
+            headerCompactMql.addListener(syncHeaderCompactMode);
+        }
+    }
     document.getElementById('updates-nav-btn')?.addEventListener('click', closeHeaderMenu);
     document.getElementById('admin-nav-btn')?.addEventListener('click', closeHeaderMenu);
     document.getElementById('logout-btn')?.addEventListener('click', closeHeaderMenu);
@@ -4458,6 +4763,19 @@ function setupEventListeners() {
     document.getElementById('sound-toggle')?.addEventListener('click', () => {
         AppState.soundEnabled = !AppState.soundEnabled;
         syncSoundToggleUi();
+    });
+
+    // Resign / leave match (versus)
+    document.getElementById('resign-btn')?.addEventListener('click', async () => {
+        if (AppState.gameMode !== 'versus') return;
+        if (!AppState.currentMatch || !AppState.currentUser?.uid) return;
+        if (!confirm('Leave this match? This counts as a resignation.')) return;
+        try {
+            await MatchManager.resignMatch(AppState.currentMatch, AppState.currentUser.uid);
+        } catch (e) {
+            console.warn('Resign failed', e);
+            UI.showToast('Failed to leave match.', 'error');
+        }
     });
     
     // Auth - Anonymous login
@@ -4502,10 +4820,7 @@ function setupEventListeners() {
         OnboardingSystem.start();
     });
     
-    // Tutorial game listener
-    document.addEventListener('startTutorialGame', () => {
-        startSinglePlayerGame('easy');
-    });
+    // Tutorial game event removed (orientation is accessed via profile/settings).
     
     // Sign In form
     document.getElementById('signin-form')?.addEventListener('submit', async (e) => {
@@ -4931,13 +5246,7 @@ function setupEventListeners() {
     });
     
     // Hint button
-    document.getElementById('hint-btn')?.addEventListener('click', () => {
-        if (AppState.gameMode === 'single' && AppState.selectedCell) {
-            const { row, col } = AppState.selectedCell;
-            const correctValue = AppState.solution[row][col];
-            GameUI.inputNumber(correctValue);
-        }
-    });
+    // Hint feature removed.
     
     // Quit game
     document.getElementById('quit-game')?.addEventListener('click', async () => {
@@ -5080,7 +5389,7 @@ function setupEventListeners() {
     
     // Undo button
     document.getElementById('undo-btn')?.addEventListener('click', () => {
-        GameHelpers.undo();
+        GameHelpers.tryUndo();
         AudioManager.playCellFill();
     });
     
@@ -5119,7 +5428,7 @@ function setupEventListeners() {
         // Ctrl+Z for undo
         if (e.ctrlKey && e.key === 'z') {
             e.preventDefault();
-            GameHelpers.undo();
+            GameHelpers.tryUndo();
         }
         
         // N for notes mode toggle
@@ -5197,6 +5506,13 @@ function initProfilePage() {
         document.getElementById('cancel-edit-btn').style.display = 'inline-block';
         document.getElementById('edit-profile-btn').style.display = 'none';
     });
+
+    // Run orientation tour again (from profile)
+    document.getElementById('run-tour-btn')?.addEventListener('click', () => {
+        ViewManager.show('lobby');
+        PresenceSystem.updateActivity('In Lobby');
+        setTimeout(() => TourSystem.start(true), 250);
+    });
     
     // Save profile changes
     document.getElementById('save-profile-btn')?.addEventListener('click', async () => {
@@ -5211,8 +5527,8 @@ function initProfilePage() {
             });
             
             // Update display
-            const bioDisplay = document.getElementById('profile-bio');
-            if (bioDisplay) bioDisplay.textContent = bio || 'No bio yet';
+            const bioDisplay = document.getElementById('profile-page-bio');
+            if (bioDisplay) bioDisplay.textContent = bio || 'No bio yet...';
             AppState.profile = Object.assign({}, AppState.profile || {}, {
                 bio: bio,
                 socialLinks: { twitter, discord }
@@ -5229,10 +5545,10 @@ function initProfilePage() {
             document.getElementById('cancel-edit-btn').style.display = 'none';
             document.getElementById('edit-profile-btn').style.display = 'inline-block';
             
-            alert('Profile updated!');
+            UI.showToast('Profile updated.', 'success');
         } catch (error) {
             console.error('Error updating profile:', error);
-            alert('Failed to update profile');
+            UI.showToast('Failed to update profile.', 'error');
         }
     });
     
@@ -5274,28 +5590,36 @@ function initProfilePage() {
             const url = await ProfileManager.uploadProfilePicture(AppState.currentUser.uid, file);
             
             // Update display
-            const img = document.getElementById('profile-picture-display');
+            const img = document.getElementById('profile-page-picture');
+            const placeholder = document.getElementById('profile-picture-placeholder');
             if (img) {
                 img.src = url;
                 img.style.display = 'block';
             }
+            if (placeholder) placeholder.style.display = 'none';
             
             progressIndicator.remove();
-            alert('Profile picture updated!');
+            UI.showToast('Profile picture updated.', 'success');
         } catch (error) {
             console.error('Error uploading profile picture:', error);
-            alert('Failed to upload profile picture');
+            UI.showToast('Failed to upload profile picture.', 'error');
         }
     });
     
     // Copy profile URL
-    document.getElementById('copy-profile-url')?.addEventListener('click', () => {
+    document.getElementById('copy-profile-url')?.addEventListener('click', async () => {
         const linkEl = document.getElementById('profile-vanity-link');
         const url = linkEl?.href || linkEl?.textContent || '';
-        if (url) {
-            navigator.clipboard.writeText(url).then(() => {
-                alert('Profile URL copied!');
-            });
+        if (!url) return;
+        try {
+            await navigator.clipboard.writeText(url);
+            UI.showToast('Profile URL copied.', 'success');
+        } catch (e) {
+            console.warn('Clipboard write failed', e);
+            try {
+                window.prompt('Copy profile URL:', url);
+            } catch { /* ignore */ }
+            UI.showToast('Copy failed. URL shown for manual copy.', 'error');
         }
     });
     
@@ -5311,7 +5635,9 @@ function initProfilePage() {
     document.getElementById('share-copy')?.addEventListener('click', () => {
         const shareText = generateShareText();
         navigator.clipboard.writeText(shareText).then(() => {
-            alert('Stats copied to clipboard!');
+            UI.showToast('Stats copied.', 'success');
+        }).catch(() => {
+            UI.showToast('Copy failed.', 'error');
         });
     });
     
@@ -6003,6 +6329,7 @@ function initFloatingChat() {
 
     async function openDmConversation(otherUserId) {
         if (!otherUserId || !AppState.currentUser) return;
+        if (otherUserId === AppState.currentUser.uid) return;
 
         // Open widget
         widget.classList.remove('minimized');
@@ -6612,6 +6939,7 @@ function startSinglePlayerGame(difficulty, options = null) {
     
     // Reset QOL state
     GameHelpers.resetGameState();
+    GameHelpers.resetToolLimits(difficulty);
     ArchitecturalStateSystem.reset();
     ArchitecturalStateSystem.startIdleWatch();
     
@@ -6626,10 +6954,6 @@ function startSinglePlayerGame(difficulty, options = null) {
     // Update UI elements
     const difficultyLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
     document.getElementById('current-difficulty').textContent = difficultyLabel;
-    const timeLimitEl = document.getElementById('time-limit-value');
-    if (timeLimitEl) {
-        timeLimitEl.textContent = AppState.timeLimitSeconds > 0 ? `${Math.round(AppState.timeLimitSeconds / 60)} min` : '—';
-    }
     const vsHeader = document.getElementById('game-header-versus');
     if (vsHeader) vsHeader.style.display = 'none';
     const singleHeader = document.getElementById('game-header-single');
@@ -6656,6 +6980,8 @@ async function startVersusGame(roomData) {
     AppState.selectedCell = null;
     // Reset UI/game helper state for a fresh versus match
     GameHelpers.resetGameState();
+    // Tools are disabled in versus mode.
+    GameHelpers.resetToolLimits('hard');
     ArchitecturalStateSystem.reset();
     ArchitecturalStateSystem.startIdleWatch();
     AppState.isGameOver = false;
@@ -7037,6 +7363,7 @@ function showPostMatchScreen(match, userId, opponentId, isWinner, isTie, isDisco
     let reasonText = 'Board Completed';
     if (isDisconnect) reasonText = 'Opponent Disconnected';
     else if (isMistakesLoss) reasonText = isWinner ? 'Opponent Out of Lives' : 'Out of Lives';
+    else if (match.winReason === 'resign') reasonText = isWinner ? 'Opponent Resigned' : 'Resigned';
     document.getElementById('postmatch-reason').textContent = reasonText;
     
     // Reset rematch UI
@@ -7264,6 +7591,7 @@ function handleMatchUpdate(match) {
 // Auth State Handler
 // ===========================================
 let authListenerRegistered = false;
+let userProfileUnsub = null;
 function registerAuthListener() {
     if (authListenerRegistered) return;
     authListenerRegistered = true;
@@ -7296,6 +7624,10 @@ function registerAuthListener() {
 
                 AppState.currentUser = user;
                 AppState.passwordReset.active = false;
+
+                // Reset prior profile listener (user switching / logout-login).
+                try { if (typeof userProfileUnsub === 'function') userProfileUnsub(); } catch { /* ignore */ }
+                userProfileUnsub = null;
                 
                 // If we're in the middle of onboarding, don't redirect to lobby
                 if (AppState.onboarding.active) {
@@ -7333,6 +7665,28 @@ function registerAuthListener() {
                 
                 UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
                 UI.updateBadges(profileData?.badges || []);
+
+                // Live profile updates (stats, badges, friends, username, admin flag).
+                try {
+                    userProfileUnsub = onSnapshot(doc(firestore, 'users', user.uid), (snap) => {
+                        if (!snap.exists()) return;
+                        const data = snap.data() || {};
+                        AppState.profile = data;
+                        AppState.friends = data.friends || [];
+                        UI.updateStats(data.stats || { wins: 0, losses: 0 });
+                        UI.updateBadges(data.badges || []);
+                        FriendsPanel.render().catch(() => {});
+                        const name = data.username || data.displayName || `Player_${user.uid.substring(0, 6)}`;
+                        const truncated = name.length > 15 ? name.substring(0, 15) + '...' : name;
+                        const headerName = document.getElementById('user-name');
+                        const welcomeName = document.getElementById('welcome-name');
+                        if (headerName) headerName.textContent = truncated;
+                        if (welcomeName) welcomeName.textContent = name;
+                        AdminConsole.refreshAdminState().catch(() => {});
+                    });
+                } catch (e) {
+                    console.warn('Failed to attach profile listener', e);
+                }
                 
                 // Initialize presence with proper username
                 await PresenceSystem.init(user.uid, displayName);
@@ -7359,9 +7713,9 @@ function registerAuthListener() {
                     window.ChatWidget?.setDmThreads?.([]);
                 }
                 
-                // Listen for challenges
-                ChallengeSystem.listenToNotifications(user.uid, (challengerId, notification) => {
-                    handleChallengeNotification(challengerId, notification);
+                // Listen for realtime notifications (challenges, friend events)
+                ChallengeSystem.listenToNotifications(user.uid, (otherUserId, notification) => {
+                    handleNotification(otherUserId, notification);
                 });
                 
                 // Show chat widget for logged in users
@@ -7373,6 +7727,8 @@ function registerAuthListener() {
                 ViewManager.show('lobby');
             } else {
                 AppState.currentUser = null;
+                try { if (typeof userProfileUnsub === 'function') userProfileUnsub(); } catch { /* ignore */ }
+                userProfileUnsub = null;
                 document.getElementById('user-info').style.display = 'none';
                 AdminConsole.refreshAdminState().catch(() => {});
                 window.ChatWidget?.reset?.();

@@ -30,3 +30,4 @@ export {vanityLookup} from "./vanity";
 export {api} from "./api";
 export {sendOnboardingEmail} from "./mail";
 export {mailer} from "./mailer";
+export {syncFriendsOnRequest, removeFriendsOnRemoval} from "./friends";

@@ -46,15 +46,16 @@
     },
     "dmParticipants": {
       "$dmId": {
-        ".read": "auth != null && auth.token.email != null && (data.child('a').val() === auth.uid || data.child('b').val() === auth.uid)",
-        ".write": "auth != null && auth.token.email != null && !data.exists() && (newData.child('a').val() === auth.uid || newData.child('b').val() === auth.uid)",
+        ".read": "auth != null && (data.child('a').val() === auth.uid || data.child('b').val() === auth.uid)",
+        // Allow creating the participant record, and allow idempotent re-writes that keep the same pair.
+        ".write": "auth != null && (!data.exists() || (data.child('a').val() === newData.child('a').val() && data.child('b').val() === newData.child('b').val())) && (newData.child('a').val() === auth.uid || newData.child('b').val() === auth.uid)",
         ".validate": "newData.hasChildren(['a', 'b']) && newData.child('a').isString() && newData.child('b').isString() && newData.child('a').val() !== newData.child('b').val()"
       }
     },
     "directMessages": {
       "$dmId": {
-        ".read": "auth != null && auth.token.email != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid)",
-        ".write": "auth != null && auth.token.email != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid)",
+        ".read": "auth != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid)",
+        ".write": "auth != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid)",
         "$messageId": {
           ".validate": "newData.hasChildren(['from', 'to', 'text', 'timestamp']) && newData.child('from').val() === auth.uid"
         }
@@ -62,9 +63,10 @@
     },
     "dmThreads": {
       "$userId": {
-        ".read": "auth != null && auth.token.email != null && auth.uid == $userId",
+        ".read": "auth != null && auth.uid == $userId",
         "$otherUserId": {
-          ".write": "auth != null && auth.token.email != null && (auth.uid == $userId || auth.uid == $otherUserId)",
+          ".read": "auth != null && (auth.uid == $userId || auth.uid == $otherUserId)",
+          ".write": "auth != null && (auth.uid == $userId || auth.uid == $otherUserId)",
           ".validate": "newData.hasChildren(['lastText', 'lastTimestamp', 'lastFrom'])"
         }
       }
@@ -72,7 +74,7 @@
     "notifications": {
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
-        ".write": "auth != null"
+        ".write": "auth != null && (auth.uid == $userId || auth.uid == newData.child('from').val())"
       }
     }
   }
