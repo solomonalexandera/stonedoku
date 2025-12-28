@@ -1,0 +1,33 @@
+{
+  "name": "Stonedoku — Clash of Worlds",
+  "short_name": "Stonedoku",
+  "description": "Real-time 1v1 Sudoku duels with gothic-brutalist flair and live chat.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#111317",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "games",
+    "puzzle",
+    "sudoku",
+    "entertainment"
+  ],
+  "dir": "ltr",
+  "lang": "en",
+  "id": "/"
+}
