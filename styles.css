@@ -3992,6 +3992,40 @@ body:not(.light-theme) .cell-notes span.on {
     font-size: 0.75rem;
 }
 
+.chat-widget {
+    --chat-vv-offset: 0px;
+}
+
+.chat-widget {
+    max-height: calc(100vh - var(--chat-vv-offset, 0px));
+}
+
+@media (max-width: 768px) {
+    .chat-widget {
+        left: 8px;
+        right: 8px;
+        bottom: 0;
+        width: auto;
+        height: calc(82vh - var(--chat-vv-offset, 0px));
+        max-height: calc(88vh - var(--chat-vv-offset, 0px));
+        border-radius: 16px 16px 8px 8px;
+        transform: translateY(0);
+    }
+
+    .chat-widget-header {
+        padding: 0.6rem 0.8rem;
+    }
+
+    .chat-widget-messages {
+        padding: 0.6rem 0.8rem;
+        gap: 0.6rem;
+    }
+
+    .chat-widget-form {
+        padding: 0.55rem;
+    }
+}
+
 .chat-widget-messages .chat-text {
     display: block;
     line-height: 1.5;

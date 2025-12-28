@@ -133,6 +133,27 @@ const PasswordPolicy = {
     }
 };
 
+// Badge metadata (names, descriptions, icons)
+const BadgeInfo = {
+    rookie: { name: 'Rookie', desc: 'Complete your first game', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>' },
+    learner: { name: 'Learner', desc: 'Play 5 games', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>' },
+    veteran: { name: 'Veteran', desc: 'Play 10 games', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>' },
+    marathoner: { name: 'Marathoner', desc: 'Play 50 games', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>' },
+    legend: { name: 'Legend', desc: 'Play 100 games', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>' },
+    winner: { name: 'Winner', desc: 'Win 5 games', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>' },
+    champion: { name: 'Champion', desc: 'Win 20 games', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>' },
+    unstoppable: { name: 'Unstoppable', desc: 'Win 50 games', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>' },
+    undefeated: { name: 'Undefeated', desc: 'Win 10 games without a loss', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg>' },
+    tactician: { name: 'Tactician', desc: 'Win rate 70%+ over 20 games', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-target"></use></svg>' },
+    speedster: { name: 'Speedster', desc: 'Finish a puzzle under 3 minutes', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>' },
+    socialite: { name: 'Socialite', desc: 'Add your first friend', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>' },
+    connector: { name: 'Connector', desc: 'Add 5 friends', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>' },
+    ambassador: { name: 'Ambassador', desc: 'Add 15 friends', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>' },
+    storyteller: { name: 'Storyteller', desc: 'Write a detailed bio', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg>' },
+    portrait: { name: 'Portrait', desc: 'Upload a profile picture', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>' },
+    warden: { name: 'Warden', desc: 'Stonedoku admin', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-lock"></use></svg>' }
+};
+
 // ==========================
 // App version + cache management
 // Fetches ` /version.txt ` at startup. If it differs from the stored
@@ -1291,13 +1312,30 @@ const friendParticipants = (a, b) => [String(a), String(b)].sort();
         // Staff badge
         if (isAdmin) earnedSet.add('warden');
 
-        if (earnedSet.size === 0) return;
-        await updateDoc(profileRef, { badges: arrayUnion(...earnedSet) });
+        const existingBadges = Array.isArray(profileData.badges) ? profileData.badges : [];
+        const newBadges = Array.from(earnedSet).filter((b) => !existingBadges.includes(b));
+        if (newBadges.length === 0) return;
+
+        await updateDoc(profileRef, { badges: arrayUnion(...newBadges) });
+
+        // Notify the current user if they earned something new
+        if (AppState.currentUser && AppState.currentUser.uid === userId && typeof UI?.showToast === 'function') {
+            newBadges.forEach((badge) => {
+                const info = BadgeInfo[badge] || { name: badge, desc: '' };
+                const msg = info.desc ? `${info.name}: ${info.desc}` : `New badge: ${info.name}`;
+                UI.showToast(msg, 'success');
+            });
+        }
     },
 
     async addBadge(userId, badge) {
         const profileRef = doc(firestore, 'users', userId);
         await updateDoc(profileRef, { badges: arrayUnion(badge) });
+        if (AppState.currentUser && AppState.currentUser.uid === userId && typeof UI?.showToast === 'function') {
+            const info = BadgeInfo[badge] || { name: badge, desc: '' };
+            const msg = info.desc ? `${info.name}: ${info.desc}` : `New badge: ${info.name}`;
+            UI.showToast(msg, 'success');
+        }
     },
 
     async uploadProfilePicture(userId, file) {
@@ -3549,7 +3587,9 @@ const UI = {
         (data.badges || []).forEach(badge => {
             const badgeEl = document.createElement('span');
             badgeEl.className = `badge ${badge}`;
-            badgeEl.textContent = badge;
+            const info = BadgeInfo[badge] || { name: badge, desc: '' };
+            badgeEl.textContent = info.name || badge;
+            if (info.desc) badgeEl.title = info.desc;
             badgesContainer.appendChild(badgeEl);
         });
         
@@ -3658,29 +3698,11 @@ const UI = {
         if (badges.length === 0) {
             badgesContainer.innerHTML = '<div class="badge-empty">No badges yet. Keep playing to earn badges!</div>';
         } else {
-            const badgeInfo = {
-                rookie: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Rookie' },
-                learner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Learner' },
-                veteran: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Veteran' },
-                marathoner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Marathoner' },
-                legend: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Legend' },
-                winner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: 'Winner' },
-                champion: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Champion' },
-                unstoppable: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Unstoppable' },
-                undefeated: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg>', name: 'Undefeated' },
-                tactician: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-target"></use></svg>', name: 'Tactician' },
-                speedster: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>', name: 'Speedster' },
-                socialite: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Socialite' },
-                connector: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Connector' },
-                ambassador: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Ambassador' },
-                storyteller: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg>', name: 'Storyteller' },
-                portrait: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>', name: 'Portrait' },
-                warden: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-lock"></use></svg>', name: 'Warden' }
-            };
             badges.forEach(badge => {
-                const info = badgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: String(badge) };
+                const info = BadgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: String(badge), desc: '' };
                 const badgeEl = document.createElement('div');
                 badgeEl.className = 'badge-item';
+                badgeEl.title = info.desc || info.name;
                 const iconEl = document.createElement('span');
                 iconEl.className = 'badge-icon';
                 iconEl.setAttribute('aria-hidden', 'true');
@@ -3958,7 +3980,9 @@ const UI = {
         (badges || []).forEach(badge => {
             const badgeEl = document.createElement('span');
             badgeEl.className = `badge ${badge}`;
-            badgeEl.textContent = badge;
+            const info = BadgeInfo[badge] || { name: badge, desc: '' };
+            badgeEl.textContent = info.name || badge;
+            if (info.desc) badgeEl.title = info.desc;
             container.appendChild(badgeEl);
         });
     },
@@ -6687,6 +6711,13 @@ function initFloatingChat() {
         }
         return existing;
     };
+
+    function updateDmHeader(otherUserId = null) {
+        const titleEl = document.getElementById('dm-view-title');
+        if (titleEl) {
+            titleEl.textContent = otherUserId ? getDmDisplayName(otherUserId) : 'Direct messages';
+        }
+    }
     const markThreadRead = async (otherUserId) => {
         if (!otherUserId || !AppState.currentUser) return;
         try {
@@ -6825,6 +6856,9 @@ function initFloatingChat() {
         const messagesVisible = messagesEl && messagesEl.style.display !== 'none';
         if (isActive && messagesVisible && !widget.classList.contains('minimized')) {
             UI.addChatMessage('chat-widget-messages', msg.displayName, msg.text, msg.timestamp, msg.userId);
+            requestAnimationFrame(() => {
+                if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+            });
         }
     }
 
@@ -6839,12 +6873,20 @@ function initFloatingChat() {
             headerMsg.className = 'chat-system-msg';
             headerMsg.textContent = `Direct messages with ${name}`;
             messagesEl.appendChild(headerMsg);
+            updateDmHeader(otherId);
+        } else {
+            updateDmHeader(null);
         }
 
         const list = messageStore.get(channel) || [];
         for (const msg of list) {
             UI.addChatMessage('chat-widget-messages', msg.displayName, msg.text, msg.timestamp, msg.userId);
         }
+
+        // Always keep most recent in view
+        requestAnimationFrame(() => {
+            if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
 
         clearActiveUnread();
     }
