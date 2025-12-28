@@ -4378,6 +4378,7 @@ body:not(.light-theme) .cell-notes span.on {
 }
 
 .emoji-toggle-btn svg {
+}
 
 .chat-widget-form input {
     flex: 1;
