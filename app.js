@@ -297,6 +297,7 @@ const LogManager = (function(){
 // ===========================================
 // Application State
 // ===========================================
+const FRONT_PAGE_VIEWS = ['auth', 'onboarding', 'reset'];
 const AppState = {
     currentUser: null,
     currentView: 'auth',
@@ -927,6 +928,7 @@ const ArchitecturalStateSystem = {
         if (viewName !== 'admin') {
             clearAdminDeepLink();
         }
+        try { document.body.classList.toggle('front-page', FRONT_PAGE_VIEWS.includes(viewName)); } catch { /* ignore */ }
     },
     
 	    showModal(modalId) {
@@ -1369,13 +1371,47 @@ const friendParticipants = (a, b) => [String(a), String(b)].sort();
 	        const reqId = friendRequestId(fromUserId, toUserId);
 	        const reqRef = doc(firestore, 'friendRequests', reqId);
 	        const participants = friendParticipants(fromUserId, toUserId);
+
+	        // If a request already exists, handle it according to the state to avoid rule violations.
+	        let existingSnap = null;
+	        try {
+	            existingSnap = await this.getFriendRequestBetween(fromUserId, toUserId);
+	        } catch (e) {
+	            console.warn('Failed to check existing friend request', e);
+	        }
+
+	        if (existingSnap && existingSnap.exists()) {
+	            const existing = existingSnap.data() || {};
+	            const status = existing.status;
+	            const existingTo = existing.toUid;
+
+	            if (status === 'pending') {
+	                if (existingTo === fromUserId) {
+	                    await this.acceptFriendRequest(fromUserId, toUserId);
+	                    return 'accepted_existing';
+	                }
+	                throw new Error('Friend request already pending.');
+	            }
+
+	            if (status === 'accepted') {
+	                throw new Error('You are already friends.');
+	            }
+
+	            try {
+	                await deleteDoc(existingSnap.ref);
+	            } catch (e) {
+	                console.warn('Failed to clear stale friend request', e);
+	            }
+	        }
+
 	        await setDoc(reqRef, {
 	            fromUid: fromUserId,
-            toUid: toUserId,
-            participants,
-            status: 'pending',
-            createdAt: Timestamp.now()
+	            toUid: toUserId,
+	            participants,
+	            status: 'pending',
+	            createdAt: Timestamp.now()
 	        }, { merge: true });
+	        const result = 'sent';
 	        try {
 	            await set(ref(rtdb, `notifications/${toUserId}/friend_${fromUserId}`), {
 	                type: 'friend_request',
@@ -1386,6 +1422,7 @@ const friendParticipants = (a, b) => [String(a), String(b)].sort();
 	            // Notification is best-effort; RTDB rules may block this for some accounts.
 	            console.debug('Friend request notification skipped', e?.message || e);
 	        }
+	        return result;
 	    },
 
     async acceptFriendRequest(userId, friendId) {
@@ -3835,8 +3872,8 @@ const UI = {
 	                        friendBtn.disabled = false;
 	                        friendBtn.onclick = async () => {
 	                            try {
-	                                await ProfileManager.sendFriendRequest(AppState.currentUser.uid, userId);
-	                                UI.showToast('Friend request sent.', 'success');
+	                                const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, userId);
+	                                UI.showToast(result === 'accepted_existing' ? 'Friend request accepted.' : 'Friend request sent.', 'success');
 	                                await FriendsPanel.refresh();
 	                            } catch (err) {
 	                                UI.showToast(err?.message || 'Failed to send request.', 'error');
@@ -4002,7 +4039,7 @@ const UI = {
                     </div>
                     ` : (targetIsGuest ? `<div class="mini-profile-actions muted-note">Guest account — social disabled</div>` : '')}
                 `;
-                if (canSocialWithTarget) {
+                    if (canSocialWithTarget) {
                     const dmBtn = miniProfile.querySelector('.mini-dm-btn');
                     const friendBtn = miniProfile.querySelector('.mini-friend-btn');
                     const profileBtn = miniProfile.querySelector('.mini-profile-btn');
@@ -4015,10 +4052,12 @@ const UI = {
                             return;
                         }
                         try {
-                            await ProfileManager.sendFriendRequest(AppState.currentUser.uid, userId);
-                            UI.showToast('Friend request sent.', 'success');
+                            const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, userId);
+                            const accepted = result === 'accepted_existing';
+                            UI.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
                             friendBtn.disabled = true;
-                            friendBtn.textContent = 'Request Sent';
+                            friendBtn.textContent = accepted ? 'Friends' : 'Request Sent';
+                            if (accepted) await FriendsPanel.refresh();
                         } catch (e) {
                             console.warn('Mini profile add friend failed', e);
                             UI.showToast(e?.message || 'Failed to send friend request.', 'error');
@@ -6092,14 +6131,16 @@ function initProfilePage() {
 	        
 	        const btn = document.getElementById('profile-friend-btn');
 	        const currentText = btn?.textContent || '';
-	        const labelEl = btn?.querySelector('.btn-label');
-	        
+        const labelEl = btn?.querySelector('.btn-label');
+        
         try {
             if (currentText.includes('Add Friend')) {
-                await ProfileManager.sendFriendRequest(AppState.currentUser.uid, profileUserId);
-                if (labelEl) labelEl.textContent = 'Request Sent';
-                else if (btn) btn.textContent = 'Request Sent';
-                alert('Friend request sent!');
+                const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, profileUserId);
+                const accepted = result === 'accepted_existing';
+                if (labelEl) labelEl.textContent = accepted ? 'Friends' : 'Request Sent';
+                else if (btn) btn.textContent = accepted ? 'Friends' : 'Request Sent';
+                alert(accepted ? 'Friend request accepted.' : 'Friend request sent!');
+                if (accepted) await FriendsPanel.refresh();
             } else if (currentText.includes('Remove Friend')) {
                 await ProfileManager.removeFriend(AppState.currentUser.uid, profileUserId);
                 if (labelEl) labelEl.textContent = 'Add Friend';
@@ -7507,8 +7548,10 @@ function initFloatingChat() {
 	        try {
 	            const resolved = await getDmQuickTarget();
 	            if (!resolved) return;
-	            await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
-	            setDmQuickStatus(`Friend request sent to @${resolved.username}`, false);
+	            const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
+	            const accepted = result === 'accepted_existing';
+	            setDmQuickStatus(accepted ? `Accepted pending request with @${resolved.username}` : `Friend request sent to @${resolved.username}`, false);
+	            if (accepted) await FriendsPanel.refresh();
 	        } catch (e) {
 	            console.error('Quick add friend failed', e);
 	            setDmQuickStatus(e?.message || 'Failed to send friend request.', true);
@@ -7532,8 +7575,10 @@ function initFloatingChat() {
 	                UI.showToast('User not found.', 'error');
 	                return;
 	            }
-	            await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
-	            UI.showToast(`Friend request sent to @${resolved.username}`, 'success');
+	            const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
+	            const accepted = result === 'accepted_existing';
+	            UI.showToast(accepted ? `Accepted pending request with @${resolved.username}` : `Friend request sent to @${resolved.username}`, 'success');
+	            if (accepted) await FriendsPanel.refresh();
 	            if (friendHandleInput) friendHandleInput.value = '';
 	        } catch (e) {
 	            console.error('Friend add failed', e);
@@ -10084,13 +10129,15 @@ const AccessibilityManager = {
 // ===========================================
 // Initialize App
 // ===========================================
-	async function bootstrapApp() {
-	    console.log('Stonedoku initialized - v2.1 (Europe DB, WCAG 2.1 AA)');
-	    console.log('Database URL:', firebaseConfig.databaseURL);
-	    console.log('Debug tools available at window.StonedokuDebug');
+async function bootstrapApp() {
+    console.log('Stonedoku initialized - v2.1 (Europe DB, WCAG 2.1 AA)');
+    console.log('Database URL:', firebaseConfig.databaseURL);
+    console.log('Debug tools available at window.StonedokuDebug');
 
-	    await configureAuthPersistence();
-	    registerAuthListener();
+    try { document.body.classList.toggle('front-page', FRONT_PAGE_VIEWS.includes(AppState.currentView)); } catch { /* ignore */ }
+
+    await configureAuthPersistence();
+    registerAuthListener();
     
     // Initialize audio
     AudioManager.init();
