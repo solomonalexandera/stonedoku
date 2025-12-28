@@ -917,6 +917,15 @@ const ArchitecturalStateSystem = {
 	        });
 
         AppState.currentView = viewName;
+        if (prev === 'profile' && viewName !== 'profile') {
+            clearProfileDeepLink();
+        }
+        if (viewName !== 'updates') {
+            clearUpdatesDeepLink();
+        }
+        if (viewName !== 'admin') {
+            clearAdminDeepLink();
+        }
     },
     
 	    showModal(modalId) {
@@ -6053,7 +6062,52 @@ function shareToSocial(platform) {
             return;
     }
     
-    window.open(shareUrl, '_blank', 'width=600,height=400');
+        window.open(shareUrl, '_blank', 'width=600,height=400');
+}
+
+function isProfileDeepLink(hash = window.location.hash || '', path = window.location.pathname || '') {
+    return /^#\/?(?:profile|user|u)\/.+/i.test(hash) || /^\/(?:profile|user|u)\/.+/i.test(path);
+}
+
+function clearProfileDeepLink() {
+    try {
+        if (!isProfileDeepLink()) return;
+        const search = window.location.search || '';
+        const target = search ? `/${search}` : '/';
+        window.history.replaceState({}, document.title, target);
+    } catch (e) {
+        console.warn('Failed to clear profile URL', e);
+    }
+}
+
+function isUpdatesDeepLink(hash = window.location.hash || '') {
+    return /^#\/updates/i.test(hash);
+}
+
+function clearUpdatesDeepLink() {
+    try {
+        if (!isUpdatesDeepLink()) return;
+        const path = window.location.pathname || '/';
+        const search = window.location.search || '';
+        window.history.replaceState({}, document.title, `${path}${search}`);
+    } catch (e) {
+        console.warn('Failed to clear updates URL', e);
+    }
+}
+
+function isAdminDeepLink(hash = window.location.hash || '') {
+    return /^#\/admin/i.test(hash);
+}
+
+function clearAdminDeepLink() {
+    try {
+        if (!isAdminDeepLink()) return;
+        const path = window.location.pathname || '/';
+        const search = window.location.search || '';
+        window.history.replaceState({}, document.title, `${path}${search}`);
+    } catch (e) {
+        console.warn('Failed to clear admin URL', e);
+    }
 }
 
 // ===========================================
