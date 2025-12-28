@@ -1630,8 +1630,15 @@
                         <div class="dm-friends-header">
                             <span>Friends</span>
                         </div>
-                        <div class="dm-friends-list" id="dm-friends-list">
-                            <div class="dm-empty">No friends yet.</div>
+                        <div class="friends-section" id="dm-friend-requests-section">
+                            <div class="friends-section-title">Requests</div>
+                            <div class="friends-list" id="dm-friend-requests-list"></div>
+                        </div>
+                        <div class="friends-section" id="dm-friends-list-section">
+                            <div class="friends-section-title">Your friends</div>
+                            <div class="dm-friends-list" id="dm-friends-list">
+                                <div class="dm-empty">No friends yet.</div>
+                            </div>
                         </div>
                     </div>
                     <div class="dm-view-header" id="dm-view-header" style="display: none;">
@@ -1675,7 +1682,7 @@
 		                    <span id="chat-hint-text">Tip: Use @whisper username message to send private messages</span>
 	                </div>
 	                <form class="chat-widget-form" id="chat-widget-form">
-	                    <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle" aria-label="Emoji picker" title="Emoji"><svg class="ui-icon" aria-hidden="true"><use href="#i-smile"></use></svg></button>
+	                    <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle" aria-label="Emoji picker" title="Emoji">😀</button>
 	                    <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
 	                    <button type="submit" class="send-btn" aria-label="Send message"><svg class="ui-icon" aria-hidden="true"><use href="#i-send"></use></svg></button>
 	                </form>

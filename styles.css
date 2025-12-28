@@ -4377,10 +4377,7 @@ body:not(.light-theme) .cell-notes span.on {
     background: rgba(0, 0, 0, 0.26);
 }
 
-.emoji-toggle-btn .ui-icon,
 .emoji-toggle-btn svg {
-    fill: currentColor;
-}
 
 .chat-widget-form input {
     flex: 1;

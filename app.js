@@ -7076,44 +7076,115 @@ function initFloatingChat() {
     }
 
 	    async function renderDmFriends() {
-	        if (!dmFriendsListEl) return;
-	        const friendIds = Array.isArray(AppState.friends) ? AppState.friends : [];
-	        dmFriendsListEl.innerHTML = '';
-	        if (friendIds.length === 0) {
-	            dmFriendsListEl.innerHTML = '<div class="dm-empty">No friends yet.</div>';
+	        const requestsList = document.getElementById('dm-friend-requests-list');
+	        const friendsList = document.getElementById('dm-friends-list');
+	        if (!requestsList || !friendsList) return;
+
+	        if (!isRegisteredUser()) {
+	            requestsList.innerHTML = '<div class="dm-empty">Friend features are for registered users.</div>';
+	            friendsList.innerHTML = '';
 	            return;
 	        }
-	        const profiles = await Promise.all(friendIds.map(async (id) => {
-	            try {
-	                const snap = await ProfileManager.getProfile(id);
-	                return snap.exists() ? { id, ...(snap.data() || {}) } : { id };
-	            } catch {
-	                return { id };
+
+	        // --- Fetch and render friend requests ---
+	        let incomingRequests = [];
+	        try {
+	            const reqQ = query(
+	                collection(firestore, 'friendRequests'),
+	                where('toUid', '==', AppState.currentUser.uid),
+	                where('status', '==', 'pending'),
+	                limit(30)
+	            );
+	            const snap = await getDocs(reqQ);
+	            incomingRequests = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+	        } catch (e) {
+	            console.warn('Failed to load incoming friend requests for chat widget', e);
+	        }
+
+	        const loadProfiles = async (ids) => {
+	            const unique = Array.from(new Set(ids.filter(Boolean)));
+	            if (unique.length === 0) return [];
+	            const results = await Promise.all(unique.map(async (id) => {
+	                try {
+	                    const snap = await ProfileManager.getProfile(id);
+	                    if (!snap.exists()) return { id, data: null };
+	                    return { id, data: snap.data() || null };
+	                } catch {
+	                    return { id, data: null };
+	                }
+	            }));
+	            return results;
+	        };
+
+	        const requestIds = incomingRequests.map((r) => r?.fromUid).filter(Boolean);
+	        const requestProfiles = await loadProfiles(requestIds);
+	        requestsList.innerHTML = '';
+	        if (requestProfiles.length === 0) {
+	            requestsList.innerHTML = '<div class="friend-empty">No incoming requests.</div>';
+	        } else {
+	            for (const r of requestProfiles) {
+	                const name = r.data?.username || r.data?.displayName || `Player_${String(r.id).substring(0, 6)}`;
+	                const row = document.createElement('div');
+	                row.className = 'friend-item';
+	                row.innerHTML = `
+	                    <div class="friend-name">${UI.escapeHtml(name)}</div>
+	                    <div class="friend-actions">
+	                        <button class="btn btn-icon btn-sm" type="button" title="Accept"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg></button>
+	                        <button class="btn btn-icon btn-sm" type="button" title="Decline"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+	                    </div>
+	                `;
+	                const [acceptBtn, declineBtn] = row.querySelectorAll('button');
+	                acceptBtn?.addEventListener('click', async () => {
+	                    try {
+	                        await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, r.id);
+	                        await renderDmFriends(); // Re-render this tab
+	                        await FriendsPanel.refresh(); // Also refresh lobby panel if open
+	                    } catch (e) {
+	                        console.error('Failed to accept friend request', e);
+	                        UI.showToast('Failed to accept request.', 'error');
+	                    }
+	                });
+	                declineBtn?.addEventListener('click', async () => {
+	                    try {
+	                        await ProfileManager.declineFriendRequest(AppState.currentUser.uid, r.id);
+	                        await renderDmFriends(); // Re-render this tab
+	                        await FriendsPanel.refresh(); // Also refresh lobby panel if open
+	                    } catch (e) {
+	                        console.error('Failed to decline friend request', e);
+	                        UI.showToast('Failed to decline request.', 'error');
+	                    }
+	                });
+	                requestsList.appendChild(row);
 	            }
-	        }));
-	        for (const p of profiles) {
+	        }
+
+	        // --- Fetch and render friends ---
+	        const friendIds = Array.isArray(AppState.friends) ? AppState.friends : [];
+	        const friendProfiles = await loadProfiles(friendIds);
+	        friendsList.innerHTML = '';
+	        if (friendProfiles.length === 0) {
+	            friendsList.innerHTML = '<div class="dm-empty">No friends yet.</div>';
+	            return;
+	        }
+
+	        for (const f of friendProfiles) {
+	            const name = f.data?.username || f.data?.displayName || `Player_${String(f.id).substring(0, 6)}`;
+	            const isOnline = AppState.onlinePlayers[f.id]?.status === 'online';
 	            const row = document.createElement('div');
-	            row.className = 'dm-friend-item';
-	            const name = p.username || p.displayName || `Player_${String(p.id).substring(0, 6)}`;
+	            row.className = 'friend-item';
+	            row.dataset.userId = f.id;
 	            row.innerHTML = `
-	                <div class="dm-friend-name">${UI.escapeHtml(name)}</div>
-	                <div class="dm-friend-actions">
-	                    <button type="button" class="btn btn-secondary btn-sm">DM</button>
+	                <div class="friend-status-dot ${isOnline ? 'online' : ''}" title="${isOnline ? 'Online' : 'Offline'}"></div>
+	                <div class="friend-name">${UI.escapeHtml(name)}</div>
+	                <div class="friend-actions">
+	                    <button class="btn btn-icon btn-sm" type="button" title="Profile"><svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg></button>
+	                    <button class="btn btn-icon btn-sm" type="button" title="Message"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg></button>
 	                </div>
 	            `;
-	            row.querySelector('button')?.addEventListener('click', async () => {
-	                if (!dmEnabled) {
-	                    alert('Sign in with email to use direct messages.');
-	                    return;
-	                }
-	                try {
-	                    await openDmConversation(p.id);
-	                } catch (e) {
-	                    console.warn('Failed to open DM from friends list', e);
-	                    alert('Failed to open DM.');
-	                }
-	            });
-	            dmFriendsListEl.appendChild(row);
+	            const [profileBtn, messageBtn] = row.querySelectorAll('button');
+	            profileBtn?.addEventListener('click', () => UI.showProfilePage(f.id));
+	            messageBtn?.addEventListener('click', () => openDmConversation(f.id));
+	            friendsList.appendChild(row);
 	        }
 	    }
 
