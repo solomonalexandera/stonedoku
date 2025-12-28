@@ -6541,6 +6541,8 @@ function initFloatingChat() {
     const NotificationCenter = (() => {
         const defaults = { global: true, game: true, dms: true, sound: true, badges: true };
         const counts = { global: 0, game: 0, dm: new Map() };
+        const LAST_SEEN_KEY = 'stonedoku_chat_seen_v1';
+        let lastSeen = { global: Date.now(), game: Date.now(), dm: {} };
 
         const loadPrefs = () => {
             try {
@@ -6552,6 +6554,25 @@ function initFloatingChat() {
 
         const prefs = Object.assign({}, defaults, AppState.settings.notifications || {}, loadPrefs());
         AppState.settings.notifications = prefs;
+
+        const loadLastSeen = () => {
+            try {
+                const raw = localStorage.getItem(LAST_SEEN_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') {
+                        lastSeen = Object.assign(lastSeen, parsed);
+                        if (!lastSeen.dm) lastSeen.dm = {};
+                    }
+                }
+            } catch { /* ignore */ }
+        };
+
+        const persistLastSeen = () => {
+            try { localStorage.setItem(LAST_SEEN_KEY, JSON.stringify(lastSeen)); } catch { /* ignore */ }
+        };
+
+        loadLastSeen();
 
         const persist = () => {
             AppState.settings.notifications = Object.assign({}, prefs);
@@ -6612,11 +6633,42 @@ function initFloatingChat() {
 
         const markRead = (channel) => {
             if (!channel) return;
-            if (channel === 'global') counts.global = 0;
-            else if (channel === 'game') counts.game = 0;
+            if (channel === 'dms') {
+                // Clear all DM unread counts locally and in RTDB.
+                counts.dm.clear();
+                const uid = AppState.currentUser?.uid;
+                const threads = AppState.dmThreads || {};
+                if (uid && threads && Object.keys(threads).length > 0) {
+                    const updates = {};
+                    Object.keys(threads).forEach((otherId) => {
+                        updates[`${otherId}/unread`] = 0;
+                        lastSeen.dm[otherId] = Date.now();
+                    });
+                    update(ref(rtdb, `dmThreads/${uid}`), updates).catch(() => {});
+                }
+                persistLastSeen();
+                updateBadgeUi();
+                return;
+            }
+            if (channel === 'global') {
+                counts.global = 0;
+                lastSeen.global = Date.now();
+                persistLastSeen();
+            }
+            else if (channel === 'game') {
+                counts.game = 0;
+                lastSeen.game = Date.now();
+                persistLastSeen();
+            }
             else if (channel.startsWith && channel.startsWith('dm_')) {
                 const id = channel.replace('dm_', '');
                 counts.dm.delete(id);
+                const uid = AppState.currentUser?.uid;
+                if (uid && id) {
+                    update(ref(rtdb, `dmThreads/${uid}/${id}`), { unread: 0 }).catch(() => {});
+                }
+                lastSeen.dm[id] = Date.now();
+                persistLastSeen();
             }
             updateBadgeUi();
         };
@@ -6626,10 +6678,18 @@ function initFloatingChat() {
             if (active) markRead(active);
         };
 
-        const markIncoming = (channel, senderId = null, dmId = null) => {
+        const markIncoming = (channel, senderId = null, dmId = null, timestamp = null) => {
             if (senderId && AppState.currentUser && senderId === AppState.currentUser.uid) return;
             if (!shouldCount(channel)) return;
             if (isChannelActive(channel)) return;
+
+            const ts = typeof timestamp === 'number' ? timestamp : null;
+            if (channel === 'global' && ts && ts <= (lastSeen.global || 0)) return;
+            if (channel === 'game' && ts && ts <= (lastSeen.game || 0)) return;
+            if (channel && channel.startsWith && channel.startsWith('dm_') && ts) {
+                const id = dmId || channel.replace('dm_', '');
+                if (lastSeen.dm?.[id] && ts <= lastSeen.dm[id]) return;
+            }
 
             if (channel === 'global') counts.global += 1;
             else if (channel === 'game') counts.game += 1;
@@ -7102,7 +7162,7 @@ function initFloatingChat() {
                 update(ref(rtdb, `dmThreads/${AppState.currentUser.uid}/${otherUserId}`), { unread: 0 }).catch(() => {});
             }
             if (msg?.from && msg.from !== AppState.currentUser?.uid) {
-                NotificationCenter.markIncoming(`dm_${otherUserId}`, msg.from, otherUserId);
+                NotificationCenter.markIncoming(`dm_${otherUserId}`, msg.from, otherUserId, normalizeTimestamp(msg.timestamp));
             }
         });
     }
@@ -7113,7 +7173,7 @@ function initFloatingChat() {
             const msg = normalizeChatMessage(raw);
             storeAppend(channel, raw);
             if (channel === 'game' || channel === 'global') {
-                NotificationCenter.markIncoming(channel, msg.userId);
+                NotificationCenter.markIncoming(channel, msg.userId, null, msg.timestamp);
             }
         },
         setDmThreads(threads) {
