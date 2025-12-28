@@ -4377,9 +4377,6 @@ body:not(.light-theme) .cell-notes span.on {
     background: rgba(0, 0, 0, 0.26);
 }
 
-.emoji-toggle-btn svg {
-}
-
 .chat-widget-form input {
     flex: 1;
     padding: 0.75rem 3rem 0.75rem 1rem;
