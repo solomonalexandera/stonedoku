@@ -7069,10 +7069,11 @@ function initFloatingChat() {
             return;
         }
 
+        const showMessages = isGlobal || isGame || isDmConversation;
+        if (messagesEl) messagesEl.style.display = showMessages ? 'flex' : 'none';
         if (dmConversationsSection) dmConversationsSection.style.display = isDmList ? 'block' : 'none';
         if (dmFriendsSection) dmFriendsSection.style.display = isFriends ? 'block' : 'none';
-        if (messagesEl) messagesEl.style.display = isDmConversation ? 'flex' : 'none';
-        if (chatHintEl) chatHintEl.style.display = isDmList ? 'block' : 'none';
+        if (chatHintEl) chatHintEl.style.display = isGlobal || isGame ? 'block' : 'none';
     }
 
 	    async function renderDmFriends() {
