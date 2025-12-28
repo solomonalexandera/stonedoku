@@ -796,6 +796,17 @@
                                         <span class="copy-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-send"></use></svg></span>
                                         Share
                                     </button>
+                                    <button class="btn btn-outline" id="qr-code">
+                                        <span class="copy-icon" aria-hidden="true"><svg class="ui-icon"><use href="#i-camera"></use></svg></span>
+                                        QR Code
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="room-qr" id="room-qr" style="display: none;">
+                                <div class="room-qr-title">Join by QR code</div>
+                                <div class="room-qr-body">
+                                    <img id="room-qr-img" alt="Room QR code" />
+                                    <div class="room-qr-hint">Scan to join this room on another device.</div>
                                 </div>
                             </div>
                             <p class="waiting-hint">The code expires when you leave.</p>
@@ -1238,13 +1249,14 @@
 	                            </div>
 	                        </div>
                         
-	                        <!-- Badges Section -->
-	                        <div class="profile-badges-section">
-	                            <h3><svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>Badges</h3>
-	                            <div class="profile-badges-grid" id="profile-page-badges">
-	                                <div class="badge-empty">No badges yet. Keep playing to earn badges!</div>
-	                            </div>
-	                        </div>
+                        <!-- Badges Section -->
+                        <div class="profile-badges-section">
+                            <h3><svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>Badges</h3>
+                            <div class="profile-badges-grid" id="profile-page-badges">
+                                <div class="badge-empty">No badges yet. Keep playing to earn badges!</div>
+                            </div>
+                            <div class="badge-help" id="profile-badge-help">Tap a badge to learn what it means.</div>
+                        </div>
                         
 	                        <!-- Social Sharing -->
 	                        <div class="profile-social-section">

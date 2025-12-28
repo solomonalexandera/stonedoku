@@ -318,6 +318,7 @@ const AppState = {
     currentOpponent: null, // opponent ID in 1v1 mode
     pendingChallenge: null, // { fromUserId, fromName } for incoming challenge modal
     pendingUsername: null, // Username pending for new signups
+    pendingJoinCode: null,
     authReady: false, // Flag for auth state ready
     // Onboarding state
     onboarding: {
@@ -2670,8 +2671,8 @@ async function cleanupAfterMatch() {
 	            AppState.profile = profileData || null;
 	            
 	            // Use username as display name
-	            const displayName = profileData?.username || profileData?.displayName || user.displayName || 'Player';
-	            const truncatedName = displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName;
+            const displayName = profileData?.username || profileData?.displayName || getFallbackDisplayName(user, profileData);
+            const truncatedName = displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName;
 	            
 	            // Update UI
 	            document.getElementById('user-info').style.display = 'flex';
@@ -2725,6 +2726,9 @@ async function cleanupAfterMatch() {
             
             ViewManager.show('lobby');
             PresenceSystem.updateActivity('In Lobby');
+            if (AppState.pendingJoinCode) {
+                setTimeout(() => joinRoomHandler(AppState.pendingJoinCode), 50);
+            }
             
         } catch (error) {
             console.error('Error completing onboarding:', error);
@@ -2936,33 +2940,33 @@ const PasswordReset = {
 const TourSystem = {
     steps: [
         {
-            target: '.single-card',
-            title: 'Solo Practice',
-            description: 'Play classic Sudoku at your own pace. Choose from Easy, Medium, or Hard difficulty to sharpen your skills.',
-            position: 'right'
-        },
-        {
-            target: '.versus-card',
-            title: 'Challenge Friends',
-            description: 'Create a game room or join with a code to compete in real-time 1v1 battles. Race to fill the most cells correctly!',
+            target: '.sudoku-grid',
+            title: 'Guard the Grid',
+            description: 'Tap any empty cell to select it. The grid is your cathedral floor—every placement must support the structure.',
             position: 'left'
         },
         {
-            target: '.stats-card',
-            title: 'Track Progress',
-            description: 'Your wins, losses, and win rate are tracked here. Watch yourself improve over time!',
+            target: '#number-pad',
+            title: 'Place Numbers',
+            description: 'Use the number pad to carve digits into the stone. The remaining counter shows how many of each number are left.',
             position: 'left'
         },
         {
-            target: '.players-card',
-            title: 'See Who\'s Online',
-            description: 'View other players currently online. Click their name to see their profile or challenge them to a game.',
+            target: '#notes-btn',
+            title: 'Sketch Notes',
+            description: 'Toggle Notes to mark possibilities in a cell. Notes keep the cathedral stable while you reason through options.',
+            position: 'left'
+        },
+        {
+            target: '#mistakes-display',
+            title: 'Mind the Integrity',
+            description: 'Each mistake weakens the structure. Watch your mistake pips here—three cracks and the board collapses.',
             position: 'left'
         },
         {
             target: '#chat-fab',
-            title: 'Chat & Connect',
-            description: 'Use the chat to talk with other players, send whispers (@whisper username), or start direct messages.',
+            title: 'Share & Duel',
+            description: 'Open chat to coordinate, whisper, or DM. Share your room code or QR to invite an opponent, then defend your grid.',
             position: 'top'
         }
     ],
@@ -3393,7 +3397,8 @@ function getCurrentDisplayName() {
     const base = profile?.username || profile?.displayName || AppState.currentUser?.displayName;
     if (base) return base;
     const uid = AppState.currentUser?.uid || '';
-    return uid ? `Player_${uid.substring(0, 6)}` : 'Player';
+    if (!uid) return AppState.currentUser?.isAnonymous ? 'guest' : 'Player';
+    return AppState.currentUser?.isAnonymous ? `guest_${uid.substring(0, 6)}` : `Player_${uid.substring(0, 6)}`;
 }
 
 async function handleChallengeNotification(otherUserId, notification) {
@@ -3583,6 +3588,8 @@ const UI = {
         if (!profile.exists()) return;
         
         const data = profile.data();
+        const targetIsGuest = !data.email;
+        const viewerCanSocial = isRegisteredUser();
         
         document.getElementById('profile-name').textContent = data.displayName || 'Anonymous';
         document.getElementById('profile-member-since').textContent = 
@@ -3593,12 +3600,17 @@ const UI = {
         // Show badges
         const badgesContainer = document.getElementById('profile-badges');
         badgesContainer.innerHTML = '';
+        const badgeHelp = document.getElementById('profile-badge-help');
+        if (badgeHelp) badgeHelp.textContent = 'Tap a badge to learn what it means.';
         (data.badges || []).forEach(badge => {
             const badgeEl = document.createElement('span');
             badgeEl.className = `badge ${badge}`;
             const info = BadgeInfo[badge] || { name: badge, desc: '' };
             badgeEl.textContent = info.name || badge;
             if (info.desc) badgeEl.title = info.desc;
+            badgeEl.addEventListener('click', () => {
+                if (badgeHelp) badgeHelp.textContent = info.desc || info.name || badge;
+            });
             badgesContainer.appendChild(badgeEl);
         });
         
@@ -3606,12 +3618,26 @@ const UI = {
         document.getElementById('challenge-player').onclick = async () => {
             await ChallengeSystem.sendChallenge(
                 AppState.currentUser.uid,
-                AppState.currentUser.displayName || 'Player',
+                getCurrentDisplayName(),
                 userId
             );
             ViewManager.hideModal('profile-modal');
             alert('Challenge sent!');
         };
+
+        const dmBtn = document.getElementById('profile-modal-dm');
+        if (dmBtn) {
+            if (targetIsGuest || !viewerCanSocial || userId === AppState.currentUser?.uid) {
+                dmBtn.disabled = true;
+                dmBtn.title = targetIsGuest ? 'Direct messages unavailable for guests' : 'Sign in to DM';
+            } else {
+                dmBtn.disabled = false;
+                dmBtn.onclick = async () => {
+                    try { await window.ChatWidget?.openDm?.(userId); } catch (e) { console.warn('Modal DM failed', e); }
+                    ViewManager.hideModal('profile-modal');
+                };
+            }
+        }
         
         ViewManager.showModal('profile-modal');
     },
@@ -3682,6 +3708,7 @@ const UI = {
         const vanityUrl = `${hostBase}/u/${encodeURIComponent(username.toLowerCase())}`;
         // Consider a user 'registered' if they have an email on their profile
         const isRegistered = !!data.email;
+        const targetIsGuest = !isRegistered;
         if (isRegistered && vanityEl && vanityLinkEl) {
             vanityLinkEl.href = `/u/${encodeURIComponent(username.toLowerCase())}`;
             vanityLinkEl.textContent = vanityUrl;
@@ -3737,7 +3764,7 @@ const UI = {
 	            const friendBtn = document.getElementById('profile-friend-btn');
 	            const labelEl = friendBtn?.querySelector('.btn-label');
 	            const dmBtn = document.getElementById('profile-dm-btn');
-	            const socialEnabled = isRegisteredUser();
+	            const socialEnabled = isRegisteredUser() && !targetIsGuest;
 
 	            if (!socialEnabled) {
 	                if (friendBtn) friendBtn.style.display = 'none';
@@ -3895,9 +3922,11 @@ const UI = {
             const statusClass = isOnline ? 'online' : 'offline';
             const statusText = isOnline ? 'Online' : 'Offline';
             const name = profileData.username || profileData.displayName || displayName;
-            const isRegistered = !!(profileData?.email || profileData?.username);
+            const isRegistered = !!profileData?.email;
+            const targetIsGuest = !profileData?.email;
             const isSelf = AppState.currentUser && userId === AppState.currentUser.uid;
             
+            const viewerCanSocial = isRegisteredUser();
             if (miniProfile.classList.contains('visible')) {
                 miniProfile.innerHTML = `
                     <div class="mini-profile-header">
@@ -3924,14 +3953,14 @@ const UI = {
                             <span class="mini-stat-label">Win Rate</span>
                         </div>
                     </div>
-                    ${(isRegistered && !isSelf) ? `
+                    ${(isRegistered && viewerCanSocial && !isSelf) ? `
                     <div class="mini-profile-actions">
                         <button type="button" class="btn btn-secondary btn-sm mini-dm-btn">DM</button>
                         <button type="button" class="btn btn-ghost btn-sm mini-friend-btn">Add Friend</button>
                     </div>
-                    ` : ''}
+                    ` : (targetIsGuest ? `<div class="mini-profile-actions muted-note">Guest account — social disabled</div>` : '')}
                 `;
-                if (isRegistered && !isSelf) {
+                if (isRegistered && viewerCanSocial && !isSelf) {
                     const dmBtn = miniProfile.querySelector('.mini-dm-btn');
                     const friendBtn = miniProfile.querySelector('.mini-friend-btn');
                     dmBtn?.addEventListener('click', async () => {
@@ -5352,8 +5381,7 @@ function setupEventListeners() {
     document.getElementById('create-room')?.addEventListener('click', async () => {
         console.log('Create room button clicked');
         try {
-            const displayName = AppState.currentUser?.displayName || 
-                              `Player_${AppState.currentUser?.uid.substring(0, 6)}`;
+            const displayName = getCurrentDisplayName();
             console.log('Creating room for:', displayName);
             const code = await LobbyManager.createRoom(AppState.currentUser.uid, displayName);
             console.log('Room created with code:', code);
@@ -5373,9 +5401,9 @@ function setupEventListeners() {
     });
     
     // Join room
-    const joinRoomHandler = async () => {
+    const joinRoomHandler = async (overrideCode = null) => {
         const codeInput = document.getElementById('room-code-input');
-        const code = codeInput?.value?.trim();
+        const code = (overrideCode || codeInput?.value || '').trim();
         
         console.log('Attempting to join room with code:', code);
         
@@ -5383,16 +5411,23 @@ function setupEventListeners() {
             alert('Please enter a valid 4-digit room code');
             return;
         }
+        if (!AppState.currentUser) {
+            alert('Sign in to join a room.');
+            ViewManager.show('auth');
+            AppState.pendingJoinCode = code;
+            return;
+        }
         
         try {
-            const displayName = AppState.currentUser?.displayName || 
-                              `Player_${AppState.currentUser?.uid.substring(0, 6)}`;
+            const displayName = getCurrentDisplayName();
             console.log('User:', AppState.currentUser?.uid, 'Display:', displayName);
             
             await LobbyManager.joinRoom(code, AppState.currentUser.uid, displayName);
             console.log('Successfully joined room');
             
             AppState.currentRoom = code;
+            AppState.pendingJoinCode = null;
+            try { window.history.replaceState({}, document.title, window.location.pathname + window.location.search); } catch { /* ignore */ }
             ViewManager.show('waiting');
             document.getElementById('display-room-code').textContent = code;
             
@@ -5439,6 +5474,34 @@ function setupEventListeners() {
         navigator.clipboard.writeText(code).then(() => {
             alert('Code copied to clipboard!');
         });
+    });
+
+    // Share room code (if supported)
+    document.getElementById('share-code')?.addEventListener('click', async () => {
+        const code = document.getElementById('display-room-code').textContent;
+        const joinUrl = `${window.location.origin}/#/join/${encodeURIComponent(code)}`;
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: 'Join my Stonedoku room', text: `Room code: ${code}`, url: joinUrl });
+            } catch { /* ignore */ }
+        } else {
+            try { await navigator.clipboard.writeText(joinUrl); } catch { /* ignore */ }
+            alert('Share link copied: ' + joinUrl);
+        }
+    });
+
+    // QR code for joining
+    document.getElementById('qr-code')?.addEventListener('click', () => {
+        const code = document.getElementById('display-room-code').textContent;
+        if (!code || code.includes('-')) return;
+        const joinUrl = `${window.location.origin}/#/join/${encodeURIComponent(code)}`;
+        const img = document.getElementById('room-qr-img');
+        const qrWrap = document.getElementById('room-qr');
+        if (img && qrWrap) {
+            img.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(joinUrl)}`;
+            img.alt = `QR code for room ${code}`;
+            qrWrap.style.display = 'block';
+        }
     });
     
     // ===========================================
@@ -5778,11 +5841,13 @@ function setupEventListeners() {
     handleVanityUrl();
     handleUpdatesUrl();
     handleAdminUrl();
+    handleJoinUrl();
 
     window.addEventListener('hashchange', () => {
         handleUpdatesUrl();
         handleAdminUrl();
         handleVanityUrl();
+        handleJoinUrl();
     });
 }
 
@@ -6205,6 +6270,26 @@ function handleAdminUrl() {
         return false;
     } catch (e) {
         console.warn('Failed to handle admin URL', e);
+        return false;
+    }
+}
+
+// ===========================================
+// Join Room Deep Link (#/join/<code>)
+// ===========================================
+function handleJoinUrl() {
+    try {
+        const hash = window.location.hash || '';
+        const match = hash.match(/^#\/join\/(\d{4})$/i);
+        if (!match) return false;
+        const code = match[1];
+        AppState.pendingJoinCode = code;
+        if (AppState.authReady && AppState.currentUser) {
+            joinRoomHandler(code);
+        }
+        return true;
+    } catch (e) {
+        console.warn('Failed to handle join URL', e);
         return false;
     }
 }
@@ -7556,8 +7641,7 @@ function initFloatingChat() {
                 alert('Sign in to use direct messages.');
                 return;
             }
-            const displayName = AppState.currentUser.displayName || 
-                              `Player_${AppState.currentUser.uid.substring(0, 6)}`;
+            const displayName = getCurrentDisplayName();
             
             const activeTab = document.querySelector('.widget-tab.active');
             const chatMode = activeTab?.dataset.chat || 'global';
