@@ -3613,6 +3613,9 @@ const UI = {
             });
             badgesContainer.appendChild(badgeEl);
         });
+        if (badgeHelp && (data.badges || []).length === 0) {
+            badgeHelp.textContent = 'Earn badges by playing and completing feats.';
+        }
         
         // Set up challenge button
         document.getElementById('challenge-player').onclick = async () => {
@@ -3765,6 +3768,8 @@ const UI = {
 	            const labelEl = friendBtn?.querySelector('.btn-label');
 	            const dmBtn = document.getElementById('profile-dm-btn');
 	            const socialEnabled = isRegisteredUser() && !targetIsGuest;
+	            let hasIncomingRequest = false;
+	            let hasOutgoingRequest = false;
 
 	            if (!socialEnabled) {
 	                if (friendBtn) friendBtn.style.display = 'none';
@@ -3773,11 +3778,9 @@ const UI = {
 	                if (friendBtn) friendBtn.style.display = '';
 	                if (dmBtn) dmBtn.style.display = '';
 
-	                let hasIncomingRequest = false;
-	                let hasOutgoingRequest = false;
 	                try {
 	                    const reqSnap = await ProfileManager.getFriendRequestBetween(AppState.currentUser.uid, userId);
-	                    if (reqSnap) {
+	                    if (reqSnap && reqSnap.exists()) {
 	                        const reqData = reqSnap.data() || {};
 	                        if (reqData.status === 'pending') {
 	                            hasIncomingRequest = reqData.toUid === AppState.currentUser.uid;
@@ -3791,19 +3794,55 @@ const UI = {
 	                if (hasIncomingRequest) {
 	                    if (labelEl) labelEl.textContent = 'Accept Request';
 	                    else if (friendBtn) friendBtn.textContent = 'Accept Request';
-	                    if (friendBtn) friendBtn.disabled = false;
+	                    if (friendBtn) {
+	                        friendBtn.disabled = false;
+	                        friendBtn.onclick = async () => {
+	                            try {
+	                                await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, userId);
+	                                UI.showToast('Friend request accepted.', 'success');
+	                                await FriendsPanel.refresh();
+	                            } catch (err) {
+	                                UI.showToast(err?.message || 'Failed to accept request.', 'error');
+	                            }
+	                        };
+	                    }
 	                } else if (hasOutgoingRequest) {
 	                    if (labelEl) labelEl.textContent = 'Request Sent';
 	                    else if (friendBtn) friendBtn.textContent = 'Request Sent';
-	                    if (friendBtn) friendBtn.disabled = true;
+	                    if (friendBtn) {
+	                        friendBtn.disabled = true;
+	                        friendBtn.onclick = null;
+	                    }
 	                } else if (isFriend) {
 	                    if (labelEl) labelEl.textContent = 'Remove Friend';
 	                    else if (friendBtn) friendBtn.textContent = 'Remove Friend';
-	                    if (friendBtn) friendBtn.disabled = false;
+	                    if (friendBtn) {
+	                        friendBtn.disabled = false;
+	                        friendBtn.onclick = async () => {
+	                            try {
+	                                await ProfileManager.removeFriend(AppState.currentUser.uid, userId);
+	                                UI.showToast('Friend removed.', 'info');
+	                                await FriendsPanel.refresh();
+	                            } catch (err) {
+	                                UI.showToast(err?.message || 'Failed to remove friend.', 'error');
+	                            }
+	                        };
+	                    }
 	                } else {
 	                    if (labelEl) labelEl.textContent = 'Add Friend';
 	                    else if (friendBtn) friendBtn.textContent = 'Add Friend';
-	                    if (friendBtn) friendBtn.disabled = false;
+	                    if (friendBtn) {
+	                        friendBtn.disabled = false;
+	                        friendBtn.onclick = async () => {
+	                            try {
+	                                await ProfileManager.sendFriendRequest(AppState.currentUser.uid, userId);
+	                                UI.showToast('Friend request sent.', 'success');
+	                                await FriendsPanel.refresh();
+	                            } catch (err) {
+	                                UI.showToast(err?.message || 'Failed to send request.', 'error');
+	                            }
+	                        };
+	                    }
 	                }
 	            }
 	        }
@@ -3928,12 +3967,14 @@ const UI = {
             
             const viewerCanSocial = isRegisteredUser();
             if (miniProfile.classList.contains('visible')) {
-                miniProfile.innerHTML = `
-                    <div class="mini-profile-header">
-                        <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
-                        <div class="mini-profile-info">
-                            <div class="mini-profile-name">${this.escapeHtml(name)}</div>
-                            <div class="mini-profile-status ${statusClass}">
+            const viewerCanSocial = isRegisteredUser();
+            const canSocialWithTarget = viewerCanSocial && isRegistered && !isSelf;
+            miniProfile.innerHTML = `
+                <div class="mini-profile-header">
+                    <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
+                    <div class="mini-profile-info">
+                        <div class="mini-profile-name">${this.escapeHtml(name)}</div>
+                        <div class="mini-profile-status ${statusClass}">
                                 <span class="status-dot"></span>
                                 ${statusText}
                             </div>
@@ -3953,16 +3994,18 @@ const UI = {
                             <span class="mini-stat-label">Win Rate</span>
                         </div>
                     </div>
-                    ${(isRegistered && viewerCanSocial && !isSelf) ? `
+                    ${(canSocialWithTarget) ? `
                     <div class="mini-profile-actions">
                         <button type="button" class="btn btn-secondary btn-sm mini-dm-btn">DM</button>
                         <button type="button" class="btn btn-ghost btn-sm mini-friend-btn">Add Friend</button>
+                        <button type="button" class="btn btn-ghost btn-sm mini-profile-btn">Profile</button>
                     </div>
                     ` : (targetIsGuest ? `<div class="mini-profile-actions muted-note">Guest account — social disabled</div>` : '')}
                 `;
-                if (isRegistered && viewerCanSocial && !isSelf) {
+                if (canSocialWithTarget) {
                     const dmBtn = miniProfile.querySelector('.mini-dm-btn');
                     const friendBtn = miniProfile.querySelector('.mini-friend-btn');
+                    const profileBtn = miniProfile.querySelector('.mini-profile-btn');
                     dmBtn?.addEventListener('click', async () => {
                         try { await window.ChatWidget?.openDm?.(userId); } catch (e) { console.warn('Mini profile DM failed', e); }
                     });
@@ -3980,6 +4023,10 @@ const UI = {
                             console.warn('Mini profile add friend failed', e);
                             UI.showToast(e?.message || 'Failed to send friend request.', 'error');
                         }
+                    });
+                    profileBtn?.addEventListener('click', () => {
+                        this.hideMiniProfile(0);
+                        UI.showProfilePage(userId);
                     });
                 }
             }
