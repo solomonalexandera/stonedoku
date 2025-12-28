@@ -112,8 +112,8 @@ service cloud.firestore {
 
     // Admin allowlist (seeded manually in console: admins/{uid})
     match /admins/{uid} {
-      allow read: if isOwner(uid);
-      allow create, update, delete: if false;
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // Community updates / status feed (public read, write via console/admin tooling)

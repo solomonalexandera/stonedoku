@@ -1331,10 +1331,10 @@ const friendParticipants = (a, b) => [String(a), String(b)].sort();
         await updateDoc(profileRef, { badges: arrayUnion(...newBadges) });
 
         // Notify the current user if they earned something new
-        if (AppState.currentUser && AppState.currentUser.uid === userId && typeof UI?.showToast === 'function') {
+        if (AppState.currentUser && AppState.currentUser.uid === userId && typeof UI?.showToast === 'function' && AppState.settings.notifications.badges) {
             newBadges.forEach((badge) => {
                 const info = BadgeInfo[badge] || { name: badge, desc: '' };
-                const msg = info.desc ? `${info.name}: ${info.desc}` : `New badge: ${info.name}`;
+                const msg = info.desc ? `New badge: ${info.name}` : `New badge: ${info.name}`;
                 UI.showToast(msg, 'success');
             });
         }
@@ -1343,9 +1343,9 @@ const friendParticipants = (a, b) => [String(a), String(b)].sort();
     async addBadge(userId, badge) {
         const profileRef = doc(firestore, 'users', userId);
         await updateDoc(profileRef, { badges: arrayUnion(badge) });
-        if (AppState.currentUser && AppState.currentUser.uid === userId && typeof UI?.showToast === 'function') {
+        if (AppState.currentUser && AppState.currentUser.uid === userId && typeof UI?.showToast === 'function' && AppState.settings.notifications.badges) {
             const info = BadgeInfo[badge] || { name: badge, desc: '' };
-            const msg = info.desc ? `${info.name}: ${info.desc}` : `New badge: ${info.name}`;
+            const msg = info.desc ? `New badge: ${info.name}` : `New badge: ${info.name}`;
             UI.showToast(msg, 'success');
         }
     },
@@ -3770,15 +3770,21 @@ const UI = {
         // Badges
         const badgesContainer = document.getElementById('profile-page-badges');
         badgesContainer.innerHTML = '';
+        const badgeHelp = document.getElementById('profile-badge-help');
+        if (badgeHelp) badgeHelp.textContent = 'Tap a badge to learn what it means.';
         const badges = data.badges || [];
         if (badges.length === 0) {
             badgesContainer.innerHTML = '<div class="badge-empty">No badges yet. Keep playing to earn badges!</div>';
+            if (badgeHelp) badgeHelp.textContent = 'Earn badges by playing and completing feats.';
         } else {
             badges.forEach(badge => {
                 const info = BadgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: String(badge), desc: '' };
                 const badgeEl = document.createElement('div');
                 badgeEl.className = 'badge-item';
                 badgeEl.title = info.desc || info.name;
+                badgeEl.setAttribute('role', 'button');
+                badgeEl.setAttribute('tabindex', '0');
+
                 const iconEl = document.createElement('span');
                 iconEl.className = 'badge-icon';
                 iconEl.setAttribute('aria-hidden', 'true');
@@ -3790,6 +3796,11 @@ const UI = {
 
                 badgeEl.appendChild(iconEl);
                 badgeEl.appendChild(nameEl);
+                
+                badgeEl.addEventListener('click', () => {
+                    if (badgeHelp) badgeHelp.textContent = info.desc || info.name || badge;
+                });
+                
                 badgesContainer.appendChild(badgeEl);
             });
         }
@@ -9442,6 +9453,7 @@ const UpdatesCenter = {
 const AdminConsole = {
     isAdmin: false,
     unsub: null,
+    editingUpdateId: null, // Add this line
     allowlistForm: null,
     allowlistInput: null,
     allowlistStatus: null,
@@ -9814,6 +9826,15 @@ const AdminConsole = {
         this.modClearGlobalBtn?.addEventListener('click', wrapMod('clearGlobalChat', false));
         this.modClearUserGlobalBtn?.addEventListener('click', wrapMod('clearUserGlobalChat'));
 
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.id = 'admin-update-cancel';
+        cancelBtn.className = 'btn btn-secondary';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.style.display = 'none';
+        this.form.querySelector('.admin-form-actions').appendChild(cancelBtn);
+        cancelBtn.addEventListener('click', () => this.cancelEdit());
+
         this.form?.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!this.isAdmin) return;
@@ -9827,27 +9848,33 @@ const AdminConsole = {
             if (!title || !body) return;
             if (this.statusEl) this.statusEl.textContent = '';
 
+            const data = {
+                title,
+                body,
+                kind,
+                severity,
+                active: true,
+                banner,
+                pinned,
+                updatedAt: Timestamp.now(),
+                authorUid: AppState.currentUser?.uid || null
+            };
+
             try {
-                await addDoc(collection(firestore, 'updates'), {
-                    title,
-                    body,
-                    kind,
-                    severity,
-                    active: true,
-                    banner,
-                    pinned,
-                    createdAt: Timestamp.now(),
-                    updatedAt: Timestamp.now(),
-                    authorUid: AppState.currentUser?.uid || null
-                });
-                this.form.reset();
-                const bannerToggle = document.getElementById('admin-update-banner');
-                if (bannerToggle) bannerToggle.checked = true;
-                if (this.statusEl) this.statusEl.textContent = 'Published.';
+                if (this.editingUpdateId) {
+                    const docRef = doc(firestore, 'updates', this.editingUpdateId);
+                    await updateDoc(docRef, data);
+                    if (this.statusEl) this.statusEl.textContent = 'Update saved.';
+                } else {
+                    data.createdAt = Timestamp.now();
+                    await addDoc(collection(firestore, 'updates'), data);
+                    if (this.statusEl) this.statusEl.textContent = 'Published.';
+                }
+                this.cancelEdit();
                 setTimeout(() => { if (this.statusEl) this.statusEl.textContent = ''; }, 1500);
             } catch (err) {
-                console.error('Admin publish failed', err);
-                if (this.statusEl) this.statusEl.textContent = 'Failed to publish.';
+                console.error('Admin publish/update failed', err);
+                if (this.statusEl) this.statusEl.textContent = 'Failed to save.';
             }
         });
     },
@@ -9863,28 +9890,10 @@ const AdminConsole = {
             return false;
         }
         try {
-            // Allow either a Firestore allowlist doc or a profile flag (legacy/escape hatch).
-            const profileAdmin = AppState.profile?.isAdmin === true;
-            if (profileAdmin) {
-                this.isAdmin = true;
-            }
             const adminDocRef = doc(firestore, 'admins', AppState.currentUser.uid);
             const snap = await getDoc(adminDocRef);
             if (snap.exists()) {
                 this.isAdmin = true;
-            } else if (profileAdmin) {
-                // Self-heal: if profile says admin but allowlist doc missing, recreate it.
-                try {
-                    await setDoc(adminDocRef, {
-                        userId: AppState.currentUser.uid,
-                        addedBy: AppState.currentUser.uid,
-                        addedAt: Timestamp.now(),
-                        restoredFromProfile: true
-                    });
-                    this.isAdmin = true;
-                } catch (e) {
-                    console.warn('Failed to restore admin allowlist doc', e);
-                }
             }
         } catch (e) {
             console.warn('Admin check failed', e);
@@ -9968,13 +9977,15 @@ const AdminConsole = {
                     <label class="admin-update-toggle"><input type="checkbox" class="admin-toggle-banner"> Banner</label>
                     <label class="admin-update-toggle"><input type="checkbox" class="admin-toggle-pinned"> Pinned</label>
                 </div>
+                <button type="button" class="btn btn-secondary btn-sm admin-update-edit">Edit</button>
                 <button type="button" class="btn btn-secondary btn-sm admin-update-danger">Delete</button>
             `;
 
             const activeEl = actions.querySelector('.admin-toggle-active');
             const bannerEl = actions.querySelector('.admin-toggle-banner');
             const pinnedEl = actions.querySelector('.admin-toggle-pinned');
-            const deleteBtn = actions.querySelector('button');
+            const editBtn = actions.querySelector('.admin-update-edit');
+            const deleteBtn = actions.querySelector('button.admin-update-danger');
 
             if (activeEl) activeEl.checked = !!item.active;
             if (bannerEl) bannerEl.checked = !!item.banner;
@@ -9992,6 +10003,7 @@ const AdminConsole = {
             activeEl?.addEventListener('change', () => updateFlags({ active: !!activeEl.checked }));
             bannerEl?.addEventListener('change', () => updateFlags({ banner: !!bannerEl.checked }));
             pinnedEl?.addEventListener('change', () => updateFlags({ pinned: !!pinnedEl.checked }));
+            editBtn?.addEventListener('click', () => this.startEdit(item));
             deleteBtn?.addEventListener('click', async () => {
                 if (!confirm('Delete this update?')) return;
                 try {
@@ -10007,6 +10019,34 @@ const AdminConsole = {
             row.appendChild(actions);
             this.listEl.appendChild(row);
         }
+    },
+
+    startEdit(item) {
+        this.editingUpdateId = item.id;
+        document.getElementById('admin-update-title').value = item.title;
+        document.getElementById('admin-update-body').value = item.body;
+        document.getElementById('admin-update-kind').value = item.kind;
+        document.getElementById('admin-update-severity').value = item.severity;
+        document.getElementById('admin-update-banner').checked = item.banner;
+        document.getElementById('admin-update-pinned').checked = item.pinned;
+
+        const submitBtn = this.form.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = 'Save Changes';
+
+        const cancelBtn = document.getElementById('admin-update-cancel');
+        if (cancelBtn) cancelBtn.style.display = 'inline-block';
+
+        this.form.scrollIntoView({ behavior: 'smooth' });
+    },
+
+    cancelEdit() {
+        this.editingUpdateId = null;
+        this.form.reset();
+        const submitBtn = this.form.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = 'Publish';
+
+        const cancelBtn = document.getElementById('admin-update-cancel');
+        if (cancelBtn) cancelBtn.style.display = 'none';
     }
 };
 

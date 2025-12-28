@@ -14,8 +14,7 @@ type Action =
 async function assertAdmin(userId: string): Promise<void> {
   const firestore = db();
   const snap = await firestore.doc(`admins/${userId}`).get();
-  const profile = await firestore.doc(`users/${userId}`).get();
-  const isAdmin = snap.exists || profile.get("isAdmin") === true;
+  const isAdmin = snap.exists;
   if (!isAdmin) {
     throw new HttpsError("permission-denied", "Admin access required.");
   }
