@@ -7822,8 +7822,8 @@ function initFloatingChat() {
             const chatMode = activeTab?.dataset.chat || 'global';
             
             try {
-                if ((chatMode === 'dms' || chatMode === 'friends') && !(AppState.widgetChatMode && AppState.widgetChatMode.startsWith && AppState.widgetChatMode.startsWith('dm_'))) {
-                    alert('Select a conversation to send a message.');
+                if (chatMode === 'dms' && !(AppState.widgetChatMode && AppState.widgetChatMode.startsWith('dm_'))) {
+                    // In DM list view, do nothing.
                     return;
                 }
                 if (chatMode === 'game') {

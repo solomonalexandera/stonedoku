@@ -123,9 +123,9 @@
     --color-cell-highlight: rgba(28, 30, 33, 0.08);
     --header-bg: linear-gradient(90deg, rgba(245, 239, 229, 0.98), rgba(233, 226, 214, 0.94));
     --header-border: rgba(0, 0, 0, 0.1);
-    --btn-icon-bg: rgba(0,0,0,0.04);
+    --btn-icon-bg: rgba(0,0,0,0.1);
     --btn-icon-border: rgba(0,0,0,0.12);
-    --btn-icon-bg-hover: rgba(0,0,0,0.08);
+    --btn-icon-bg-hover: rgba(0,0,0,0.15);
     --footer-bg: var(--color-card-bg);
     --footer-border: rgba(0, 0, 0, 0.12);
     --footer-vines: none;
@@ -7727,6 +7727,27 @@ textarea:focus-visible {
     width: 100%;
     justify-content: space-between;
 }
+}
+
+/* Customizations */
+
+/* Fix for small icon buttons in chat widget friends list */
+.friend-actions .btn-icon.btn-sm {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+}
+
+.friend-actions .btn-icon.btn-sm .ui-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 0;
+}
+
+.light-theme .btn {
+    background: linear-gradient(180deg, rgba(0,0,0,0.01), rgba(0,0,0,0.08));
+    border-color: rgba(0,0,0,0.18);
+    text-shadow: none;
 }
 
 /* ===========================================
