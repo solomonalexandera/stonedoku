@@ -75,103 +75,14 @@ import {
     getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
-// ===========================================
-// Firebase Configuration
-// ===========================================
-// NOTE: Replace these placeholder values with your actual Firebase project config
-
-// Development / test fallback Firebase config (used by local dev and E2E)
-const firebaseConfig = {
-    apiKey: "AIzaSyCp7BkBGFmgjSL_28iexOAO7X4RoY_7tQ4",
-    authDomain: "stonedoku-c0898.firebaseapp.com",
-    projectId: "stonedoku-c0898",
-    storageBucket: "stonedoku-c0898.firebasestorage.app",
-    messagingSenderId: "755062989426",
-    appId: "1:755062989426:web:446a5be32bf4d6b66198eb",
-    databaseURL: "https://stonedoku-c0898-default-rtdb.europe-west1.firebasedatabase.app"
-};
-
-// Initialize Firebase
-const firebaseApp = initializeApp(firebaseConfig);
-const auth = getAuth(firebaseApp);
-const rtdb = getDatabase(firebaseApp);
-// Force long-polling to avoid QUIC/WebChannel transport errors in constrained networks.
-const firestore = initializeFirestore(firebaseApp, {
-    experimentalAutoDetectLongPolling: true,
-    useFetchStreams: false
-});
-const functions = getFunctions(firebaseApp);
-const storage = getStorage(firebaseApp);
 
 
-// Client-side Log Manager
-// Writes debug/info/error logs to Firestore `clientLogs` collection.
-// Overrides console methods so logs are persisted and removed from console output.
-const LogManager = (function(){
-    const orig = {
-        log: console.log.bind(console),
-        info: console.info.bind(console),
-        warn: console.warn.bind(console),
-        error: console.error.bind(console)
-    };
+// Firebase services and core modules are now initialized in src/client/entry.js
+const { AppState, LogManager, SudokuGenerator, ProfanityFilter, firebase } = window.Stonedoku;
+const { auth, rtdb, firestore, functions, storage } = firebase;
 
-    let disabled = false;
-    function hasAnalyticsConsent() {
-        try {
-            const raw = localStorage.getItem('stonedoku_cookie_consent');
-            if (!raw) return false;
-            const parsed = JSON.parse(raw);
-            return !!parsed?.analytics;
-        } catch {
-            return false;
-        }
-    }
-    async function writeToFirestore(level, args) {
-        if (disabled) return;
-        // Whisper autocomplete/suggestion UI removed.
-        if (!hasAnalyticsConsent()) return;
-        if (!window.AppState || !window.AppState.currentUser) return;
-        try {
-            // Build a compact message and optional meta payload
-            const message = args.map(a => {
-                try { return typeof a === 'string' ? a : JSON.stringify(a); } catch(e) { return String(a); }
-            }).join(' ');
 
-            const meta = { src: 'client', href: window.location.href };
-
-            await addDoc(collection(firestore, 'clientLogs'), {
-                level: level,
-                message: message,
-                meta: meta,
-                createdAt: Timestamp.now()
-            });
-        } catch (e) {
-            // If permission errors occur, disable future writes to avoid spamming
-            try {
-                orig.error('LogManager write failed:', e);
-            } catch (_) {}
-            if (e && (e.code === 'permission-denied' || String(e).includes('Missing or insufficient permissions'))) {
-                disabled = true;
-            } else {
-                disabled = true;
-            }
-        }
-    }
-
-    // Override console methods to mirror logs locally and (when signed-in) to Firestore.
-    console.log = (...args) => { orig.log(...args); writeToFirestore('debug', args); };
-    console.info = (...args) => { orig.info(...args); writeToFirestore('info', args); };
-    console.warn = (...args) => { orig.warn(...args); writeToFirestore('warn', args); };
-    console.error = (...args) => { orig.error(...args); writeToFirestore('error', args); };
-
-    return {
-        _orig: orig,
-        log: (...args) => writeToFirestore('debug', args),
-        info: (...args) => writeToFirestore('info', args),
-        warn: (...args) => writeToFirestore('warn', args),
-        error: (...args) => writeToFirestore('error', args)
-    };
-})();
+// LogManager has been extracted to src/client/lib/logManager.js
 
 // Also capture console output into an in-memory buffer for E2E diagnostics
 try {
@@ -202,90 +113,7 @@ try {
 // ===========================================
 // Application State
 // ===========================================
-const FRONT_PAGE_VIEWS = ['auth', 'onboarding', 'reset'];
-const AppState = {
-    currentUser: null,
-    currentView: 'auth',
-    gameMode: null, // 'single' or 'versus'
-    currentMatch: null,
-    currentRoom: null,
-    selectedCell: null,
-    puzzle: null,
-    solution: null,
-    originalPuzzle: null, // Store original puzzle to track user-filled cells
-    playerScore: 0,
-    opponentScore: 0,
-    gameTimer: null,
-    gameSeconds: 0,
-    timeLimitSeconds: 0, // 0 = none (used in Custom Sudoku)
-    soundEnabled: true,
-    listeners: [],
-    onlinePlayers: {},
-    currentOpponent: null, // opponent ID in 1v1 mode
-    pendingChallenge: null, // { fromUserId, fromName } for incoming challenge modal
-    pendingUsername: null, // Username pending for new signups
-    pendingJoinCode: null,
-    authReady: false, // Flag for auth state ready
-    // Onboarding state
-    onboarding: {
-        active: false,
-        step: 1,
-        data: {
-            username: '',
-            email: '',
-            password: '',
-            avatarFile: null,
-            avatarUrl: null
-        }
-    },
-    passwordReset: {
-        active: false,
-        oobCode: null,
-        email: null
-    },
-    profile: null,
-    // Tour state
-    tour: {
-        active: false,
-        step: 0
-    },
-    // New QOL features
-    mistakes: 0,
-    maxMistakes: 3,
-    notesMode: false,
-    notes: {}, // cellIndex -> Set of numbers
-    moveHistory: [], // for undo
-    toolLimits: {
-        undoMax: 0,
-        eraseMax: 0,
-        undoLeft: 0,
-        eraseLeft: 0,
-    },
-    currentDifficulty: 'medium',
-    widgetChatMode: 'global', // 'global', 'game', or 'dm_[userId]'
-    widgetGameChatContext: null, // 'lobby:<code>' | 'match:<id>'
-    widgetGameChatUnsub: null, // function to stop current game-channel listener
-    activeDMs: {}, // userId -> { messages: [], unread: 0 }
-    dmThreads: {}, // otherUserId -> { otherDisplayName, lastText, lastTimestamp, unread }
-    friends: [], // Array of friend user IDs
-    settings: {
-        highlightConflicts: true,
-        highlightSameNumbers: true,
-        autoCheck: true,
-        notifications: {
-            global: true,
-            game: true,
-            dms: true,
-            sound: true,
-            badges: true
-        }
-    },
-    moderation: {
-        muted: false,
-        blocked: false
-    },
-    moderationChatNotified: false
-};
+// AppState has been extracted to src/client/appState.js
 // Provide lightweight stubs early so tests that check for globals don't race.
 try { window.startSinglePlayerGame = window.startSinglePlayerGame || function() { console.warn('startSinglePlayerGame (stub) called before init'); }; } catch (e) {}
 
@@ -571,27 +399,6 @@ const isAutomationEnv = () => {
 
 const automationMode = isAutomationEnv();
 
-// ===========================================
-// Profanity Filter (Basic)
-// ===========================================
-const ProfanityFilter = {
-    // Basic list of common inappropriate words
-    // In production, consider using a more comprehensive third-party service
-    badWords: [
-        'spam', 'scam', 'hack', 'cheat', 'exploit',
-        // Common mild profanity that should be filtered in a game context
-        'stupid', 'idiot', 'loser', 'noob'
-    ],
-    
-    filter(text) {
-        let filtered = text;
-        for (const word of this.badWords) {
-            const regex = new RegExp(`\\b${word}\\b`, 'gi');
-            filtered = filtered.replace(regex, '*'.repeat(word.length));
-        }
-        return filtered;
-    }
-};
 
 // ===========================================
 // View Manager
@@ -3279,6 +3086,7 @@ const ChatManager = {
     async sendGlobalMessage(userId, displayName, text) {
         // Normal global message
         
+        // ProfanityFilter is now imported from its own module
         const filteredText = ProfanityFilter.filter(text);
         const chatRef = ref(rtdb, 'globalChat');
 
@@ -3412,6 +3220,7 @@ const ChatManager = {
     },
     
     async sendGameMessage(matchId, userId, displayName, text) {
+        // ProfanityFilter is now imported from its own module
         const filteredText = ProfanityFilter.filter(text);
         const chatRef = ref(rtdb, `matches/${matchId}/chat`);
         
@@ -9474,6 +9283,24 @@ window.StonedokuDebug = {
 // Expose a few helpers for E2E and integration tests
 window.startSinglePlayerGame = startSinglePlayerGame;
 window.AppState = AppState;
+
+// Expose core managers for incremental splitting/refactor
+window.Stonedoku = window.Stonedoku || {};
+window.Stonedoku.Managers = Object.assign(window.Stonedoku.Managers || {}, {
+    ViewManager,
+    PresenceSystem,
+    ProfileManager,
+    FriendsPanel,
+    UpdatesCenter,
+    AdminConsole,
+    AudioManager,
+    SudokuGenerator,
+    ArchitecturalStateSystem,
+    MotionSystem,
+    AccessibilityManager,
+    CookieConsent,
+    LegalModals
+});
 
 // ===========================================
 // Cookie Consent Manager (UK PECR Compliant)

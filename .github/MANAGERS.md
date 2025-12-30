@@ -70,3 +70,6 @@ This document indexes the primary "manager" objects and domain modules implement
 ## Notes and contributor guidance
 - This file should reflect the managers implemented in `app.js`. If you add or rename a manager, update this document.
 - Prefer adding new domain logic as a manager object to keep `app.js` organized. Keep each manager focused and well-documented.
+
+- Managers are also exposed at `window.Stonedoku.Managers` to support incremental refactoring and modular imports.
+- AI agents and contributors: before modifying managers, read this MANAGERS.md and the `.github/prompts/AI_PROMPTS.prompt.md` guidance (if present) so changes align with project conventions.
