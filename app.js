@@ -40,7 +40,8 @@ import {
     serverTimestamp,
     runTransaction,
     goOffline,
-    goOnline
+    goOnline,
+    limitToLast
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 	import {
 	    getFirestore,
@@ -381,6 +382,9 @@ const AppState = {
     },
     moderationChatNotified: false
 };
+
+// Transient set to avoid duplicate badge reveal popups in a single session
+AppState._recentBadgeReveals = new Set();
 
 function setModerationState(partial = {}, { notify = true } = {}) {
     const prevMuted = !!AppState.moderation.muted;
@@ -1330,13 +1334,48 @@ const friendParticipants = (a, b) => [String(a), String(b)].sort();
 
         await updateDoc(profileRef, { badges: arrayUnion(...newBadges) });
 
-        // Notify the current user if they earned something new
-        if (AppState.currentUser && AppState.currentUser.uid === userId && typeof UI?.showToast === 'function' && AppState.settings.notifications.badges) {
-            newBadges.forEach((badge) => {
+        // Record awards for analytics/history and reveal to the user.
+        try {
+            for (const badge of newBadges) {
+                try {
+                    await addDoc(collection(firestore, 'badgeAwards'), {
+                        userId,
+                        badge,
+                        createdAt: Timestamp.now()
+                    });
+                } catch (e) {
+                    console.debug('Failed to record badge award', badge, e?.message || e);
+                }
+            }
+        } catch (e) {
+            console.warn('badgeAwards logging failed', e);
+        }
+
+        // Fetch newest profile data so UI updates immediately.
+        let refreshed = null;
+        try {
+            const fresh = await getDoc(profileRef);
+            if (fresh.exists()) refreshed = fresh.data() || {};
+        } catch (e) {
+            console.warn('Failed to refresh profile after awarding badges', e);
+        }
+
+        // Notify the current user with a richer reveal (toast + popup) and refresh badge UI.
+        if (AppState.currentUser && AppState.currentUser.uid === userId) {
+            // Update local AppState/profile and UI immediately
+            if (refreshed) {
+                AppState.profile = refreshed;
+                AppState.friends = refreshed.friends || [];
+                try { UI.updateBadges(refreshed.badges || []); } catch (e) { /* ignore */ }
+            }
+            // Show reveals for each new badge, de-duplicating within this session
+            for (const badge of newBadges) {
+                if (AppState._recentBadgeReveals.has(badge)) continue;
+                AppState._recentBadgeReveals.add(badge);
                 const info = BadgeInfo[badge] || { name: badge, desc: '' };
-                const msg = info.desc ? `New badge: ${info.name}` : `New badge: ${info.name}`;
-                UI.showToast(msg, 'success');
-            });
+                if (AppState.settings.notifications.badges) UI.showToast(`New badge: ${info.name}`, 'success');
+                UI.showBadgeReveal(badge);
+            }
         }
     },
 
@@ -2423,9 +2462,9 @@ async function cleanupAfterMatch() {
         skipBtn3?.addEventListener('click', () => this.createAccount());
         nextBtn3?.addEventListener('click', () => this.createAccount());
         
-        // Step 4: Tour
+        // Step 4: Tour (force tour when started from onboarding)
         document.getElementById('start-tour')?.addEventListener('click', () => {
-            TourSystem.start();
+            TourSystem.start(true);
         });
         
         document.getElementById('skip-tour')?.addEventListener('click', () => {
@@ -3052,7 +3091,7 @@ const TourSystem = {
             this.end(false);
         });
     },
-    
+
     showStep(stepIndex) {
         const step = this.steps[stepIndex];
         if (!step) return;
@@ -3073,11 +3112,27 @@ const TourSystem = {
         // Update spotlight
         const rect = target.getBoundingClientRect();
         const padding = 10;
-        
-        spotlight.style.left = `${rect.left - padding}px`;
-        spotlight.style.top = `${rect.top - padding}px`;
-        spotlight.style.width = `${rect.width + padding * 2}px`;
-        spotlight.style.height = `${rect.height + padding * 2}px`;
+
+        // Mobile-friendly fallback: if viewport is narrow, place tooltip full-width
+        const isMobile = window.innerWidth <= 640;
+        if (isMobile) {
+            // center spotlight on target but limit size to viewport
+            const w = Math.min(rect.width + padding * 2, window.innerWidth - 40);
+            const h = Math.min(rect.height + padding * 2, window.innerHeight - 160);
+            const left = Math.max(20, rect.left + rect.width / 2 - w / 2);
+            const top = Math.max(80, rect.top + rect.height / 2 - h / 2);
+            spotlight.style.left = `${left}px`;
+            spotlight.style.top = `${top}px`;
+            spotlight.style.width = `${w}px`;
+            spotlight.style.height = `${h}px`;
+            // Force tooltip to bottom for readability
+            tooltip.className = 'tour-tooltip position-bottom mobile';
+        } else {
+            spotlight.style.left = `${rect.left - padding}px`;
+            spotlight.style.top = `${rect.top - padding}px`;
+            spotlight.style.width = `${rect.width + padding * 2}px`;
+            spotlight.style.height = `${rect.height + padding * 2}px`;
+        }
         
         // Update tooltip content
         document.getElementById('tour-title').textContent = step.title;
@@ -3150,6 +3205,15 @@ const TourSystem = {
 // ===========================================
 // Chat Manager
 // ===========================================
+// Wire onboarding tutorial button (outside TourSystem to avoid syntax errors)
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('start-tutorial');
+    if (btn) {
+        btn.addEventListener('click', () => {
+            try { TutorialGame.start(); } catch (e) { console.warn('Failed to start tutorial', e); }
+        });
+    }
+});
 const ChatManager = {
     participantsEnsured: new Set(),
 
@@ -3168,6 +3232,12 @@ const ChatManager = {
             try {
                 await set(participantsRef, { a, b });
             } catch { /* ignore */ }
+            // Mirror participants to Firestore for security rules lookup
+            try {
+                await setDoc(doc(firestore, 'dmParticipants', dmId), { participants: [a, b] });
+            } catch (e) {
+                console.warn('Failed to write dmParticipants to Firestore', e);
+            }
             this.participantsEnsured.add(dmId);
         } catch (e) {
             console.warn('ensureDmParticipants failed', e);
@@ -3226,14 +3296,33 @@ const ChatManager = {
         
         const filteredText = ProfanityFilter.filter(text);
         const chatRef = ref(rtdb, 'globalChat');
-        
-        await push(chatRef, {
-            userId: userId,
-            displayName: displayName,
-            text: filteredText,
-            timestamp: serverTimestamp()
-        });
-        
+
+        // Push to RTDB (legacy)
+        let pushRef = null;
+        try {
+            pushRef = await push(chatRef, {
+                userId: userId,
+                displayName: displayName,
+                text: filteredText,
+                timestamp: serverTimestamp()
+            });
+        } catch (e) {
+            console.warn('RTDB push for global chat failed', e);
+        }
+
+        // Also write to Firestore for migration / long-term storage
+        try {
+            await addDoc(collection(firestore, 'globalChat'), {
+                userId: userId,
+                displayName: displayName,
+                text: filteredText,
+                rtdbKey: pushRef?.key || null,
+                timestamp: fsServerTimestamp()
+            });
+        } catch (e) {
+            console.warn('Failed to write global chat message to Firestore', e);
+        }
+
         return { type: 'global' };
     },
     
@@ -3253,15 +3342,35 @@ const ChatManager = {
         const dmRef = ref(rtdb, `directMessages/${dmId}`);
 
         await this.ensureDmParticipants(dmId, fromUserId, targetUserId);
-        
-        await push(dmRef, {
-            from: fromUserId,
-            fromDisplayName: fromDisplayName,
-            to: targetUserId,
-            text: filteredText,
-            timestamp: serverTimestamp(),
-            read: false
-        });
+
+        let pushRef = null;
+        try {
+            pushRef = await push(dmRef, {
+                from: fromUserId,
+                fromDisplayName: fromDisplayName,
+                to: targetUserId,
+                text: filteredText,
+                timestamp: serverTimestamp(),
+                read: false
+            });
+        } catch (e) {
+            console.warn('RTDB push for DM failed', e);
+        }
+
+        // Mirror to Firestore
+        try {
+            await addDoc(collection(firestore, 'directMessages', dmId, 'messages'), {
+                from: fromUserId,
+                fromDisplayName: fromDisplayName,
+                to: targetUserId,
+                text: filteredText,
+                rtdbKey: pushRef?.key || null,
+                timestamp: fsServerTimestamp(),
+                read: false
+            });
+        } catch (e) {
+            console.warn('Failed to write DM to Firestore', e);
+        }
 
         await this.updateDmThreads({
             fromUserId,
@@ -3270,7 +3379,7 @@ const ChatManager = {
             toDisplayName: targetData.username || targetData.displayName || targetUsername,
             text: filteredText
         });
-        
+
         return { dmId, targetUserId, targetUsername };
     },
     
@@ -3282,14 +3391,34 @@ const ChatManager = {
 
             await this.ensureDmParticipants(dmId, fromUserId, toUserId);
 
-            await push(dmRef, {
-                from: fromUserId,
-                fromDisplayName: fromDisplayName,
-                to: toUserId,
-                text: filteredText,
-                timestamp: serverTimestamp(),
-                read: false
-            });
+            let pushRef = null;
+            try {
+                pushRef = await push(dmRef, {
+                    from: fromUserId,
+                    fromDisplayName: fromDisplayName,
+                    to: toUserId,
+                    text: filteredText,
+                    timestamp: serverTimestamp(),
+                    read: false
+                });
+            } catch (e) {
+                console.warn('RTDB push for DM failed', e);
+            }
+
+            // Mirror to Firestore
+            try {
+                await addDoc(collection(firestore, 'directMessages', dmId, 'messages'), {
+                    from: fromUserId,
+                    fromDisplayName: fromDisplayName,
+                    to: toUserId,
+                    text: filteredText,
+                    rtdbKey: pushRef?.key || null,
+                    timestamp: fsServerTimestamp(),
+                    read: false
+                });
+            } catch (e) {
+                console.warn('Failed to write DM to Firestore', e);
+            }
 
             await this.updateDmThreads({
                 fromUserId,
@@ -3317,12 +3446,24 @@ const ChatManager = {
     
     listenToGlobalChat(callback) {
         const chatRef = ref(rtdb, 'globalChat');
-        
-        // Only get last 50 messages
+        // Load initial messages and build a seen-keys set to avoid duplicates
+        const seenKeys = new Set();
+        get(query(chatRef, limitToLast(50))).then((snapshot) => {
+            const initialMessages = [];
+            snapshot.forEach((child) => {
+                seenKeys.add(child.key);
+                initialMessages.push(child.val());
+            });
+            initialMessages.forEach(callback);
+        }).catch(e => console.warn('Failed to load initial global chat messages', e));
+
+        // Listen for new messages and skip ones we've already seen
         const listener = onChildAdded(chatRef, (snapshot) => {
+            if (seenKeys.has(snapshot.key)) return;
+            seenKeys.add(snapshot.key);
             callback(snapshot.val());
         });
-        
+
         AppState.listeners.push({ ref: chatRef, callback: listener });
         return listener;
     },
@@ -3359,6 +3500,122 @@ const ChatManager = {
         });
         AppState.listeners.push({ ref: chatRef, callback: listener });
         return listener;
+    }
+};
+
+// ===========================================
+// Orientation Manager - encourage portrait on small devices
+// ===========================================
+const OrientationManager = {
+    init() {
+        try {
+            const dismissed = (() => {
+                try { return localStorage.getItem('stonedoku_orientation_dismissed') === '1'; } catch { return false; }
+            })();
+            this.dismissed = dismissed;
+        } catch { this.dismissed = false; }
+        this.checkAndShow();
+        window.addEventListener('resize', () => this.checkAndShow());
+        window.addEventListener('orientationchange', () => setTimeout(() => this.checkAndShow(), 250));
+    },
+    checkAndShow() {
+        if (this.dismissed) return;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const smallScreen = w <= 640;
+        const landscapeOnSmall = smallScreen && w > h;
+        const onboardingActive = !!AppState.onboarding.active;
+        // If onboarding or tour is active we should nudge users to rotate when in landscape on small screens
+        if (landscapeOnSmall) {
+            this.showOverlay(onboardingActive);
+        } else {
+            this.hideOverlay();
+        }
+    },
+    showOverlay(isOnboarding) {
+        let el = document.getElementById('orientation-overlay');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'orientation-overlay';
+            el.className = 'orientation-overlay';
+            el.innerHTML = `
+                <div class="orientation-card">
+                    <h3>Rotate your device</h3>
+                    <p>For the best experience, rotate your phone to portrait while completing onboarding and the tour.</p>
+                    <div class="orientation-actions">
+                        <button class="btn btn-primary" id="orientation-dismiss">Continue anyway</button>
+                        <button class="btn btn-ghost" id="orientation-never">Don't show again</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(el);
+            document.getElementById('orientation-dismiss')?.addEventListener('click', () => { this.hideOverlay(); });
+            document.getElementById('orientation-never')?.addEventListener('click', () => { this.dismissed = true; try { localStorage.setItem('stonedoku_orientation_dismissed','1'); } catch{}; this.hideOverlay(); });
+        }
+        el.style.display = 'flex';
+    },
+    hideOverlay() {
+        const el = document.getElementById('orientation-overlay');
+        if (el) el.style.display = 'none';
+    }
+};
+
+// ===========================================
+// Tutorial Game - lightweight step-through tutorial
+// ===========================================
+const TutorialGame = {
+    steps: [
+        { title: 'Select a Cell', desc: 'Tap any empty cell to select it.' },
+        { title: 'Choose a Number', desc: 'Use the number pad to place a number in the selected cell.' },
+        { title: 'Use Notes', desc: 'Toggle notes to mark possibilities before committing.' },
+        { title: 'Finish', desc: 'Well done — you completed the quick tutorial.' }
+    ],
+    start() {
+        // Ensure player is registered into a lightweight tutorial mode
+        try {
+            ViewManager.show('game');
+        } catch { /* ignore */ }
+        AppState.tutorialActive = true;
+        AppState.tutorialStep = 0;
+        this.showOverlayStep(0);
+    },
+    showOverlayStep(idx) {
+        const step = this.steps[idx];
+        if (!step) return this.end();
+        let el = document.getElementById('tutorial-overlay');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'tutorial-overlay';
+            el.className = 'tutorial-overlay';
+            el.innerHTML = `
+                <div class="tutorial-card">
+                    <h3 id="tutorial-title"></h3>
+                    <p id="tutorial-desc"></p>
+                    <div class="tutorial-actions">
+                        <button class="btn btn-ghost" id="tutorial-skip">Skip</button>
+                        <button class="btn btn-primary" id="tutorial-next">Next</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(el);
+            document.getElementById('tutorial-next')?.addEventListener('click', () => { this.next(); });
+            document.getElementById('tutorial-skip')?.addEventListener('click', () => { this.end(); });
+        }
+        document.getElementById('tutorial-title').textContent = step.title;
+        document.getElementById('tutorial-desc').textContent = step.desc;
+        el.style.display = 'flex';
+        AppState.tutorialStep = idx;
+    },
+    next() {
+        const nextIdx = (AppState.tutorialStep || 0) + 1;
+        if (nextIdx >= this.steps.length) return this.end();
+        this.showOverlayStep(nextIdx);
+    },
+    end() {
+        AppState.tutorialActive = false;
+        const el = document.getElementById('tutorial-overlay');
+        if (el) el.style.display = 'none';
+        UI.showToast('Tutorial finished.', 'success');
+        // Return user to lobby
+        try { ViewManager.show('lobby'); } catch {}
     }
 };
 
@@ -4110,16 +4367,66 @@ const UI = {
     updateBadges(badges) {
         const container = document.getElementById('badges-list');
         if (!container) return;
-        
         container.innerHTML = '';
         (badges || []).forEach(badge => {
-            const badgeEl = document.createElement('span');
-            badgeEl.className = `badge ${badge}`;
-            const info = BadgeInfo[badge] || { name: badge, desc: '' };
-            badgeEl.textContent = info.name || badge;
-            if (info.desc) badgeEl.title = info.desc;
+            const info = BadgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: badge, desc: '' };
+            const badgeEl = document.createElement('button');
+            badgeEl.className = `badge badge-pill ${badge}`;
+            badgeEl.setAttribute('type', 'button');
+            badgeEl.setAttribute('aria-label', info.name || badge);
+            badgeEl.title = info.desc || info.name || badge;
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'badge-icon';
+            iconSpan.innerHTML = info.iconHtml || '';
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'badge-label';
+            nameSpan.textContent = info.name || badge;
+            badgeEl.appendChild(iconSpan);
+            badgeEl.appendChild(nameSpan);
+            badgeEl.addEventListener('click', () => {
+                // Show a small description popover
+                UI.showBadgeReveal(badge);
+            });
             container.appendChild(badgeEl);
         });
+    },
+
+    showBadgeReveal(badgeKey) {
+        try {
+            const info = BadgeInfo[badgeKey] || { name: badgeKey, desc: '', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>' };
+            const existing = document.getElementById('badge-reveal');
+            if (existing) existing.remove();
+            const el = document.createElement('div');
+            el.id = 'badge-reveal';
+            el.className = 'badge-reveal';
+            el.innerHTML = `
+                <div class="badge-reveal-card">
+                    <div class="badge-reveal-icon">${info.iconHtml}</div>
+                    <div class="badge-reveal-body">
+                        <div class="badge-reveal-name">${UI.escapeHtml(info.name || badgeKey)}</div>
+                        <div class="badge-reveal-desc">${UI.escapeHtml(info.desc || '')}</div>
+                        <div class="badge-reveal-actions">
+                            <button class="btn btn-primary btn-sm" id="badge-reveal-view">View Badges</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(el);
+            // Basic inline styles to ensure visibility even without CSS rules.
+            el.style.position = 'fixed';
+            el.style.right = '20px';
+            el.style.bottom = '20px';
+            el.style.zIndex = '9999';
+            el.style.pointerEvents = 'auto';
+            const btn = document.getElementById('badge-reveal-view');
+            if (btn) btn.addEventListener('click', () => {
+                // Open profile page for current user
+                if (AppState.currentUser) UI.showProfilePage(AppState.currentUser.uid);
+            });
+            // Auto-dismiss after a short time
+            setTimeout(() => { el.classList.add('fade-out'); setTimeout(() => el.remove(), 450); }, 4200);
+        } catch (e) {
+            console.warn('showBadgeReveal failed', e);
+        }
     },
 
     showToast(message, type = 'info') {
@@ -7069,11 +7376,11 @@ function initFloatingChat() {
             return;
         }
 
-        const showMessages = isGlobal || isGame || isDmConversation;
+        const showMessages = isDmConversation || !(isDmArea || isFriends);
         if (messagesEl) messagesEl.style.display = showMessages ? 'flex' : 'none';
         if (dmConversationsSection) dmConversationsSection.style.display = isDmList ? 'block' : 'none';
         if (dmFriendsSection) dmFriendsSection.style.display = isFriends ? 'block' : 'none';
-        if (chatHintEl) chatHintEl.style.display = isGlobal || isGame ? 'block' : 'none';
+        if (chatHintEl) chatHintEl.style.display = (isDmArea || isFriends) ? 'none' : 'block';
     }
 
 	    async function renderDmFriends() {
@@ -8693,7 +9000,8 @@ function handleMatchUpdate(match) {
 	// Auth State Handler
 	// ===========================================
 	let authListenerRegistered = false;
-	let userProfileUnsub = null;
+    let userProfileUnsub = null;
+    let friendRequestsUnsub = null;
 	async function configureAuthPersistence() {
 	    try {
 	        await setPersistence(auth, browserLocalPersistence);
@@ -8782,8 +9090,12 @@ function registerAuthListener() {
 	                AppState.passwordReset.active = false;
 
 	                // Reset prior profile listener (user switching / logout-login).
-	                try { if (typeof userProfileUnsub === 'function') userProfileUnsub(); } catch { /* ignore */ }
-	                userProfileUnsub = null;
+                    try { if (typeof userProfileUnsub === 'function') userProfileUnsub(); } catch { /* ignore */ }
+                    userProfileUnsub = null;
+                    try { if (typeof friendRequestsUnsub === 'function') friendRequestsUnsub(); } catch { /* ignore */ }
+                    friendRequestsUnsub = null;
+                    try { if (typeof friendRequestsUnsub === 'function') friendRequestsUnsub(); } catch { /* ignore */ }
+                    friendRequestsUnsub = null;
                 
                 // If we're in the middle of onboarding, don't redirect to lobby
                 if (AppState.onboarding.active) {
@@ -8853,6 +9165,26 @@ function registerAuthListener() {
 	                } catch (e) {
 	                    console.warn('Failed to attach profile listener', e);
 	                }
+
+                    // Real-time incoming friend requests for this user (so requests appear instantly)
+                    try {
+                        // Clean any previous listener first
+                        try { if (typeof friendRequestsUnsub === 'function') friendRequestsUnsub(); } catch {}
+                        const frQuery = query(
+                            collection(firestore, 'friendRequests'),
+                            where('toUid', '==', user.uid),
+                            where('status', '==', 'pending')
+                        );
+                        friendRequestsUnsub = onSnapshot(frQuery, (qsnap) => {
+                            // Rerender the friends panel so the incoming requests list updates immediately.
+                            // Keep this lightweight: render handles fetching profiles and UI updates.
+                            try { FriendsPanel.render().catch(() => {}); } catch (e) { console.warn('FriendRequests onSnapshot handler failed', e); }
+                        }, (err) => {
+                            console.warn('FriendRequests listener error', err);
+                        });
+                    } catch (e) {
+                        console.warn('Failed to attach friendRequests listener', e);
+                    }
 
                 // Initialize realtime systems (best-effort; do not block view transitions).
                 PresenceSystem.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
@@ -10250,6 +10582,8 @@ async function bootstrapApp() {
 
     await configureAuthPersistence();
     registerAuthListener();
+    // Initialize orientation manager early so onboarding/tour get nudges on mobile
+    try { OrientationManager.init(); } catch (e) { console.warn('OrientationManager init failed', e); }
     
     // Initialize audio
     AudioManager.init();

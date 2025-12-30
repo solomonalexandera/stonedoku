@@ -47,19 +47,24 @@ service cloud.firestore {
     match /friendRequests/{requestId} {
       allow read: if isSignedIn() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
 
+      // Creation of a pending friend request requires a registered user sender.
       allow create: if isRegisteredUser()
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.toUid is string
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+      // Allow the recipient to create a response document (accepted/declined) when necessary
+      || (isSignedIn()
+        && request.resource.data.toUid == request.auth.uid
+        && request.resource.data.fromUid is string
+        && request.resource.data.status in ['accepted', 'declined']);
 
+      // Updates: recipient can accept/decline a pending request; sender can cancel.
       allow update: if isSignedIn()
         && (
-          // Recipient can accept/decline a pending request.
           (request.auth.uid == resource.data.toUid
             && resource.data.status == 'pending'
             && request.resource.data.status in ['accepted', 'declined'])
           ||
-          // Sender can cancel a pending request.
           (request.auth.uid == resource.data.fromUid
             && resource.data.status == 'pending'
             && request.resource.data.status == 'cancelled')
@@ -105,9 +110,67 @@ service cloud.firestore {
     match /clientLogs/{logId} {
       // Allow clients to create logs while signed in (anonymous or registered)
       allow create: if isSignedIn();
-      // Do not expose logs publicly by default
-      allow read: if false;
+      // Allow admins to read client logs for moderation/diagnostics
+      allow read: if isAdmin();
       allow update, delete: if false;
+    }
+
+    // Global chat collection (mirrored from RTDB)
+    match /globalChat/{messageId} {
+      // Public read (anyone can read global chat)
+      allow read: if true;
+      // Allow signed-in clients (including anonymous) to create messages as themselves
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.timestamp != null;
+      // Prevent client-side updates/deletes (moderation or functions should handle that)
+      allow update, delete: if false;
+    }
+
+    // Direct messages (per-conversation subcollection)
+    // Participant lists are stored in `dmParticipants/{dmId}` with a `participants` array.
+    match /directMessages/{dmId}/messages/{msgId} {
+      function dmParticipants() {
+        return get(/databases/$(database)/documents/dmParticipants/$(dmId)).data.participants;
+      }
+
+      function isParticipant() {
+        return isSignedIn() && dmParticipants() is list && request.auth.uid in dmParticipants();
+      }
+
+      // Read: only participants or admins can read messages
+      allow read: if isParticipant() || isAdmin();
+
+      // Create: sender must be authenticated as `from` field and recipient must be a participant; admins may also create
+      allow create: if (isSignedIn()
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string
+        && request.resource.data.text is string
+        && request.resource.data.timestamp != null
+        && dmParticipants() is list
+        && request.auth.uid in dmParticipants()
+        && request.resource.data.to in dmParticipants()) || isAdmin();
+
+      // Admins may update/delete for moderation purposes; participants may not update/delete directly
+      allow update, delete: if isAdmin();
+    }
+
+    // DM participants mapping (used by security rules to verify participants)
+    match /dmParticipants/{dmId} {
+      // Create: allow when signed-in user is one of the participants and exactly two participants provided
+      // Admins may also create or overwrite participant lists.
+      allow create: if (isSignedIn()
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants[0] is string
+        && request.resource.data.participants[1] is string) || isAdmin();
+
+      // Read: participants and admins may read
+      allow read: if (isSignedIn() && resource.data.participants is list && request.auth.uid in resource.data.participants) || isAdmin();
+
+      // Only admins may update or delete participant documents
+      allow update, delete: if isAdmin();
     }
 
     // Admin allowlist (seeded manually in console: admins/{uid})

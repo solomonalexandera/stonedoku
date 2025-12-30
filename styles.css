@@ -1992,6 +1992,48 @@ body:not(.light-theme) .diff-dot {
     box-shadow: var(--shadow-lg);
 }
 
+/* In light theme the glow button's white text can be hard to read on light backgrounds.
+   Use an oxblood red text color that complements the theme. */
+body.light-theme .btn-glow {
+    color: #5B0B0B; /* Oxblood red */
+    border-color: rgba(91, 11, 11, 0.12);
+}
+
+body.light-theme .btn-glow svg,
+body.light-theme .btn-glow .ui-icon {
+    color: inherit;
+    fill: currentColor;
+}
+
+/* Orientation overlay styles */
+.orientation-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.45);
+    z-index: 9998;
+}
+.orientation-overlay .orientation-card {
+    background: var(--color-card-bg);
+    color: var(--color-text);
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    max-width: 420px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+}
+.orientation-overlay .orientation-actions { display:flex; gap:0.5rem; justify-content:center; margin-top:0.75rem; }
+
+/* Tutorial overlay styles */
+.tutorial-overlay { display:none; position: fixed; inset: 0; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index:9999; }
+.tutorial-card { background: var(--color-card-bg); color: var(--color-text); padding: 1rem 1.25rem; border-radius: 10px; max-width: 520px; box-shadow: var(--shadow-lg); }
+.tutorial-card .tutorial-actions { display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.75rem; }
+
+/* Mobile tweaks for tour tooltip */
+.tour-tooltip.mobile { max-width: calc(100% - 40px); left: 20px !important; right: 20px !important; }
+
 .join-inline {
     display: flex;
     gap: 0.5rem;

@@ -76,3 +76,9 @@ firebase deploy --only functions
 - **Firebase:** The primary and most critical dependency. The application is tightly coupled with Firebase services.
 - **No other significant external dependencies** are used on the client-side, as seen in the root `package.json`. The client-side code uses ES module imports directly from the Firebase CDN.
 - The Firebase Functions have dependencies on `firebase-admin`, `firebase-functions`, and TypeScript, as defined in `functions/package.json`.
+## Technologies
+
+- HTML5
+- CSS3
+- JavaScript (ES6+)
+- Firebase Hosting

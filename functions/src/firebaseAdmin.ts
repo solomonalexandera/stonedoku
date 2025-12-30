@@ -46,7 +46,7 @@ export function getAdmin(): typeof admin {
     if (sa) {
       admin.initializeApp({
         credential: admin.credential.cert(sa),
-        projectId: sa.project_id || process.env.FIREBASE_PROJECT_ID,
+        projectId: sa.project_id || process.env.FIREBASE_PROJECT_ID || 'dummy-project-id',
         storageBucket: sa.storageBucket || process.env.FIREBASE_STORAGE_BUCKET,
         databaseURL: sa.databaseURL || process.env.FIREBASE_DATABASE_URL,
       });
