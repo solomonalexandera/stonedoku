@@ -6292,11 +6292,51 @@ function initProfilePage() {
         document.getElementById('edit-profile-btn').style.display = 'none';
     });
 
-    // Run orientation tour again (from profile)
-    document.getElementById('run-tour-btn')?.addEventListener('click', () => {
-        ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
-        setTimeout(() => TourSystem.start(true), 250);
+    // Run orientation tour again (from profile) — offer choice: Tour or Tutorial
+    document.getElementById('run-tour-btn')?.addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        // Position menu near button
+        try {
+            // Remove existing menu
+            const existing = document.getElementById('profile-orientation-menu');
+            if (existing) existing.remove();
+
+            const rect = btn.getBoundingClientRect();
+            const menu = document.createElement('div');
+            menu.id = 'profile-orientation-menu';
+            menu.className = 'profile-orientation-menu';
+            menu.style.position = 'absolute';
+            menu.style.left = `${Math.max(8, rect.left)}px`;
+            menu.style.top = `${rect.bottom + 8}px`;
+            menu.style.zIndex = 10050;
+            menu.innerHTML = `
+                <button class="btn btn-sm btn-primary" id="profile-run-tour">Run Tour</button>
+                <button class="btn btn-sm btn-ghost" id="profile-run-tutorial">Try Tutorial Game</button>
+                <button class="btn btn-sm btn-outline" id="profile-run-close">Close</button>
+            `;
+            document.body.appendChild(menu);
+
+            document.getElementById('profile-run-tour')?.addEventListener('click', () => {
+                try { ViewManager.show('lobby'); PresenceSystem.updateActivity('In Lobby'); setTimeout(() => TourSystem.start(true), 250); } catch (e) { console.warn('Failed to start tour', e); }
+                menu.remove();
+            });
+            document.getElementById('profile-run-tutorial')?.addEventListener('click', () => {
+                try { TutorialGame.start(); } catch (e) { console.warn('Failed to start tutorial', e); }
+                menu.remove();
+            });
+            document.getElementById('profile-run-close')?.addEventListener('click', () => menu.remove());
+
+            // Auto-remove when clicking outside
+            const onDocClick = (evt) => {
+                if (!menu.contains(evt.target) && evt.target !== btn) {
+                    menu.remove();
+                    document.removeEventListener('click', onDocClick);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', onDocClick), 50);
+        } catch (e) {
+            console.warn('Orientation menu failed', e);
+        }
     });
     
     // Save profile changes

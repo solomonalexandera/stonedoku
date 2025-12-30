@@ -2034,6 +2034,17 @@ body.light-theme .btn-glow .ui-icon {
 /* Mobile tweaks for tour tooltip */
 .tour-tooltip.mobile { max-width: calc(100% - 40px); left: 20px !important; right: 20px !important; }
 
+/* Profile orientation menu */
+.profile-orientation-menu {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--color-card-bg);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+}
+.profile-orientation-menu .btn { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+
 .join-inline {
     display: flex;
     gap: 0.5rem;
