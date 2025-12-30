@@ -4,7 +4,7 @@
 <body>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getAuth, signInAnonymously, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { getAuth, signInAnonymously, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile as fbUpdateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getDatabase, ref, set, get, update, remove, serverTimestamp, goOffline, goOnline } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 import { getFirestore, doc, setDoc, getDoc, enableNetwork, disableNetwork } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
@@ -39,6 +39,24 @@ window.e2e = {
   signIn: async () => {
     const res = await signInAnonymously(auth);
     return res.user.uid;
+  },
+  signInWithEmail: async (email, password, displayName) => {
+    // Try create account, fall back to sign-in if it already exists
+    try {
+      const res = await createUserWithEmailAndPassword(auth, email, password);
+      if (displayName) {
+        try { await fbUpdateProfile(res.user, { displayName }); } catch(_) {}
+      }
+      return res.user.uid;
+    } catch (e) {
+      // If already exists, sign in
+      try {
+        const s = await signInWithEmailAndPassword(auth, email, password);
+        return s.user.uid;
+      } catch (e2) {
+        throw e2;
+      }
+    }
   },
   signOut: async () => {
     await signOut(auth);
@@ -168,7 +186,14 @@ window.e2e = {
       await ensureOnline();
       // Mark profiles created by tests so cleanup can identify them
       const payload = Object.assign({}, data || {}, { _e2e: true });
+      // Ensure usernameLower mapping for quick lookup in tests
+      if (payload.username) payload.usernameLower = String(payload.username).toLowerCase();
       await setDoc(doc(firestore, 'users', uid), payload);
+      try {
+        if (payload.usernameLower) {
+          await setDoc(doc(firestore, 'usernames', payload.usernameLower), { userId: uid });
+        }
+      } catch (e) { /* ignore mapping failures */ }
       // Quiet connections so later navigations using networkidle aren't held open
       await quietConnections();
       return { success: true };
@@ -185,6 +210,8 @@ window.e2e = {
         return null;
       }
     },
+    ensureOnline: async () => { try { await ensureOnline(); return { success: true }; } catch (e) { return { success: false, error: e.message }; } },
+    quietConnections: async () => { try { await quietConnections(); return { success: true }; } catch (e) { return { success: false, error: e.message }; } },
     // Global chat (Realtime DB)
   sendGlobalChat: async (uid, displayName, text) => {
       await ensureOnline();

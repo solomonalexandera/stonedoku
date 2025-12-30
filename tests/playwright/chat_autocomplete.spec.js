@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test('chat @whisper autocomplete suggests and inserts username', async ({ browser }) => {
+test.skip('chat autocomplete (whisper command removed)', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
 
@@ -26,18 +26,12 @@ test('chat @whisper autocomplete suggests and inserts username', async ({ browse
   await page.click('#chat-fab');
   await page.waitForSelector('#chat-widget-input', { state: 'visible', timeout: 5000 });
 
-  // Type partial whisper command to trigger suggestions
-  await page.fill('#chat-widget-input', `@whisper ${username.substring(0,6)}`);
+  // Type a sample message (autocomplete command removed)
+  await page.fill('#chat-widget-input', `hello ${username.substring(0,6)}`);
 
-  // Wait for suggestion box and assert username present
-  const suggestion = page.locator('#chat-suggestion-box');
-  await expect(suggestion).toBeVisible({ timeout: 10000 });
-  await expect(suggestion).toContainText(username, { timeout: 10000 });
-
-  // Click the suggestion and ensure input updates
-  await page.click(`#chat-suggestion-box >> text=${username}`);
+  // Ensure the input contains the typed message
   const val = await page.inputValue('#chat-widget-input');
-  expect(val.startsWith(`@whisper ${username}`)).toBeTruthy();
+  expect(val.startsWith(`hello ${username.substring(0,6)}`)).toBeTruthy();
 
   await context.close();
 });

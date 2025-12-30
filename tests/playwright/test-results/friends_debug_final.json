@@ -1,0 +1,16 @@
+{
+  "uidA": "VQE3XeCq65fx9lHO3M2HKCeKGDA2",
+  "uidB": "SpnaV7TPd6QwxH8v7HYh82BuI6q1",
+  "a": {
+    "_e2e": true,
+    "friends": [
+      "SpnaV7TPd6QwxH8v7HYh82BuI6q1"
+    ]
+  },
+  "b": {
+    "_e2e": true,
+    "friends": [
+      "VQE3XeCq65fx9lHO3M2HKCeKGDA2"
+    ]
+  }
+}

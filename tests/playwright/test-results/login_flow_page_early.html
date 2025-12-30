@@ -1,7 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
+<!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Stonedoku</title>
@@ -20,10 +17,8 @@
     <!-- Accessibility -->
     <meta name="color-scheme" content="dark light">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Libre+Franklin:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
-        rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&amp;family=Libre+Franklin:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets.css">
     <link rel="stylesheet" href="/styles.css?v=20251222A">
 </head>
@@ -32,8 +27,7 @@
     <svg class="ui-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <symbol id="i-sun" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="4"></circle>
-            <path
-                d="M12 2v2M12 20v2M4 12H2M22 12h-2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4">
+            <path d="M12 2v2M12 20v2M4 12H2M22 12h-2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4">
             </path>
         </symbol>
         <symbol id="i-moon" viewBox="0 0 24 24">
@@ -86,8 +80,7 @@
         </symbol>
         <symbol id="i-gear" viewBox="0 0 24 24">
             <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-            <path
-                d="M19.4 15a7.9 7.9 0 0 0 .1-2l2-1.2-2-3.4-2.3.7a7.7 7.7 0 0 0-1.7-1L15 5h-6l-.5 2.1a7.7 7.7 0 0 0-1.7 1L4.5 7.4l-2 3.4 2 1.2a7.9 7.9 0 0 0 .1 2l-2 1.2 2 3.4 2.3-.7c.5.4 1.1.7 1.7 1L9 21h6l.5-2.1c.6-.3 1.2-.6 1.7-1l2.3.7 2-3.4-2-1.2Z">
+            <path d="M19.4 15a7.9 7.9 0 0 0 .1-2l2-1.2-2-3.4-2.3.7a7.7 7.7 0 0 0-1.7-1L15 5h-6l-.5 2.1a7.7 7.7 0 0 0-1.7 1L4.5 7.4l-2 3.4 2 1.2a7.9 7.9 0 0 0 .1 2l-2 1.2 2 3.4 2.3-.7c.5.4 1.1.7 1.7 1L9 21h6l.5-2.1c.6-.3 1.2-.6 1.7-1l2.3.7 2-3.4-2-1.2Z">
             </path>
         </symbol>
         <symbol id="i-undo" viewBox="0 0 24 24">
@@ -243,15 +236,12 @@
                             <h1>Stonedoku</h1>
                         </div>
                         <nav class="nav-controls">
-                            <button id="header-menu-toggle" class="btn btn-icon header-menu-toggle" type="button"
-                                aria-label="Open menu" aria-expanded="false" aria-controls="header-menu" title="Menu"
-                                data-tooltip="Menu">
+                            <button id="header-menu-toggle" class="btn btn-icon header-menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="header-menu" title="Menu" data-tooltip="Menu">
                                 <svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-menu"></use>
                                 </svg>
                             </button>
-                            <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme" title="Theme"
-                                data-tooltip="Theme">
+                            <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme" title="Theme" data-tooltip="Theme">
                                 <span class="icon-stack" aria-hidden="true">
                                     <svg class="ui-icon icon-moon">
                                         <use href="#i-moon"></use>
@@ -261,8 +251,7 @@
                                     </svg>
                                 </span>
                             </button>
-                            <button id="sound-toggle" class="btn btn-icon" aria-label="Toggle sound" title="Sound"
-                                data-tooltip="Sound">
+                            <button id="sound-toggle" class="btn btn-icon" aria-label="Toggle sound" title="Sound" data-tooltip="Sound">
                                 <span class="icon-stack" aria-hidden="true">
                                     <svg class="ui-icon icon-volume">
                                         <use href="#i-volume"></use>
@@ -276,22 +265,19 @@
                                 <div class="user-info" id="user-info" style="display: none;">
                                     <span class="user-status" id="user-status"></span>
                                     <span class="user-name" id="user-name"></span>
-                                    <button id="my-profile-btn" class="btn btn-icon" aria-label="My Profile"
-                                        title="My Profile" data-tooltip="Profile">
+                                    <button id="my-profile-btn" class="btn btn-icon" aria-label="My Profile" title="My Profile" data-tooltip="Profile">
                                         <svg class="ui-icon" aria-hidden="true">
                                             <use href="#i-user"></use>
                                         </svg>
                                     </button>
                                     <button id="logout-btn" class="btn btn-secondary btn-header">Logout</button>
                                 </div>
-                                <button id="updates-nav-btn" class="btn btn-icon" type="button"
-                                    aria-label="Open updates feed" title="Updates" data-tooltip="Updates">
+                                <button id="updates-nav-btn" class="btn btn-icon" type="button" aria-label="Open updates feed" title="Updates" data-tooltip="Updates">
                                     <svg class="ui-icon" aria-hidden="true">
                                         <use href="#i-book"></use>
                                     </svg>
                                 </button>
-                                <button id="admin-nav-btn" class="btn btn-icon" type="button"
-                                    aria-label="Open admin console" title="Admin console" style="display: none;">
+                                <button id="admin-nav-btn" class="btn btn-icon" type="button" aria-label="Open admin console" title="Admin console" style="display: none;">
                                     <svg class="ui-icon" aria-hidden="true">
                                         <use href="#i-gear"></use>
                                     </svg>
@@ -302,8 +288,7 @@
                 </header>
 
                 <!-- Updates Banner -->
-                <section class="updates-banner" id="updates-banner" aria-label="Community updates"
-                    style="display: none;">
+                <section class="updates-banner" id="updates-banner" aria-label="Community updates" style="display: none;">
                     <div class="updates-banner-inner">
                         <div class="updates-banner-mark" aria-hidden="true">
                             <svg class="ui-icon">
@@ -318,14 +303,12 @@
                         <div class="updates-banner-actions">
                             <button class="btn btn-outline btn-sm" type="button" id="updates-banner-open">All
                                 updates</button>
-                            <button class="btn btn-icon" type="button" id="updates-banner-toggle"
-                                aria-label="Expand update" aria-expanded="false" title="Expand">
+                            <button class="btn btn-icon" type="button" id="updates-banner-toggle" aria-label="Expand update" aria-expanded="false" title="Expand">
                                 <svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-chevron-down"></use>
                                 </svg>
                             </button>
-                            <button class="btn btn-icon" type="button" id="updates-banner-dismiss"
-                                aria-label="Dismiss update" title="Dismiss">
+                            <button class="btn btn-icon" type="button" id="updates-banner-dismiss" aria-label="Dismiss update" title="Dismiss">
                                 <svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-x"></use>
                                 </svg>
@@ -361,7 +344,7 @@
                                             <span class="feature-icon" aria-hidden="true"><svg class="ui-icon">
                                                     <use href="#i-target"></use>
                                                 </svg></span>
-                                            <span>Solo & Versus Modes</span>
+                                            <span>Solo &amp; Versus Modes</span>
                                         </div>
                                         <div class="feature-item">
                                             <span class="feature-icon" aria-hidden="true"><svg class="ui-icon">
@@ -398,7 +381,7 @@
                             <div class="auth-card">
                                 <div class="auth-card-header">
                                     <h2>Get Started</h2>
-                                    <p>Sign in to save progress & play online</p>
+                                    <p>Sign in to save progress &amp; play online</p>
                                 </div>
 
                                 <!-- Auth Mode Tabs -->
@@ -412,12 +395,11 @@
                                     <form id="signin-form" class="auth-form">
                                         <div class="form-group">
                                             <label for="signin-email">Email</label>
-                                            <input type="email" id="signin-email" placeholder="you@example.com"
-                                                required>
+                                            <input type="email" id="signin-email" placeholder="you@example.com" required="">
                                         </div>
                                         <div class="form-group">
                                             <label for="signin-password">Password</label>
-                                            <input type="password" id="signin-password" placeholder="••••••••" required>
+                                            <input type="password" id="signin-password" placeholder="••••••••" required="">
                                         </div>
                                         <div class="form-group">
                                             <button type="button" id="forgot-password" class="link-btn-inline">Forgot
@@ -446,13 +428,11 @@
                                     <div class="signup-intro">
                                         <p class="signup-intro-text">Ready to join the community? Let's get you set up!
                                         </p>
-                                        <button type="button" id="start-onboarding"
-                                            class="btn btn-primary btn-lg btn-block">
+                                        <button type="button" id="start-onboarding" class="btn btn-primary btn-lg btn-block">
                                             Begin Registration
                                         </button>
                                     </div>
-                                    <p class="auth-terms">By signing up, you agree to our <button type="button"
-                                            class="link-btn-inline" id="auth-terms-link">Terms of Service</button> and
+                                    <p class="auth-terms">By signing up, you agree to our <button type="button" class="link-btn-inline" id="auth-terms-link">Terms of Service</button> and
                                         <button type="button" class="link-btn-inline" id="auth-privacy-link">Privacy
                                             Policy</button></p>
                                 </div>
@@ -498,9 +478,7 @@
 
                                     <div class="onboarding-form">
                                         <div class="form-group">
-                                            <input type="text" id="onboard-username" class="onboard-input"
-                                                placeholder="Enter your username" minlength="3" maxlength="20"
-                                                pattern="^[a-zA-Z0-9_]+$" autofocus>
+                                            <input type="text" id="onboard-username" class="onboard-input" placeholder="Enter your username" minlength="3" maxlength="20" pattern="^[a-zA-Z0-9_]+$" autofocus="">
                                             <span class="form-hint">3-20 characters • Letters, numbers,
                                                 underscore</span>
                                             <span class="form-error" id="username-error"></span>
@@ -511,7 +489,7 @@
                                         <button type="button" class="btn btn-secondary" id="onboard-back-1">
                                             ← Back
                                         </button>
-                                        <button type="button" class="btn btn-primary" id="onboard-next-1" disabled>
+                                        <button type="button" class="btn btn-primary" id="onboard-next-1" disabled="">
                                             Continue →
                                         </button>
                                     </div>
@@ -525,21 +503,17 @@
                                             <use href="#i-mail"></use>
                                         </svg></div>
                                     <h2 class="onboarding-title">Account</h2>
-                                    <p class="onboarding-subtitle">Secure your access, <span
-                                            id="onboard-display-name">Player</span>.</p>
+                                    <p class="onboarding-subtitle">Secure your access, <span id="onboard-display-name">Player</span>.</p>
 
                                     <div class="onboarding-form">
                                         <div class="form-group">
                                             <label for="onboard-email">Email Address</label>
-                                            <input type="email" id="onboard-email" class="onboard-input"
-                                                placeholder="you@example.com">
+                                            <input type="email" id="onboard-email" class="onboard-input" placeholder="you@example.com">
                                             <span class="form-error" id="email-error"></span>
                                         </div>
                                         <div class="form-group">
                                             <label for="onboard-password">Create Password</label>
-                                            <input type="password" id="onboard-password" class="onboard-input"
-                                                placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6"
-                                                maxlength="4096">
+                                            <input type="password" id="onboard-password" class="onboard-input" placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6" maxlength="4096">
                                             <div class="password-strength" id="password-strength">
                                                 <div class="strength-bar"></div>
                                                 <span class="strength-text"></span>
@@ -548,8 +522,7 @@
                                         </div>
                                         <div class="form-group">
                                             <label for="onboard-confirm">Confirm Password</label>
-                                            <input type="password" id="onboard-confirm" class="onboard-input"
-                                                placeholder="Type password again" minlength="6">
+                                            <input type="password" id="onboard-confirm" class="onboard-input" placeholder="Type password again" minlength="6">
                                             <span class="form-error" id="confirm-error"></span>
                                         </div>
                                     </div>
@@ -558,7 +531,7 @@
                                         <button type="button" class="btn btn-secondary" id="onboard-back-2">
                                             ← Back
                                         </button>
-                                        <button type="button" class="btn btn-primary" id="onboard-next-2" disabled>
+                                        <button type="button" class="btn btn-primary" id="onboard-next-2" disabled="">
                                             Continue →
                                         </button>
                                     </div>
@@ -585,7 +558,7 @@
                                                 </div>
                                                 <img id="preview-image" src="" alt="Preview" style="display: none;">
                                             </div>
-                                            <input type="file" id="onboard-avatar" accept="image/*" hidden>
+                                            <input type="file" id="onboard-avatar" accept="image/*" hidden="">
                                         </div>
                                         <p class="upload-hint">Optional • Max 2MB • JPG, PNG, GIF</p>
                                     </div>
@@ -689,8 +662,7 @@
                                     <form id="reset-request-form" class="auth-form">
                                         <div class="form-group">
                                             <label for="reset-request-email">Email address</label>
-                                            <input type="email" id="reset-request-email" placeholder="you@example.com"
-                                                required>
+                                            <input type="email" id="reset-request-email" placeholder="you@example.com" required="">
                                         </div>
                                         <button type="submit" class="btn btn-primary btn-block">Send reset link</button>
                                         <p class="form-hint">We'll send a link that works for 30 minutes.</p>
@@ -705,14 +677,11 @@
                                     <form id="reset-confirm-form" class="auth-form">
                                         <div class="form-group">
                                             <label for="reset-new-password">New password</label>
-                                            <input type="password" id="reset-new-password"
-                                                placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6"
-                                                maxlength="4096" required>
+                                            <input type="password" id="reset-new-password" placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6" maxlength="4096" required="">
                                         </div>
                                         <div class="form-group">
                                             <label for="reset-confirm-password">Confirm password</label>
-                                            <input type="password" id="reset-confirm-password"
-                                                placeholder="Repeat password" minlength="6" required>
+                                            <input type="password" id="reset-confirm-password" placeholder="Repeat password" minlength="6" required="">
                                         </div>
                                         <button type="submit" class="btn btn-primary btn-block">Update password</button>
                                         <div class="form-error" id="reset-confirm-status"></div>
@@ -725,8 +694,7 @@
                                             </svg></div>
                                         <h3>Password updated</h3>
                                         <p>You can now sign in with your new password.</p>
-                                        <button type="button" class="btn btn-primary btn-block"
-                                            id="reset-return-login">Return to sign in</button>
+                                        <button type="button" class="btn btn-primary btn-block" id="reset-return-login">Return to sign in</button>
                                     </div>
                                 </div>
                                 <div class="reset-footer">
@@ -770,18 +738,15 @@
                                                         Easy
                                                     </button>
                                                     <button class="diff-btn medium" data-difficulty="medium">
-                                                        <span class="diff-dot diff-dot-medium"
-                                                            aria-hidden="true"></span> Medium
+                                                        <span class="diff-dot diff-dot-medium" aria-hidden="true"></span> Medium
                                                     </button>
                                                     <button class="diff-btn hard" data-difficulty="hard">
                                                         <span class="diff-dot diff-dot-hard" aria-hidden="true"></span>
                                                         Hard
                                                     </button>
                                                 </div>
-                                                <button class="btn btn-outline btn-block" type="button"
-                                                    id="open-custom-sudoku">
-                                                    <span class="btn-icon-inline" aria-hidden="true"><svg
-                                                            class="ui-icon">
+                                                <button class="btn btn-outline btn-block" type="button" id="open-custom-sudoku">
+                                                    <span class="btn-icon-inline" aria-hidden="true"><svg class="ui-icon">
                                                             <use href="#i-gear"></use>
                                                         </svg></span>
                                                     Custom Sudoku
@@ -806,8 +771,7 @@
                                                         Create Game
                                                     </button>
                                                     <div class="join-inline">
-                                                        <input type="text" id="room-code-input" placeholder="CODE"
-                                                            maxlength="4">
+                                                        <input type="text" id="room-code-input" placeholder="CODE" maxlength="4">
                                                         <button class="btn btn-outline" id="join-room">Join</button>
                                                     </div>
                                                 </div>
@@ -869,8 +833,7 @@
                                             Friends
                                         </h3>
                                         <div class="friends-add">
-                                            <input type="text" id="friend-handle-input" class="input"
-                                                placeholder="Add by username" aria-label="Friend username">
+                                            <input type="text" id="friend-handle-input" class="input" placeholder="Add by username" aria-label="Friend username">
                                             <button class="btn btn-secondary" id="friend-add-btn">
                                                 <svg class="ui-icon" aria-hidden="true">
                                                     <use href="#i-plus"></use>
@@ -935,7 +898,7 @@
                                     <div class="room-qr" id="room-qr" style="display: none;">
                                         <div class="room-qr-title">Join by QR code</div>
                                         <div class="room-qr-body">
-                                            <img id="room-qr-img" alt="Room QR code" />
+                                            <img id="room-qr-img" alt="Room QR code">
                                             <div class="room-qr-hint">Scan to join this room on another device.</div>
                                         </div>
                                     </div>
@@ -1038,8 +1001,7 @@
                                 <div class="game-status">
                                     <span class="game-timer" id="game-timer-versus">00:00</span>
                                     <span class="game-mode-label">Versus Mode</span>
-                                    <button class="btn btn-secondary btn-sm" id="resign-btn" type="button"
-                                        title="Leave match" aria-label="Leave match">Leave</button>
+                                    <button class="btn btn-secondary btn-sm" id="resign-btn" type="button" title="Leave match" aria-label="Leave match">Leave</button>
                                 </div>
                                 <div class="player-info player-opponent">
                                     <span class="player-name" id="opponent-name">Opponent</span>
@@ -1077,8 +1039,7 @@
                                     </div>
                                     <div class="difficulty-grid">
                                         <button class="difficulty-btn btn-easy" data-difficulty="easy">Easy</button>
-                                        <button class="difficulty-btn btn-medium"
-                                            data-difficulty="medium">Medium</button>
+                                        <button class="difficulty-btn btn-medium" data-difficulty="medium">Medium</button>
                                         <button class="difficulty-btn btn-hard" data-difficulty="hard">Hard</button>
                                         <button class="difficulty-btn btn-daily" data-difficulty="daily">Daily</button>
                                     </div>
@@ -1090,28 +1051,25 @@
                                             <use href="#i-gear"></use>
                                         </svg> Settings</h3>
                                     <div class="setting-row">
-                                        <span class="setting-label"
-                                            title="Highlights invalid entries in the same row/column/box.">Highlight
+                                        <span class="setting-label" title="Highlights invalid entries in the same row/column/box.">Highlight
                                             Conflicts</span>
                                         <label class="toggle-switch">
-                                            <input type="checkbox" id="highlight-conflicts" checked>
+                                            <input type="checkbox" id="highlight-conflicts" checked="">
                                             <span class="toggle-slider"></span>
                                         </label>
                                     </div>
                                     <div class="setting-row">
-                                        <span class="setting-label"
-                                            title="Highlights cells matching the selected number.">Show Same
+                                        <span class="setting-label" title="Highlights cells matching the selected number.">Show Same
                                             Numbers</span>
                                         <label class="toggle-switch">
-                                            <input type="checkbox" id="highlight-same" checked>
+                                            <input type="checkbox" id="highlight-same" checked="">
                                             <span class="toggle-slider"></span>
                                         </label>
                                     </div>
                                     <div class="setting-row">
-                                        <span class="setting-label"
-                                            title="Checks entries as you play. Mistakes are counted.">Auto-Check</span>
+                                        <span class="setting-label" title="Checks entries as you play. Mistakes are counted.">Auto-Check</span>
                                         <label class="toggle-switch">
-                                            <input type="checkbox" id="auto-check" checked>
+                                            <input type="checkbox" id="auto-check" checked="">
                                             <span class="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -1233,8 +1191,7 @@
                             </div>
                             <div class="modal-body">
                                 <div class="result-display" id="result-display">
-                                    <div class="result-icon" id="result-icon" aria-hidden="true"><svg
-                                            class="ui-icon ui-icon-xl">
+                                    <div class="result-icon" id="result-icon" aria-hidden="true"><svg class="ui-icon ui-icon-xl">
                                             <use href="#i-trophy"></use>
                                         </svg></div>
                                     <p id="result-message">You won!</p>
@@ -1365,14 +1322,11 @@
                                 <!-- Profile Card -->
                                 <div class="profile-card-main">
                                     <div class="profile-picture-wrapper">
-                                        <img src="" alt="Profile Picture" id="profile-page-picture"
-                                            class="profile-picture">
-                                        <div class="profile-picture-placeholder" id="profile-picture-placeholder"
-                                            aria-hidden="true"><svg class="ui-icon ui-icon-xl">
+                                        <img src="" alt="Profile Picture" id="profile-page-picture" class="profile-picture">
+                                        <div class="profile-picture-placeholder" id="profile-picture-placeholder" aria-hidden="true"><svg class="ui-icon ui-icon-xl">
                                                 <use href="#i-user"></use>
                                             </svg></div>
-                                        <label class="profile-picture-edit" id="profile-picture-edit"
-                                            style="display: none;">
+                                        <label class="profile-picture-edit" id="profile-picture-edit" style="display: none;">
                                             <input type="file" accept="image/*" id="profile-picture-input">
                                             <span class="edit-icon" aria-hidden="true"><svg class="ui-icon">
                                                     <use href="#i-camera"></use>
@@ -1383,29 +1337,22 @@
                                     <div class="profile-details">
                                         <h2 id="profile-page-username">Username</h2>
                                         <p class="profile-bio" id="profile-page-bio">No bio yet...</p>
-                                        <textarea class="profile-bio-edit" id="profile-bio-input"
-                                            placeholder="Write something about yourself..." maxlength="200"
-                                            style="display: none;"></textarea>
-                                        <div class="profile-edit-fields" id="profile-edit-fields"
-                                            style="display: none;">
+                                        <textarea class="profile-bio-edit" id="profile-bio-input" placeholder="Write something about yourself..." maxlength="200" style="display: none;"></textarea>
+                                        <div class="profile-edit-fields" id="profile-edit-fields" style="display: none;">
                                             <div class="form-group">
                                                 <label for="profile-twitter">Twitter</label>
-                                                <input type="url" id="profile-twitter"
-                                                    placeholder="https://twitter.com/yourhandle">
+                                                <input type="url" id="profile-twitter" placeholder="https://twitter.com/yourhandle">
                                             </div>
                                             <div class="form-group">
                                                 <label for="profile-discord">Discord</label>
                                                 <input type="text" id="profile-discord" placeholder="username#1234">
                                             </div>
                                         </div>
-                                        <p class="profile-member-date">Member since <span
-                                                id="profile-page-member-since">---</span></p>
+                                        <p class="profile-member-date">Member since <span id="profile-page-member-since">---</span></p>
                                         <div class="profile-vanity-url" id="profile-vanity-url">
                                             <span class="vanity-label">Profile URL:</span>
                                             <a href="#" id="profile-vanity-link">stone-doku.web.app/u/username</a>
-                                            <button class="btn btn-icon btn-copy-url" id="copy-profile-url"
-                                                title="Copy URL" aria-label="Copy profile URL"><svg class="ui-icon"
-                                                    aria-hidden="true">
+                                            <button class="btn btn-icon btn-copy-url" id="copy-profile-url" title="Copy URL" aria-label="Copy profile URL"><svg class="ui-icon" aria-hidden="true">
                                                     <use href="#i-copy"></use>
                                                 </svg></button>
                                         </div>
@@ -1484,34 +1431,27 @@
 
                                 <!-- Actions for own profile -->
                                 <div class="profile-actions" id="profile-own-actions" style="display: none;">
-                                    <button class="btn btn-primary" id="edit-profile-btn"><svg class="ui-icon"
-                                            aria-hidden="true">
+                                    <button class="btn btn-primary" id="edit-profile-btn"><svg class="ui-icon" aria-hidden="true">
                                             <use href="#i-pencil"></use>
                                         </svg>Edit Profile</button>
-                                    <button class="btn btn-secondary" id="run-tour-btn" type="button"
-                                        title="Run orientation tour again"><svg class="ui-icon" aria-hidden="true">
+                                    <button class="btn btn-secondary" id="run-tour-btn" type="button" title="Run orientation tour again"><svg class="ui-icon" aria-hidden="true">
                                             <use href="#i-book"></use>
                                         </svg>Orientation</button>
-                                    <button class="btn btn-success" id="save-profile-btn" style="display: none;"><svg
-                                            class="ui-icon" aria-hidden="true">
+                                    <button class="btn btn-success" id="save-profile-btn" style="display: none;"><svg class="ui-icon" aria-hidden="true">
                                             <use href="#i-check"></use>
                                         </svg>Save Changes</button>
-                                    <button class="btn btn-secondary" id="cancel-edit-btn"
-                                        style="display: none;">Cancel</button>
+                                    <button class="btn btn-secondary" id="cancel-edit-btn" style="display: none;">Cancel</button>
                                 </div>
 
                                 <!-- Actions for other profiles -->
                                 <div class="profile-actions" id="profile-other-actions" style="display: none;">
-                                    <button class="btn btn-primary" id="profile-challenge-btn"><svg class="ui-icon"
-                                            aria-hidden="true">
+                                    <button class="btn btn-primary" id="profile-challenge-btn"><svg class="ui-icon" aria-hidden="true">
                                             <use href="#i-swords"></use>
                                         </svg><span class="btn-label">Challenge</span></button>
-                                    <button class="btn btn-secondary" id="profile-friend-btn"><svg class="ui-icon"
-                                            aria-hidden="true">
+                                    <button class="btn btn-secondary" id="profile-friend-btn"><svg class="ui-icon" aria-hidden="true">
                                             <use href="#i-users"></use>
                                         </svg><span class="btn-label">Add Friend</span></button>
-                                    <button class="btn btn-accent" id="profile-dm-btn"><svg class="ui-icon"
-                                            aria-hidden="true">
+                                    <button class="btn btn-accent" id="profile-dm-btn"><svg class="ui-icon" aria-hidden="true">
                                             <use href="#i-chat"></use>
                                         </svg><span class="btn-label">Message</span></button>
                                 </div>
@@ -1557,14 +1497,11 @@
                                     <form id="admin-allowlist-form" class="auth-form">
                                         <div class="form-group">
                                             <label for="admin-allowlist-uid">User UID</label>
-                                            <input type="text" id="admin-allowlist-uid" required autocomplete="off"
-                                                placeholder="Enter Firebase UID">
+                                            <input type="text" id="admin-allowlist-uid" required="" autocomplete="off" placeholder="Enter Firebase UID">
                                         </div>
                                         <div class="admin-form-actions inline">
-                                            <button type="button" class="btn btn-primary btn-sm"
-                                                id="admin-allowlist-add">Grant</button>
-                                            <button type="button" class="btn btn-ghost btn-sm"
-                                                id="admin-allowlist-remove">Revoke</button>
+                                            <button type="button" class="btn btn-primary btn-sm" id="admin-allowlist-add">Grant</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" id="admin-allowlist-remove">Revoke</button>
                                         </div>
                                         <div class="form-error" id="admin-allowlist-status"></div>
                                     </form>
@@ -1574,14 +1511,11 @@
                                     <p class="admin-card-subtitle">Find a user by username/@handle.</p>
                                     <div class="form-group">
                                         <label for="admin-lookup-username">Username</label>
-                                        <input type="text" id="admin-lookup-username"
-                                            placeholder="e.g. player123 or @player123" autocomplete="off">
+                                        <input type="text" id="admin-lookup-username" placeholder="e.g. player123 or @player123" autocomplete="off">
                                     </div>
                                     <div class="admin-form-actions inline">
-                                        <button type="button" class="btn btn-secondary btn-sm"
-                                            id="admin-lookup-btn">Lookup</button>
-                                        <button type="button" class="btn btn-ghost btn-sm" id="admin-lookup-copy"
-                                            disabled>Copy UID</button>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="admin-lookup-btn">Lookup</button>
+                                        <button type="button" class="btn btn-ghost btn-sm" id="admin-lookup-copy" disabled="">Copy UID</button>
                                     </div>
                                     <div class="form-error" id="admin-lookup-status"></div>
                                 </div>
@@ -1591,14 +1525,11 @@
                                     </p>
                                     <div class="form-group">
                                         <label for="admin-mod-search">Username or UID</label>
-                                        <input type="text" id="admin-mod-search" placeholder="@handle or UID"
-                                            autocomplete="off">
+                                        <input type="text" id="admin-mod-search" placeholder="@handle or UID" autocomplete="off">
                                     </div>
                                     <div class="admin-form-actions inline">
-                                        <button type="button" class="btn btn-secondary btn-sm"
-                                            id="admin-mod-search-btn">Search</button>
-                                        <button type="button" class="btn btn-ghost btn-sm"
-                                            id="admin-mod-search-clear">Clear</button>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="admin-mod-search-btn">Search</button>
+                                        <button type="button" class="btn btn-ghost btn-sm" id="admin-mod-search-clear">Clear</button>
                                     </div>
                                     <div class="form-error" id="admin-mod-search-status"></div>
                                     <div class="admin-mod-result" id="admin-mod-search-result"></div>
@@ -1609,24 +1540,17 @@
                                     <div class="moderation-grid">
                                         <div class="form-group">
                                             <label for="mod-target-uid">User UID</label>
-                                            <input type="text" id="mod-target-uid" placeholder="Target UID"
-                                                autocomplete="off">
+                                            <input type="text" id="mod-target-uid" placeholder="Target UID" autocomplete="off">
                                         </div>
                                         <div class="mod-actions">
-                                            <button type="button" class="btn btn-secondary btn-sm"
-                                                id="mod-mute">Mute</button>
-                                            <button type="button" class="btn btn-ghost btn-sm"
-                                                id="mod-unmute">Unmute</button>
-                                            <button type="button" class="btn btn-secondary btn-sm"
-                                                id="mod-block">Block</button>
-                                            <button type="button" class="btn btn-ghost btn-sm"
-                                                id="mod-unblock">Unblock</button>
+                                            <button type="button" class="btn btn-secondary btn-sm" id="mod-mute">Mute</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" id="mod-unmute">Unmute</button>
+                                            <button type="button" class="btn btn-secondary btn-sm" id="mod-block">Block</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" id="mod-unblock">Unblock</button>
                                         </div>
                                         <div class="mod-actions">
-                                            <button type="button" class="btn btn-danger btn-sm"
-                                                id="mod-clear-global">Clear Global Chat</button>
-                                            <button type="button" class="btn btn-danger btn-sm"
-                                                id="mod-clear-user-global">Clear User Messages</button>
+                                            <button type="button" class="btn btn-danger btn-sm" id="mod-clear-global">Clear Global Chat</button>
+                                            <button type="button" class="btn btn-danger btn-sm" id="mod-clear-user-global">Clear User Messages</button>
                                         </div>
                                         <div class="form-error" id="mod-status"></div>
                                     </div>
@@ -1636,19 +1560,17 @@
                                     <form id="admin-update-form" class="auth-form">
                                         <div class="form-group">
                                             <label for="admin-update-title">Title</label>
-                                            <input type="text" id="admin-update-title" required maxlength="120"
-                                                autocomplete="off">
+                                            <input type="text" id="admin-update-title" required="" maxlength="120" autocomplete="off">
                                         </div>
                                         <div class="form-group">
                                             <label for="admin-update-body">Body</label>
-                                            <textarea id="admin-update-body" rows="5" required
-                                                maxlength="1200"></textarea>
+                                            <textarea id="admin-update-body" rows="5" required="" maxlength="1200"></textarea>
                                         </div>
                                         <div class="form-group grid-2">
                                             <div>
                                                 <label for="admin-update-kind">Kind</label>
                                                 <select id="admin-update-kind">
-                                                    <option value="update" selected>Update</option>
+                                                    <option value="update" selected="">Update</option>
                                                     <option value="status">Status</option>
                                                     <option value="maintenance">Maintenance</option>
                                                 </select>
@@ -1656,7 +1578,7 @@
                                             <div>
                                                 <label for="admin-update-severity">Severity</label>
                                                 <select id="admin-update-severity">
-                                                    <option value="info" selected>Info</option>
+                                                    <option value="info" selected="">Info</option>
                                                     <option value="warn">Warn</option>
                                                     <option value="critical">Critical</option>
                                                 </select>
@@ -1664,7 +1586,7 @@
                                         </div>
                                         <div class="form-group admin-flags">
                                             <label class="setting-row checkbox-row">
-                                                <input type="checkbox" id="admin-update-banner" checked>
+                                                <input type="checkbox" id="admin-update-banner" checked="">
                                                 <span class="setting-label">Show in banner</span>
                                             </label>
                                             <label class="setting-row checkbox-row">
@@ -1703,8 +1625,7 @@
                     </div>
 
                     <!-- Custom Sudoku Modal -->
-                    <div id="custom-sudoku-modal" class="modal" style="display: none;" role="dialog" aria-modal="true"
-                        aria-labelledby="custom-sudoku-title">
+                    <div id="custom-sudoku-modal" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="custom-sudoku-title">
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h2 id="custom-sudoku-title">Custom Sudoku</h2>
@@ -1715,14 +1636,14 @@
                                         <label for="custom-difficulty">Difficulty</label>
                                         <select id="custom-difficulty">
                                             <option value="easy">Easy</option>
-                                            <option value="medium" selected>Medium</option>
+                                            <option value="medium" selected="">Medium</option>
                                             <option value="hard">Hard</option>
                                         </select>
                                     </div>
                                     <div class="form-group">
                                         <label for="custom-time-limit">Time limit</label>
                                         <select id="custom-time-limit">
-                                            <option value="0" selected>None</option>
+                                            <option value="0" selected="">None</option>
                                             <option value="300">5 minutes</option>
                                             <option value="600">10 minutes</option>
                                             <option value="900">15 minutes</option>
@@ -1733,7 +1654,7 @@
                                     <div class="form-group">
                                         <label for="custom-mistakes">Mistake limit</label>
                                         <select id="custom-mistakes">
-                                            <option value="3" selected>3 mistakes</option>
+                                            <option value="3" selected="">3 mistakes</option>
                                             <option value="5">5 mistakes</option>
                                         </select>
                                     </div>
@@ -1741,7 +1662,7 @@
                                         <label class="setting-row" style="justify-content: space-between;">
                                             <span class="setting-label">Auto-check</span>
                                             <span class="toggle-switch">
-                                                <input type="checkbox" id="custom-auto-check" checked>
+                                                <input type="checkbox" id="custom-auto-check" checked="">
                                                 <span class="toggle-slider"></span>
                                             </span>
                                         </label>
@@ -1751,10 +1672,8 @@
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button class="btn btn-primary" type="submit" form="custom-sudoku-form"
-                                    id="custom-sudoku-start">Start</button>
-                                <button class="btn btn-secondary" type="button"
-                                    id="custom-sudoku-cancel">Cancel</button>
+                                <button class="btn btn-primary" type="submit" form="custom-sudoku-form" id="custom-sudoku-start">Start</button>
+                                <button class="btn btn-secondary" type="button" id="custom-sudoku-cancel">Cancel</button>
                             </div>
                         </div>
                     </div>
@@ -1802,7 +1721,7 @@
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h2>Player Profile</h2>
-                                <button class="modal-close" id="close-profile">&times;</button>
+                                <button class="modal-close" id="close-profile">×</button>
                             </div>
                             <div class="modal-body">
                                 <div class="profile-info">
@@ -1848,32 +1767,25 @@
                 <div id="chat-widget" class="chat-widget minimized">
                     <div class="chat-widget-header" id="chat-widget-header">
                         <div class="chat-widget-tabs" id="chat-widget-tabs">
-                            <button class="widget-tab active" data-chat="global"><svg class="ui-icon"
-                                    aria-hidden="true">
+                            <button class="widget-tab active" data-chat="global"><svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-globe"></use>
                                 </svg>Global</button>
-                            <button class="widget-tab" data-chat="game" id="widget-game-tab" style="display: none;"><svg
-                                    class="ui-icon" aria-hidden="true">
+                            <button class="widget-tab" data-chat="game" id="widget-game-tab" style="display: none;"><svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-users"></use>
                                 </svg>Game</button>
-                            <button class="widget-tab" data-chat="dms" id="widget-dms-tab"><svg class="ui-icon"
-                                    aria-hidden="true">
+                            <button class="widget-tab" data-chat="dms" id="widget-dms-tab"><svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-chat"></use>
                                 </svg>DMs</button>
-                            <button class="widget-tab" data-chat="friends" id="widget-friends-tab"><svg class="ui-icon"
-                                    aria-hidden="true">
+                            <button class="widget-tab" data-chat="friends" id="widget-friends-tab"><svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-users"></use>
                                 </svg>Friends</button>
                         </div>
                         <div class="chat-widget-controls">
                             <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
-                            <button class="widget-btn" id="chat-notify-btn" title="Notification settings"
-                                aria-label="Notification settings" data-tooltip="Notifications"><svg class="ui-icon"
-                                    aria-hidden="true">
+                            <button class="widget-btn" id="chat-notify-btn" title="Notification settings" aria-label="Notification settings" data-tooltip="Notifications"><svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-gear"></use>
                                 </svg></button>
-                            <button class="widget-btn" id="chat-minimize" title="Minimize" aria-label="Minimize chat"
-                                data-tooltip="Minimize"><svg class="ui-icon" aria-hidden="true">
+                            <button class="widget-btn" id="chat-minimize" title="Minimize" aria-label="Minimize chat" data-tooltip="Minimize"><svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-minus"></use>
                                 </svg></button>
                         </div>
@@ -1882,11 +1794,11 @@
                         <div class="chat-notify-panel" id="chat-notify-panel" style="display: none;">
                             <div class="chat-notify-title">Notifications</div>
                             <div class="chat-notify-grid">
-                                <label><input type="checkbox" id="notify-global" checked> Global chat</label>
-                                <label><input type="checkbox" id="notify-game" checked> Game chat</label>
-                                <label><input type="checkbox" id="notify-dms" checked> DMs</label>
-                                <label><input type="checkbox" id="notify-sound" checked> Sound</label>
-                                <label><input type="checkbox" id="notify-badge" checked> Show badges</label>
+                                <label><input type="checkbox" id="notify-global" checked=""> Global chat</label>
+                                <label><input type="checkbox" id="notify-game" checked=""> Game chat</label>
+                                <label><input type="checkbox" id="notify-dms" checked=""> DMs</label>
+                                <label><input type="checkbox" id="notify-sound" checked=""> Sound</label>
+                                <label><input type="checkbox" id="notify-badge" checked=""> Show badges</label>
                             </div>
                         </div>
                         <!-- DM List (Conversations) -->
@@ -1895,8 +1807,7 @@
                                 <span>Direct Messages</span>
                             </div>
                             <div class="dm-quick" id="dm-quick">
-                                <input type="text" id="dm-quick-handle" class="input" placeholder="Username or @handle"
-                                    autocomplete="off">
+                                <input type="text" id="dm-quick-handle" class="input" placeholder="Username or @handle" autocomplete="off">
                                 <div class="dm-quick-actions">
                                     <button class="btn btn-secondary btn-sm" type="button" id="dm-quick-open">Open
                                         DM</button>
@@ -1970,12 +1881,9 @@
                             <span id="chat-hint-text">Tip: Use direct messages or the Friends panel to message other players</span>
                         </div>
                         <form class="chat-widget-form" id="chat-widget-form">
-                            <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle"
-                                aria-label="Emoji picker" title="Emoji">😀</button>
-                            <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200"
-                                autocomplete="off">
-                            <button type="submit" class="send-btn" aria-label="Send message"><svg class="ui-icon"
-                                    aria-hidden="true">
+                            <button type="button" class="emoji-toggle-btn" id="widget-emoji-toggle" aria-label="Emoji picker" title="Emoji">😀</button>
+                            <input type="text" id="chat-widget-input" placeholder="Type a message..." maxlength="200" autocomplete="off">
+                            <button type="submit" class="send-btn" aria-label="Send message"><svg class="ui-icon" aria-hidden="true">
                                     <use href="#i-send"></use>
                                 </svg></button>
                         </form>
@@ -1993,7 +1901,7 @@
                 <!-- Footer -->
                 <footer class="app-footer" role="contentinfo">
                     <div class="footer-content">
-                        <p>&copy; 2024 Stonedoku. Real-time competitive Sudoku.</p>
+                        <p>© 2024 Stonedoku. Real-time competitive Sudoku.</p>
                         <nav class="footer-links" aria-label="Legal links">
                             <button type="button" class="link-btn" id="privacy-link">Privacy Policy</button>
                             <span class="footer-separator">•</span>
@@ -2009,8 +1917,7 @@
             </div>
 
             <!-- Cookie Consent Banner (UK PECR Compliant) -->
-            <div id="cookie-consent" class="cookie-banner" role="dialog" aria-labelledby="cookie-title"
-                aria-describedby="cookie-desc" style="display: none;">
+            <div id="cookie-consent" class="cookie-banner" role="dialog" aria-labelledby="cookie-title" aria-describedby="cookie-desc" style="display: none;">
                 <div class="cookie-content">
                     <div class="cookie-header">
                         <span class="cookie-icon" aria-hidden="true"><svg class="ui-icon">
@@ -2022,7 +1929,7 @@
                         consent for non-essential cookies.</p>
                     <div class="cookie-options">
                         <label class="cookie-option">
-                            <input type="checkbox" id="cookie-essential" checked disabled>
+                            <input type="checkbox" id="cookie-essential" checked="" disabled="">
                             <span class="option-content">
                                 <strong>Essential</strong>
                                 <small>Required for the app to function</small>
@@ -2057,12 +1964,11 @@
             </div>
 
             <!-- Privacy Policy Modal -->
-            <div id="privacy-modal" class="legal-modal" role="dialog" aria-labelledby="privacy-title" aria-modal="true"
-                style="display: none;">
+            <div id="privacy-modal" class="legal-modal" role="dialog" aria-labelledby="privacy-title" aria-modal="true" style="display: none;">
                 <div class="legal-modal-content">
                     <div class="legal-modal-header">
                         <h1 id="privacy-title">Privacy Policy</h1>
-                        <button type="button" class="modal-close" aria-label="Close privacy policy">&times;</button>
+                        <button type="button" class="modal-close" aria-label="Close privacy policy">×</button>
                     </div>
                     <div class="legal-modal-body">
                         <p class="legal-updated">Last updated: 20 December 2024</p>
@@ -2169,7 +2075,7 @@
                         </section>
 
                         <section>
-                            <h2>10. Contact & Complaints</h2>
+                            <h2>10. Contact &amp; Complaints</h2>
                             <p>For privacy enquiries: privacy@stonedoku.com</p>
                             <p>You have the right to lodge a complaint with the Information Commissioner's Office
                                 (ICO):<br>
@@ -2181,12 +2087,11 @@
             </div>
 
             <!-- Terms of Service Modal -->
-            <div id="terms-modal" class="legal-modal" role="dialog" aria-labelledby="terms-title" aria-modal="true"
-                style="display: none;">
+            <div id="terms-modal" class="legal-modal" role="dialog" aria-labelledby="terms-title" aria-modal="true" style="display: none;">
                 <div class="legal-modal-content">
                     <div class="legal-modal-header">
                         <h1 id="terms-title">Terms of Service</h1>
-                        <button type="button" class="modal-close" aria-label="Close terms of service">&times;</button>
+                        <button type="button" class="modal-close" aria-label="Close terms of service">×</button>
                     </div>
                     <div class="legal-modal-body">
                         <p class="legal-updated">Last updated: 20 December 2024</p>
@@ -2287,12 +2192,11 @@
             </div>
 
             <!-- Cookie Policy Modal -->
-            <div id="cookies-modal" class="legal-modal" role="dialog" aria-labelledby="cookies-title" aria-modal="true"
-                style="display: none;">
+            <div id="cookies-modal" class="legal-modal" role="dialog" aria-labelledby="cookies-title" aria-modal="true" style="display: none;">
                 <div class="legal-modal-content">
                     <div class="legal-modal-header">
                         <h1 id="cookies-title">Cookie Policy</h1>
-                        <button type="button" class="modal-close" aria-label="Close cookie policy">&times;</button>
+                        <button type="button" class="modal-close" aria-label="Close cookie policy">×</button>
                     </div>
                     <div class="legal-modal-body">
                         <p class="legal-updated">Last updated: 20 December 2024</p>
@@ -2396,8 +2300,7 @@
 
                         <section>
                             <h2>6. Third-Party Cookies</h2>
-                            <p>Our service uses Firebase (Google). Google may set their own cookies. See <a
-                                    href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's
+                            <p>Our service uses Firebase (Google). Google may set their own cookies. See <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's
                                     Privacy Policy</a> for details.</p>
                         </section>
 
@@ -2415,13 +2318,11 @@
             </div>
 
             <!-- Accessibility Statement Modal -->
-            <div id="accessibility-modal" class="legal-modal" role="dialog" aria-labelledby="accessibility-title"
-                aria-modal="true" style="display: none;">
+            <div id="accessibility-modal" class="legal-modal" role="dialog" aria-labelledby="accessibility-title" aria-modal="true" style="display: none;">
                 <div class="legal-modal-content">
                     <div class="legal-modal-header">
                         <h1 id="accessibility-title">Accessibility Statement</h1>
-                        <button type="button" class="modal-close"
-                            aria-label="Close accessibility statement">&times;</button>
+                        <button type="button" class="modal-close" aria-label="Close accessibility statement">×</button>
                     </div>
                     <div class="legal-modal-body">
                         <p class="legal-updated">Last updated: 20 December 2024</p>
@@ -2490,8 +2391,7 @@
                             <h2>7. Enforcement</h2>
                             <p>If you're not satisfied with our response, you can contact the Equality Advisory Support
                                 Service (EASS):</p>
-                            <p>Website: <a href="https://www.equalityadvisoryservice.com" target="_blank"
-                                    rel="noopener">equalityadvisoryservice.com</a></p>
+                            <p>Website: <a href="https://www.equalityadvisoryservice.com" target="_blank" rel="noopener">equalityadvisoryservice.com</a></p>
                         </section>
                     </div>
                 </div>
@@ -2524,6 +2424,6 @@
             <script src="/effects.js"></script>
         </div>
     </div>
-</body>
 
-</html>
+
+</body></html>

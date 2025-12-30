@@ -173,32 +173,6 @@ const LogManager = (function(){
     };
 })();
 
-// Also capture console output into an in-memory buffer for E2E diagnostics
-try {
-    (function(){
-        const realLog = console.log.bind(console);
-        const realInfo = console.info.bind(console);
-        const realWarn = console.warn.bind(console);
-        const realError = console.error.bind(console);
-        console.log = function(...args){
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'log', args: args.map(a=>String(a)), ts: Date.now() }); } catch (e) {}
-            return realLog(...args);
-        };
-        console.info = function(...args){
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'info', args: args.map(a=>String(a)), ts: Date.now() }); } catch (e) {}
-            return realInfo(...args);
-        };
-        console.warn = function(...args){
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'warn', args: args.map(a=>String(a)), ts: Date.now() }); } catch (e) {}
-            return realWarn(...args);
-        };
-        console.error = function(...args){
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'error', args: args.map(a=>String(a)), ts: Date.now() }); } catch (e) {}
-            return realError(...args);
-        };
-    })();
-} catch (e) {}
-
 // ===========================================
 // Application State
 // ===========================================
@@ -291,14 +265,8 @@ try { window.startSinglePlayerGame = window.startSinglePlayerGame || function() 
 
 // Minimal UI stub so early code can call `UI.*` before the full `UI` helper is defined.
 if (typeof window.UI === 'undefined') {
-    // Capture toasts and console errors for e2e debugging
-    try { window._capturedToasts = window._capturedToasts || []; } catch (e) {}
-    try { window._capturedConsole = window._capturedConsole || []; } catch (e) {}
     window.UI = {
-        showToast: function(message, type) {
-            try { window._capturedToasts.push({ message: message, type: type || 'info', ts: Date.now(), stack: (new Error()).stack }); } catch (e) {}
-            try { console.log('CAPTURE_TOAST', message, type); } catch (e) {}
-        },
+        showToast: function() {},
         showStartupError: function(msg) { try { console.error('Startup error (stub):', msg); } catch(e){} }
     };
 }
@@ -1390,42 +1358,28 @@ const friendParticipants = (a, b) => [String(a), String(b)].sort();
         const reqId = friendRequestId(userId, friendId);
         const reqRef = doc(firestore, 'friendRequests', reqId);
         const participants = friendParticipants(userId, friendId);
-        try {
-            await setDoc(reqRef, {
-                status: 'accepted',
-                respondedAt: Timestamp.now(),
-                participants
-            }, { merge: true });
-        } catch (e) {
-            try { console.error('acceptFriendRequest: failed to set friendRequests doc', { userId, friendId, err: String(e) }); } catch (_) {}
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'error', msg: 'accept:setDoc', userId, friendId, error: String(e), ts: Date.now() }); } catch (_) {}
-            // Continue — do not throw so callers treat this as success where possible
-        }
+        await setDoc(reqRef, {
+            status: 'accepted',
+            respondedAt: Timestamp.now(),
+            participants
+        }, { merge: true });
 
         // Optimistic friend list update (Cloud Function also syncs).
         const userRef = doc(firestore, 'users', userId);
         const friendRef = doc(firestore, 'users', friendId);
-        try {
-            await Promise.all([
-                updateDoc(userRef, { friends: arrayUnion(friendId) }),
-                updateDoc(friendRef, { friends: arrayUnion(userId) })
-            ]);
-        } catch (e) {
-            try { console.error('acceptFriendRequest: failed to update user friend lists', { userId, friendId, err: String(e) }); } catch (_) {}
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'error', msg: 'accept:updateDoc', userId, friendId, error: String(e), ts: Date.now() }); } catch (_) {}
-            // Don't rethrow — the acceptance may still be visible via other mechanisms
-        }
-
-        	try {
-            await set(ref(rtdb, `notifications/${friendId}/friend_${userId}`), {
-                type: 'friend_accept',
-                from: userId,
-                timestamp: serverTimestamp()
-            });
-        } catch (e) {
-            try { console.debug('Friend accept notification skipped', e?.message || e); } catch (_) {}
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'debug', msg: 'accept:notification-skip', userId, friendId, error: String(e), ts: Date.now() }); } catch (_) {}
-        }
+        await Promise.all([
+            updateDoc(userRef, { friends: arrayUnion(friendId) }),
+            updateDoc(friendRef, { friends: arrayUnion(userId) })
+        ]);
+	        try {
+	            await set(ref(rtdb, `notifications/${friendId}/friend_${userId}`), {
+	                type: 'friend_accept',
+	                from: userId,
+	                timestamp: serverTimestamp()
+	            });
+	        } catch (e) {
+	            console.debug('Friend accept notification skipped', e?.message || e);
+	        }
 	    },
 
     async declineFriendRequest(userId, friendId) {

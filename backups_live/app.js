@@ -2915,7 +2915,7 @@ const TourSystem = {
         {
             target: '#chat-fab',
             title: 'Chat & Connect',
-            description: 'Use the chat to talk with other players, send whispers (@whisper username), or start direct messages.',
+            description: 'Use the chat to talk with other players or start direct messages.',
             position: 'top'
         }
     ],
@@ -3124,12 +3124,12 @@ const ChatManager = {
 
     async sendGlobalMessage(userId, displayName, text) {
         // Check for whisper command
-        if (text.startsWith('@whisper ') || text.startsWith('@w ')) {
+        if (text.startsWith('/dm ') || text.startsWith('/d ')) {
             if (!isRegisteredUser()) {
                 throw new Error('Sign in to use direct messages.');
             }
             const parts = text.match(/^@w(?:hisper)?\s+(\S+)\s+(.+)$/i);
-            if (!parts) throw new Error('Whisper format: @whisper username message');
+            if (!parts) throw new Error('Direct message format: /dm username message');
             const targetUsername = parts[1];
             const message = parts[2];
             await this.sendWhisper(userId, displayName, targetUsername, message);
@@ -6197,7 +6197,7 @@ function initFloatingChat() {
 
     if (!widget || !fab) return;
 
-    // Suggestion popup for @whisper username autocomplete
+    // Suggestion popup for whisper username autocomplete
     const suggestionBox = document.createElement('div');
     suggestionBox.id = 'chat-suggestion-box';
     suggestionBox.style.position = 'fixed';
@@ -6720,7 +6720,7 @@ function initFloatingChat() {
 	            }
 	            setChatHint('Sign in to start direct messages.');
         } else {
-            setChatHint('Tip: Use @whisper username message to send private messages');
+            setChatHint('Tip: Use direct messages to send private messages');
         }
     }
 
@@ -7396,7 +7396,7 @@ function initFloatingChat() {
                 alert('Messaging is disabled for your account. Please contact an administrator.');
                 return;
             }
-            if ((text.startsWith('@whisper ') || text.startsWith('@w ')) && !dmEnabled) {
+            if ((text.startsWith('/dm ') || text.startsWith('/d ')) && !dmEnabled) {
                 alert('Sign in to use direct messages.');
                 return;
             }
@@ -7435,12 +7435,12 @@ function initFloatingChat() {
         }
     });
 
-    // Autocomplete whisper command: @whi -> @whisper
+    // Autocomplete deprecated whisper command to /dm
     input?.addEventListener('input', (e) => {
         if (!dmEnabled) return;
         const val = e.target.value;
         if (/^@whi(?!s)/i.test(val)) {
-            e.target.value = val.replace(/^@whi/i, '@whisper');
+            e.target.value = val.replace(/^@whi/i, '/dm');
         }
     });
     
