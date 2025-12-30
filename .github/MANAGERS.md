@@ -1,72 +1,72 @@
 # Stonedoku Manager Index
 
-This document provides an index of the "manager" objects found in `app.js`. These managers encapsulate specific domains of functionality within the application. Before adding new features, consult this list to see if existing managers can be extended. If a new domain of functionality is required, create a new manager and add it to this index.
+This document indexes the primary "manager" objects and domain modules implemented in `app.js`. It is intended as a quick reference for contributors and AI agents working on the codebase. Keep this file up to date when adding or significantly changing a manager.
 
-## Existing Managers
-
-### `AudioManager`
-- **Purpose:** Manages all audio-related features.
-- **Functionality:** Uses the Web Audio API to play sound effects for various game events like filling a cell, errors, correct moves, victory, and defeat. It can be globally enabled or disabled via `AppState.soundEnabled`.
-
-### `SudokuGenerator`
-- **Purpose:** Handles the creation and solving of Sudoku puzzles.
-- **Functionality:** Generates complete, valid Sudoku grids and creates puzzles of varying difficulty (easy, medium, hard) by removing cells from a solved grid.
-
-### `ProfanityFilter`
-- **Purpose:** Provides basic filtering for user-generated text.
-- **Functionality:** A simple, client-side filter that replaces a predefined list of inappropriate words in chat messages with asterisks.
+## Managers (current)
 
 ### `ViewManager`
-- **Purpose:** Controls the visibility of different UI sections (views).
-- **Functionality:** Manages the single-page application (SPA) flow by showing and hiding different views like `auth`, `lobby`, and `game`.
+- **Purpose:** Controls which SPA view is visible (`auth`, `lobby`, `game`, etc.).
+- **Key responsibilities:** Show/hide views, route-like navigation, and coordinate view-level lifecycle (mount/unmount) handlers.
+
+### `AppState` (global state container)
+- **Purpose:** Holds application state used across managers (currentUser, currentView, friends, listeners, settings, etc.).
 
 ### `LogManager`
-- **Purpose:** Centralized client-side logging to Firestore.
-- **Functionality:** Persists client `debug`, `info`, `warn`, and `error` messages into the `clientLogs` collection in Firestore and suppresses verbose console output in production-like environments.
-
-### `OnboardingSystem`
-- **Purpose:** Multi-step user signup/onboarding flow.
-- **Functionality:** Controls the onboarding UI steps for username, email/password, and profile picture; validates inputs and creates the user profile.
-
-### `CreativeFeatures`
-- **Purpose:** Cosmetic UI enhancements for gameplay.
-- **Functionality:** Confetti, streak indicators, and micro-animations for completed rows/columns/boxes.
-
-### `PresenceSystem`
-- **Purpose:** Manages user online status and activity.
-- **Functionality:** Uses Firebase Realtime Database's `.info/connected` feature to track a user's online status. It updates a user's presence in the `presence/` path of the RTDB, indicating their current activity (e.g., "In Lobby").
+- **Purpose:** Centralized client-side logging and diagnostics.
+- **Key responsibilities:** Override console methods, capture logs into `window._capturedConsole`, and persist logs to Firestore `clientLogs` when permitted.
 
 ### `ProfileManager`
-- **Purpose:** Manages persistent user data in Firestore.
-- **Functionality:** Creates and updates user profiles, tracks statistics (wins/losses), and awards badges based on achievements. All data is stored in the `users` collection in Firestore.
+- **Purpose:** CRUD and helper operations for user profiles stored in Firestore (`users` collection).
+- **Key responsibilities:** Create/update profiles, check username availability, manage friendships (send/accept/decline), and load friend/profile data.
+
+### `FriendsPanel` (Friends UI)
+- **Purpose:** UI manager for displaying friends, incoming requests, and friend actions.
+- **Key responsibilities:** Render friend list, handle accept/decline actions, and refresh friend state.
+
+### `PresenceSystem`
+- **Purpose:** Track online presence and current activity via the RTDB `presence/` path.
+- **Key responsibilities:** Manage `.info/connected` listeners, write presence status, and clear presence on disconnect.
 
 ### `LobbyManager`
-- **Purpose:** Manages the creation and state of game lobbies.
-- **Functionality:** Handles creating unique rooms, joining rooms, setting player ready status, and managing lobby-specific chat. It uses the `lobbies/` path in the RTDB.
+- **Purpose:** Manage lobby creation and state in the RTDB (`lobbies/`).
+- **Key responsibilities:** Create/join lobbies, maintain player lists and ready status, and coordinate match start.
 
 ### `MatchManager`
-- **Purpose:** Manages the state and logic of an active 1v1 Sudoku match.
-- **Functionality:** Creates new matches, handles player moves, validates them against the solution, updates scores and mistakes, and determines the win/loss condition. It uses the `matches/` path in the RTDB.
+- **Purpose:** Manage active match lifecycle and game rules for 1v1 matches.
+- **Key responsibilities:** Create matches in RTDB (`matches/`), apply moves, scorekeeping, mistake limits, and determining match end.
 
 ### `ChatManager`
-- **Purpose:** Manages global and in-game chat functionality.
-- **Functionality:** Sends and receives chat messages for both the global chat and specific game matches, leveraging the RTDB for real-time communication.
+- **Purpose:** Global and in-match chat messaging via RTDB.
+- **Key responsibilities:** Post/read chat messages, moderate message display, and plug into UI chat widgets.
 
-### `ChallengeSystem`
-- **Purpose:** Handles player-to-player challenge notifications and acceptance flows.
-- **Functionality:** Sends challenge notifications via RTDB (`notifications/`), listens for incoming notifications, and accepts/declines challenges by creating rooms or removing notifications.
+### `ChallengeSystem` / `Notification` handlers
+- **Purpose:** Send and process direct notifications (challenge invites, friend notifications) using RTDB `notifications/`.
+- **Key responsibilities:** Post notifications, listen for them via `onChildAdded`, and handle accept/decline flows including creating rooms and cleaning up notifications.
 
-### `UI` (UI Helpers)
-- **Purpose:** Centralized DOM helpers and small UI affordances used across views.
-- **Functionality:** Renders player lists and mini-profiles, positions tooltips, formats times, updates badges/stats, and provides utilities like `escapeHtml` and hover handlers.
+### `OnboardingSystem`
+- **Purpose:** Multi-step signup and onboarding helper.
+- **Key responsibilities:** Validate username, collect email/password and profile data, and create the corresponding Firestore records.
 
-### `GameHelpers`
-- **Purpose:** Small game-related utilities used by the UI.
-- **Functionality:** Counts placed numbers, updates remaining counts/progress/mistakes display, highlights conflicts/same numbers, manages move history and undo.
+### `UI` (helpers)
+- **Purpose:** Reusable DOM utilities and small UI affordances used across views.
+- **Key responsibilities:** `showToast`, `escapeHtml`, small render helpers, and common formatting utilities.
 
-### `GameUI`
-- **Purpose:** Render and interact with the Sudoku board and cells.
-- **Functionality:** Creates the 9x9 grid, manages ARIA attributes for accessibility, renders puzzles (single-player vs board state), handles cell selection, and processes numeric input (delegating validation to the `MatchManager` in versus mode).
+### `AudioManager`
+- **Purpose:** Play audio cues for game events.
 
-### Notes
-- Before implementing new functionality, consult this `MANAGERS.md` to see whether an existing manager covers the domain. If adding or significantly changing a manager, update this file immediately.
+### `SudokuGenerator`
+- **Purpose:** Create and solve Sudoku puzzles for different difficulties.
+
+### `ProfanityFilter`
+- **Purpose:** Client-side filtering for user-generated text (basic replacement).
+
+### `GameHelpers` & `GameUI`
+- **Purpose:** Helpers and UI rendering for the Sudoku board.
+- **Key responsibilities:** Render grid, handle cell selection/input, maintain move history, update remaining counts, and highlight conflicts.
+
+### `CreativeFeatures`
+- **Purpose:** Cosmetic UI features (confetti, streaks, micro-animations).
+
+## Notes and contributor guidance
+- This file should reflect the managers implemented in `app.js`. If you add or rename a manager, update this document.
+- Prefer adding new domain logic as a manager object to keep `app.js` organized. Keep each manager focused and well-documented.
