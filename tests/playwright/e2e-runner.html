@@ -188,7 +188,7 @@ window.e2e = {
       const payload = Object.assign({}, data || {}, { _e2e: true });
       // Ensure usernameLower mapping for quick lookup in tests
       if (payload.username) payload.usernameLower = String(payload.username).toLowerCase();
-      await setDoc(doc(firestore, 'users', uid), payload);
+      await setDoc(doc(firestore, 'users', uid), payload, { merge: true });
       try {
         if (payload.usernameLower) {
           await setDoc(doc(firestore, 'usernames', payload.usernameLower), { userId: uid });

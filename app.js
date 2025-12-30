@@ -1405,15 +1405,15 @@ const friendParticipants = (a, b) => [String(a), String(b)].sort();
         // Optimistic friend list update (Cloud Function also syncs).
         const userRef = doc(firestore, 'users', userId);
         const friendRef = doc(firestore, 'users', friendId);
+        // Update only the accepting user's doc client-side. Writing to another user's
+        // document from this client can violate security rules (and is unnecessary
+        // because a Cloud Function will sync the reciprocal relationship).
         try {
-            await Promise.all([
-                updateDoc(userRef, { friends: arrayUnion(friendId) }),
-                updateDoc(friendRef, { friends: arrayUnion(userId) })
-            ]);
+            await updateDoc(userRef, { friends: arrayUnion(friendId) });
         } catch (e) {
-            try { console.error('acceptFriendRequest: failed to update user friend lists', { userId, friendId, err: String(e) }); } catch (_) {}
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'error', msg: 'accept:updateDoc', userId, friendId, error: String(e), ts: Date.now() }); } catch (_) {}
-            // Don't rethrow — the acceptance may still be visible via other mechanisms
+            try { console.error('acceptFriendRequest: failed to update user friend list', { userId, friendId, err: String(e) }); } catch (_) {}
+            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'error', msg: 'accept:updateUser', userId, friendId, error: String(e), ts: Date.now() }); } catch (_) {}
+            // Don't rethrow — acceptance may still be visible via other mechanisms
         }
 
         	try {
