@@ -1,0 +1,131 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - link "Skip to game board" [ref=e3] [cursor=pointer]:
+    - /url: "#sudoku-board"
+  - generic [ref=e5]:
+    - application "Stonedoku Game" [ref=e6]:
+      - banner [ref=e7]:
+        - generic [ref=e8]:
+          - heading "Stonedoku" [level=1] [ref=e10] [cursor=pointer]
+          - navigation [ref=e11]:
+            - text: Menu
+            - button "Toggle theme" [ref=e12] [cursor=pointer]:
+              - img [ref=e14]
+              - text: "Theme: Light"
+            - button "Toggle sound" [pressed] [ref=e16] [cursor=pointer]:
+              - img [ref=e18]
+              - text: "Sound: On"
+            - generic "Header menu" [ref=e20]:
+              - text: Profile
+              - button "Open updates feed" [ref=e21] [cursor=pointer]:
+                - img [ref=e22]
+                - text: Updates
+      - region "Community updates" [ref=e24]:
+        - generic [ref=e25]:
+          - img [ref=e27]
+          - generic [ref=e29]:
+            - generic [ref=e30]: Update
+            - generic [ref=e31]: Updates to the app are ongoing
+          - generic [ref=e32]:
+            - button "All updates" [ref=e33] [cursor=pointer]
+            - button "Expand update" [ref=e34] [cursor=pointer]:
+              - img [ref=e35]
+            - button "Dismiss update" [ref=e37] [cursor=pointer]:
+              - img [ref=e38]
+      - main [ref=e40]:
+        - generic [ref=e42]:
+          - generic [ref=e43]:
+            - generic [ref=e44]:
+              - generic [ref=e45]:
+                - img [ref=e47]
+                - generic [ref=e49]: Real-time multiplayer
+              - heading "Master Sudoku Challenge Friends" [level=1] [ref=e50]:
+                - text: Master Sudoku
+                - text: Challenge Friends
+              - paragraph [ref=e51]: The classic puzzle game, reimagined for competitive play. Race against friends in real-time 1v1 battles.
+              - generic [ref=e52]:
+                - generic [ref=e53]:
+                  - img [ref=e55]
+                  - generic [ref=e57]: Solo & Versus Modes
+                - generic [ref=e58]:
+                  - img [ref=e60]
+                  - generic [ref=e62]: Track Your Progress
+                - generic [ref=e63]:
+                  - img [ref=e65]
+                  - generic [ref=e67]: Earn Achievements
+            - generic [ref=e69]:
+              - generic [ref=e70]: "5"
+              - generic [ref=e72]: "3"
+              - generic [ref=e74]: "7"
+              - generic [ref=e77]: "9"
+              - generic [ref=e78]: "1"
+          - generic [ref=e79]:
+            - generic [ref=e80]:
+              - heading "Get Started" [level=2] [ref=e81]
+              - paragraph [ref=e82]: Sign in to save progress & play online
+            - generic [ref=e83]:
+              - button "Sign In" [ref=e84] [cursor=pointer]
+              - button "Sign Up" [ref=e85] [cursor=pointer]
+            - generic [ref=e86]:
+              - generic [ref=e87]:
+                - generic [ref=e88]:
+                  - generic [ref=e89]: Email
+                  - textbox "Email" [ref=e90]:
+                    - /placeholder: you@example.com
+                - generic [ref=e91]:
+                  - generic [ref=e92]: Password
+                  - textbox "Password" [ref=e93]:
+                    - /placeholder: ••••••••
+                - button "Forgot password?" [ref=e95] [cursor=pointer]
+                - button "Sign In" [ref=e96] [cursor=pointer]
+              - generic [ref=e98]: or continue with
+              - button "Play as Guest" [ref=e99] [cursor=pointer]:
+                - img [ref=e101]
+                - text: Play as Guest
+              - paragraph [ref=e103]: No account needed • Progress saved locally
+      - text: Notifications Minimize Chat
+      - contentinfo [ref=e104]:
+        - generic [ref=e105]:
+          - paragraph [ref=e106]: © 2024 Stonedoku. Real-time competitive Sudoku.
+          - navigation "Legal links" [ref=e107]:
+            - button "Privacy Policy" [ref=e108] [cursor=pointer]
+            - generic [ref=e109]: •
+            - button "Terms of Service" [ref=e110] [cursor=pointer]
+            - generic [ref=e111]: •
+            - button "Cookie Policy" [ref=e112] [cursor=pointer]
+            - generic [ref=e113]: •
+            - button "Accessibility" [ref=e114] [cursor=pointer]
+          - paragraph [ref=e115]: Made in the UK 🇬🇧
+    - dialog "Cookie Preferences" [ref=e116]:
+      - generic [ref=e117]:
+        - generic [ref=e118]:
+          - img [ref=e120]
+          - heading "Cookie Preferences" [level=2] [ref=e122]
+        - paragraph [ref=e123]: We use cookies to enhance your experience. Under UK law (PECR), we need your consent for non-essential cookies.
+        - generic [ref=e124]:
+          - generic [ref=e125] [cursor=pointer]:
+            - checkbox "Essential Required for the app to function" [checked] [disabled] [ref=e126]
+            - generic [ref=e127]:
+              - strong [ref=e128]: Essential
+              - generic [ref=e129]: Required for the app to function
+          - generic [ref=e130] [cursor=pointer]:
+            - checkbox "Analytics Help us improve by tracking usage" [ref=e131]
+            - generic [ref=e132]:
+              - strong [ref=e133]: Analytics
+              - generic [ref=e134]: Help us improve by tracking usage
+          - generic [ref=e135] [cursor=pointer]:
+            - checkbox "Preferences Remember your settings" [ref=e136]
+            - generic [ref=e137]:
+              - strong [ref=e138]: Preferences
+              - generic [ref=e139]: Remember your settings
+        - generic [ref=e140]:
+          - button "Accept All" [active] [ref=e141] [cursor=pointer]
+          - button "Accept Selected" [ref=e142] [cursor=pointer]
+          - button "Essential Only" [ref=e143] [cursor=pointer]
+        - paragraph [ref=e144]:
+          - button "Learn more about our cookies" [ref=e145] [cursor=pointer]
+```

@@ -48,6 +48,16 @@ test('create two users and make them friends (backend)', async ({ browser }) => 
     catch (e) { return { __error: e && e.message ? e.message : String(e) }; }
   }, { uid: uidA, username: usernameA, displayName: nameA, email: emailA });
 
+  // Wait for profile to be resolvable and visible
+  try {
+    await pageA.waitForFunction(async (uid) => {
+      try {
+        const p = await window.e2e.getProfile(uid);
+        return !!(p && (p.friends || p.username || p.usernameLower));
+      } catch (e) { return false; }
+    }, uidA, { timeout: 10000 });
+  } catch (e) { /* ignore */ }
+
   // Create second user on pageB
   // Ensure pageB is online before sign-up
   await pageB.evaluate(async () => { try { return await window.e2e.ensureOnline(); } catch (e) { return { __error: e && e.message ? e.message : String(e) }; } });
@@ -68,6 +78,15 @@ test('create two users and make them friends (backend)', async ({ browser }) => 
     catch (e) { return { __error: e && e.message ? e.message : String(e) }; }
   }, { uid: uidB, username: usernameB, displayName: nameB, email: emailB });
 
+  try {
+    await pageB.waitForFunction(async (uid) => {
+      try {
+        const p = await window.e2e.getProfile(uid);
+        return !!(p && (p.friends || p.username || p.usernameLower));
+      } catch (e) { return false; }
+    }, uidB, { timeout: 10000 });
+  } catch (e) { /* ignore */ }
+
   // Read back profiles
   // Ensure online before reading profiles (createProfile may quiet connections)
   // Ensure both pages are online
@@ -84,6 +103,25 @@ test('create two users and make them friends (backend)', async ({ browser }) => 
     try { return await window.e2e.createProfile(data.uidB, { friends: [data.uidA] }); }
     catch (e) { return { __error: e && e.message ? e.message : String(e) }; }
   }, { uidA, uidB });
+
+  // Wait/poll until both profiles reflect the friendship (allow eventual consistency)
+  try {
+    await pageA.waitForFunction(async (a,b) => {
+      try {
+        const p = await window.e2e.getProfile(a);
+        return !!(p && Array.isArray(p.friends) && p.friends.includes(b));
+      } catch (e) { return false; }
+    }, uidA, uidB, { timeout: 10000 });
+  } catch (e) { /* ignore */ }
+
+  try {
+    await pageB.waitForFunction(async (a,b) => {
+      try {
+        const p = await window.e2e.getProfile(b);
+        return !!(p && Array.isArray(p.friends) && p.friends.includes(a));
+      } catch (e) { return false; }
+    }, uidA, uidB, { timeout: 10000 });
+  } catch (e) { /* ignore */ }
 
   // Read back profiles from their respective pages
   const finalA = await pageA.evaluate(async (uid) => { try { return await window.e2e.getProfile(uid); } catch (e) { return { __error: e && e.message ? e.message : String(e) }; } }, uidA);
@@ -114,6 +152,10 @@ test('create two users and make them friends (backend)', async ({ browser }) => 
   const bData = b || {};
   const aFriends = Array.isArray(aData.friends) ? aData.friends : [];
   const bFriends = Array.isArray(bData.friends) ? bData.friends : [];
+
+  // Dump captured logs before assertions so we have artifacts even if assertions fail
+  try { await dumpCapturedLogs(pageA, 'pageA'); } catch (e) {}
+  try { await dumpCapturedLogs(pageB, 'pageB'); } catch (e) {}
 
   expect(aFriends).toContain(uidB);
   expect(bFriends).toContain(uidA);

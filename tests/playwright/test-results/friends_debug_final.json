@@ -1,16 +1,17 @@
 {
-  "uidA": "VQE3XeCq65fx9lHO3M2HKCeKGDA2",
-  "uidB": "SpnaV7TPd6QwxH8v7HYh82BuI6q1",
+  "uidA": "2xOls8p1SAWrUHNbQ3aRFNZj8og1",
+  "uidB": "wi74OCTtLza9ilUZVXmgzVIonnD2",
   "a": {
+    "usernameLower": "e2e_a_1767127046422",
     "_e2e": true,
-    "friends": [
-      "SpnaV7TPd6QwxH8v7HYh82BuI6q1"
-    ]
+    "displayName": "E2E-A-1767127046422",
+    "username": "e2e_a_1767127046422",
+    "email": "e2e_a_1767127046422@example.com"
   },
   "b": {
-    "_e2e": true,
     "friends": [
-      "VQE3XeCq65fx9lHO3M2HKCeKGDA2"
-    ]
+      "2xOls8p1SAWrUHNbQ3aRFNZj8og1"
+    ],
+    "_e2e": true
   }
 }

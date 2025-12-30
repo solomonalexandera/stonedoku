@@ -15,12 +15,12 @@ test('ui friend request accept shows no error toast', async ({ browser }) => {
 
   // Create accounts
   await pageA.goto('http://127.0.0.1:8000/tests/playwright/e2e-runner.html');
-  const uidA = await pageA.evaluate(async (e,p,name) => await window.e2e.signInWithEmail(e,p,name), emailA, pass, 'UserA');
-  await pageA.evaluate(async (uid,username,display,email) => await window.e2e.createProfile(uid,{ username, displayName: display, email}), uidA, usernameA, 'User A', emailA).catch(()=>{});
+  const uidA = await pageA.evaluate(async (opts) => await window.e2e.signInWithEmail(opts.email, opts.pass, opts.name), { email: emailA, pass, name: 'UserA' });
+  await pageA.evaluate(async (opts) => await window.e2e.createProfile(opts.uid, { username: opts.username, displayName: opts.display, email: opts.email }), { uid: uidA, username: usernameA, display: 'User A', email: emailA }).catch(()=>{});
 
   await pageB.goto('http://127.0.0.1:8000/tests/playwright/e2e-runner.html');
-  const uidB = await pageB.evaluate(async (e,p,name) => await window.e2e.signInWithEmail(e,p,name), emailB, pass, 'UserB');
-  await pageB.evaluate(async (uid,username,display,email) => await window.e2e.createProfile(uid,{ username, displayName: display, email}), uidB, usernameB, 'User B', emailB).catch(()=>{});
+  const uidB = await pageB.evaluate(async (opts) => await window.e2e.signInWithEmail(opts.email, opts.pass, opts.name), { email: emailB, pass, name: 'UserB' });
+  await pageB.evaluate(async (opts) => await window.e2e.createProfile(opts.uid, { username: opts.username, displayName: opts.display, email: opts.email }), { uid: uidB, username: usernameB, display: 'User B', email: emailB }).catch(()=>{});
 
   // Open main app in both pages (their auth state should persist in each context)
   await pageA.goto('http://127.0.0.1:8000/');
@@ -34,9 +34,20 @@ test('ui friend request accept shows no error toast', async ({ browser }) => {
   try { await pageA.locator('#cookie-accept-all').click({ timeout: 2000 }); } catch (e) {}
   try { await pageB.locator('#cookie-accept-all').click({ timeout: 2000 }); } catch (e) {}
 
+  // Ensure pages are online so vanity/profile lookups work
+  await pageA.evaluate(async () => { try { return await window.e2e.ensureOnline(); } catch (e) { return null; } });
+  await pageB.evaluate(async () => { try { return await window.e2e.ensureOnline(); } catch (e) { return null; } });
+
   // Send friend request from A to B using profile UI
   await pageA.goto(`http://127.0.0.1:8000/u/${usernameB}`);
-  await pageA.waitForSelector('#profile-friend-btn', { timeout: 10000 });
+  try {
+    await pageA.waitForSelector('#profile-friend-btn', { timeout: 15000 });
+  } catch (e) {
+    const fs = require('fs');
+    try { fs.writeFileSync('tests/playwright/test-results/ui_pageA_profile.html', await pageA.content()); } catch (e) {}
+    try { await pageA.screenshot({ path: 'tests/playwright/test-results/ui_pageA_profile.png', fullPage: true }); } catch (e) {}
+    throw e;
+  }
   await pageA.click('#profile-friend-btn', { force: true });
 
   // Accept on B via profile

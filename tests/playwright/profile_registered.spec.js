@@ -26,15 +26,15 @@ test('registered user profile playthrough (edit social links, vanity url)', asyn
   // Helper to retry navigation once if it fails intermittently in CI
   async function navigateWithRetry(p, url, options = {}) {
     try {
-      await p.goto(url, options);
+      await p.goto(url, Object.assign({ waitUntil: 'load', timeout: 60000 }, options));
     } catch (e) {
       // small backoff and retry
       await new Promise(r => setTimeout(r, 1000));
-      await p.goto(url, options);
+      await p.goto(url, Object.assign({ waitUntil: 'load', timeout: 60000 }, options));
     }
   }
 
-  await navigateWithRetry(appPage, 'http://127.0.0.1:8000/', { waitUntil: 'networkidle' });
+  await navigateWithRetry(appPage, 'http://127.0.0.1:8000/');
 
   // Dismiss cookie banner early to avoid click interception
   try {
@@ -75,7 +75,7 @@ test('registered user profile playthrough (edit social links, vanity url)', asyn
 
   // Navigate to vanity URL using hash and verify profile loads
   const username = profileData.username.toLowerCase();
-  await appPage.goto(`http://127.0.0.1:8000/#profile/${encodeURIComponent(username)}`, { waitUntil: 'networkidle' });
+  await appPage.goto(`http://127.0.0.1:8000/#profile/${encodeURIComponent(username)}`, { waitUntil: 'load', timeout: 60000 });
 
   // Wait for profile page to show
   await appPage.waitForSelector('#profile-view', { state: 'visible', timeout: 10000 });

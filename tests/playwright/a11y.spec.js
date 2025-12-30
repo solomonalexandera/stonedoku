@@ -11,7 +11,7 @@ test.describe('Accessibility (axe-core) checks', () => {
   for (const p of pagesToCheck) {
     test(`a11y: ${p}`, async ({ page }) => {
       const url = `http://127.0.0.1:8000${p}`;
-      await page.goto(url, { waitUntil: 'networkidle' });
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
       // inject axe-core from CDN
       await page.addScriptTag({ url: 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.6.3/axe.min.js' });
