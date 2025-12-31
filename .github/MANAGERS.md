@@ -44,10 +44,12 @@ This document indexes the primary "manager" objects and domain modules implement
 ### `ChatManager`
 - **Purpose:** Global and in-match chat messaging via RTDB.
 - **Key responsibilities:** Post/read chat messages, moderate message display, and plug into UI chat widgets.
+- **Location:** `src/client/managers/chatManager.js` (factory `createChatManager`, instance created in `app.js`).
 
-### `ChallengeSystem` / `Notification` handlers
+### `ChallengeManager` / `Notification` handlers
 - **Purpose:** Send and process direct notifications (challenge invites, friend notifications) using RTDB `notifications/`.
 - **Key responsibilities:** Post notifications, listen for them via `onChildAdded`, and handle accept/decline flows including creating rooms and cleaning up notifications.
+- **Location:** `src/client/managers/challengeManager.js` (factory `createChallengeManager`, instance created in `app.js`).
 
 ### `OnboardingSystem`
 - **Purpose:** Multi-step signup and onboarding helper.

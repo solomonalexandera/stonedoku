@@ -25,7 +25,7 @@ export function createUIHelpers({
     ViewManager = globalThis.ViewManager,
     ProfileManager = globalThis.ProfileManager,
     FriendsManager = globalThis.FriendsManager,
-    ChallengeSystem = () => globalThis.ChallengeSystem,
+    ChallengeManager = () => globalThis.ChallengeManager,
     BadgeInfo = defaultBadgeInfo,
     isRegisteredUser = globalThis.isRegisteredUser,
     getCurrentDisplayName = globalThis.getCurrentDisplayName,
@@ -33,9 +33,9 @@ export function createUIHelpers({
     ref = globalThis.ref,
     get = globalThis.get
 } = {}) {
-    const resolveChallengeSystem = typeof ChallengeSystem === 'function'
-        ? ChallengeSystem
-        : () => ChallengeSystem;
+    const resolveChallengeManager = typeof ChallengeManager === 'function'
+        ? ChallengeManager
+        : () => ChallengeManager;
     const badgeInfo = BadgeInfo || defaultBadgeInfo;
     const ui = {
         badgeInfo,
@@ -165,7 +165,7 @@ export function createUIHelpers({
             const challengeBtn = document.getElementById('challenge-player');
             if (challengeBtn) {
                 challengeBtn.onclick = async () => {
-                    const cs = resolveChallengeSystem();
+                    const cs = resolveChallengeManager();
                     if (cs?.sendChallenge && AppState.currentUser) {
                         await cs.sendChallenge(AppState.currentUser.uid, getCurrentDisplayName?.(), userId);
                         ViewManager?.hideModal?.('profile-modal');

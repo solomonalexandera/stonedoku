@@ -12,9 +12,6 @@ This directory contains high-level "manager" modules that encapsulate major doma
 - Add an export for new managers to `index.js`.
 
 ## Inventory
-- `audioManager.js` – shared audio cues.
-- `logManager.js` – console override and Firestore logging helper (factory: `createLogManager`).
+- `chatManager.js` – global chat, DMs, and in-match chat helpers (factory: `createChatManager`).
+- `challengeManager.js` – challenge notification send/accept/decline flows (factory: `createChallengeManager`).
 - `profileManager.js` – user profiles, vanity usernames, badges, avatars, and friend relationships (factory: `createProfileManager`).
-- `friendsManager.js` – lobby friends UI rendering backed by ProfileManager (factory: `createFriendsManager`).
-- `lobbyManager.js` – lobby creation/join/leave, readiness, and chat helpers (factory: `createLobbyManager`).
-- `matchManager.js` – 1v1 match lifecycle and RTDB board state (factory: `createMatchManager`).

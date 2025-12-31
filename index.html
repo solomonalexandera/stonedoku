@@ -2520,8 +2520,32 @@
                 });
             </script>
             <!-- Firebase SDK bootstrapping (entry must run before app.js) -->
-            <script type="module" src="/src/client/entry.js"></script>
-            <script type="module" src="/app.js?v=20251221D"></script>
+            <script type="module">
+                const VERSION_TAG = '20251231A';
+                const useBundle = !window.location.search.includes('nobundle=1');
+                const entryUrl = `/src/client/entry.js?v=${VERSION_TAG}`;
+                const appUrl = `/app.js?v=${VERSION_TAG}`;
+                const bundleUrl = `/dist/app.bundle.js?v=${VERSION_TAG}`;
+
+                (async () => {
+                    try {
+                        await import(entryUrl);
+                        if (useBundle) {
+                            try {
+                                await import(bundleUrl);
+                            } catch (err) {
+                                console.warn('Bundle load failed, falling back to app.js', err);
+                                await import(appUrl);
+                            }
+                        } else {
+                            await import(appUrl);
+                        }
+                    } catch (err) {
+                        console.error('Failed to bootstrap Stonedoku', err);
+                        throw err;
+                    }
+                })();
+            </script>
             <script src="/effects.js"></script>
         </div>
     </div>

@@ -21,7 +21,7 @@ This file is intended as a compact default context for AI agents working on the 
 - `LobbyManager`: RTDB lobby management.
 - `MatchManager`: RTDB match lifecycle and game rules.
 - `ChatManager`: Global/in-match chat via RTDB.
-- `ChallengeSystem` / Notification handlers: Send/process direct notifications.
+- `ChallengeManager` / Notification handlers: Send/process direct notifications.
 - `OnboardingSystem`: Signup/onboarding helpers.
 - `UI`: Shared DOM helpers and small UI affordances.
 - `AudioManager`, `SudokuGenerator`, `ProfanityFilter`, `GameHelpers`, `GameUI`, `CreativeFeatures`.

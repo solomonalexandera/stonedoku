@@ -4,6 +4,8 @@ export { AudioManager } from './audioManager.js';
 export { createLogManager } from './logManager.js';
 export { createProfileManager, friendRequestId, friendParticipants } from './profileManager.js';
 export { createFriendsManager } from './friendsManager.js';
+export { createChatManager } from './chatManager.js';
 export { createLobbyManager } from './lobbyManager.js';
 export { createMatchManager } from './matchManager.js';
 export { createPresenceManager } from './presenceManager.js';
+export { createChallengeManager } from './challengeManager.js';

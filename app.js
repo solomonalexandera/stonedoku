@@ -73,15 +73,9 @@ import {
     uploadBytes,
     getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
-import {
-    createFriendsManager,
-    createLobbyManager,
-    createMatchManager,
-    createPresenceManager,
-    createProfileManager
-} from './src/client/managers/index.js';
-import { createLogManager } from './src/client/managers/logManager.js';
-import { BoardIntegritySystem, createGameHelpers, createGameUI, createUIHelpers } from './src/client/ui/index.js';
+import { createPresenceManager } from './src/client/managers/presenceManager.js';
+import { createProfileManager } from './src/client/managers/profileManager.js';
+import { createFriendsManager } from './src/client/managers/friendsManager.js';
 
 // ===========================================
 // Firebase Configuration
@@ -217,7 +211,70 @@ ensureAppVersionFresh();
 // Writes debug/info/error logs to Firestore `clientLogs` collection.
 // Overrides console methods so logs are persisted and removed from console output.
 // ==========================
-const LogManager = createLogManager(firestore, () => window.AppState);
+const LogManager = (function(){
+    const orig = {
+        log: console.log.bind(console),
+        info: console.info.bind(console),
+        warn: console.warn.bind(console),
+        error: console.error.bind(console)
+    };
+
+    let disabled = false;
+    function hasAnalyticsConsent() {
+        try {
+            const raw = localStorage.getItem('stonedoku_cookie_consent');
+            if (!raw) return false;
+            const parsed = JSON.parse(raw);
+            return !!parsed?.analytics;
+        } catch {
+            return false;
+        }
+    }
+    async function writeToFirestore(level, args) {
+        if (disabled) return;
+        if (!hasAnalyticsConsent()) return;
+        if (!window.AppState || !window.AppState.currentUser) return;
+        try {
+            // Build a compact message and optional meta payload
+            const message = args.map(a => {
+                try { return typeof a === 'string' ? a : JSON.stringify(a); } catch(e) { return String(a); }
+            }).join(' ');
+
+            const meta = { src: 'client', href: window.location.href };
+
+            await addDoc(collection(firestore, 'clientLogs'), {
+                level: level,
+                message: message,
+                meta: meta,
+                createdAt: Timestamp.now()
+            });
+        } catch (e) {
+            // If permission errors occur, disable future writes to avoid spamming
+            try {
+                orig.error('LogManager write failed:', e);
+            } catch (_) {}
+            if (e && (e.code === 'permission-denied' || String(e).includes('Missing or insufficient permissions'))) {
+                disabled = true;
+            } else {
+                disabled = true;
+            }
+        }
+    }
+
+    // Override console methods to mirror logs locally and (when signed-in) to Firestore.
+    console.log = (...args) => { orig.log(...args); writeToFirestore('debug', args); };
+    console.info = (...args) => { orig.info(...args); writeToFirestore('info', args); };
+    console.warn = (...args) => { orig.warn(...args); writeToFirestore('warn', args); };
+    console.error = (...args) => { orig.error(...args); writeToFirestore('error', args); };
+
+    return {
+        _orig: orig,
+        log: (...args) => writeToFirestore('debug', args),
+        info: (...args) => writeToFirestore('info', args),
+        warn: (...args) => writeToFirestore('warn', args),
+        error: (...args) => writeToFirestore('error', args)
+    };
+})();
 
 // ===========================================
 // Application State
@@ -304,10 +361,6 @@ const AppState = {
     },
     moderationChatNotified: false
 };
-
-// Instantiate modular game helpers using shared AppState and BoardIntegritySystem.
-const GameHelpers = createGameHelpers({ AppState, BoardIntegritySystem });
-window.GameHelpers = GameHelpers;
 
 function setModerationState(partial = {}, { notify = true } = {}) {
     const prevMuted = !!AppState.moderation.muted;
@@ -872,12 +925,12 @@ const ArchitecturalStateSystem = {
 	};
 
 // ===========================================
-// Presence Manager
+// Presence System
 // ===========================================
-const PresenceManager = createPresenceManager({ rtdb, appState: AppState });
+const PresenceSystem = createPresenceManager({ rtdb, appState: AppState });
 
 // ===========================================
-// User Profile Manager (modular)
+// User Profile Manager
 // ===========================================
 const ProfileManager = createProfileManager({
     firestore,
@@ -890,9 +943,9 @@ const ProfileManager = createProfileManager({
 });
 
 // ===========================================
-// Friends Manager (modular)
+// Friends Panel (Lobby)
 // ===========================================
-const FriendsManager = createFriendsManager({
+const FriendsPanel = createFriendsManager({
     firestore,
     profileManager: ProfileManager,
     appState: AppState,
@@ -902,20 +955,554 @@ const FriendsManager = createFriendsManager({
 });
 
 // ===========================================
-// Lobby Manager (modular)
+// Lobby/Room Manager
 // ===========================================
-const LobbyManager = createLobbyManager({
-    rtdb,
-    appState: AppState
-});
+const LobbyManager = {
+    generateRoomCode() {
+        return Math.floor(1000 + Math.random() * 9000).toString();
+    },
+    
+    async createRoom(userId, displayName) {
+        let code = this.generateRoomCode();
+        let attempts = 0;
+        
+        // Ensure unique code
+        while (attempts < 10) {
+            const roomRef = ref(rtdb, `lobbies/${code}`);
+            const snapshot = await get(roomRef);
+            
+            if (!snapshot.exists()) {
+                await set(roomRef, {
+                    code: code,
+                    host: userId,
+                    hostName: displayName,
+                    players: {
+                        [userId]: {
+                            name: displayName,
+                            ready: false,
+                            joinedAt: serverTimestamp()
+                        }
+                    },
+                    status: 'waiting',
+                    createdAt: serverTimestamp(),
+                    chat: {}
+                });
+                
+                return code;
+            }
+            
+            code = this.generateRoomCode();
+            attempts++;
+        }
+        
+        throw new Error('Could not generate unique room code');
+    },
+    
+    async joinRoom(code, userId, displayName) {
+        console.log('LobbyManager.joinRoom called with:', { code, userId, displayName });
+        const roomRef = ref(rtdb, `lobbies/${code}`);
+        const snapshot = await get(roomRef);
+        
+        console.log('Room snapshot exists:', snapshot.exists());
+        
+        if (!snapshot.exists()) {
+            throw new Error('Room not found');
+        }
+        
+        const room = snapshot.val();
+        console.log('Room data:', room);
+        
+        if (room.status !== 'waiting') {
+            throw new Error('Game already started');
+        }
+        
+        const playerCount = Object.keys(room.players || {}).length;
+        console.log('Player count in room:', playerCount);
+        
+        if (playerCount >= 2) {
+            throw new Error('Room is full');
+        }
+        
+        // Add player to room (not ready yet)
+        await update(ref(rtdb, `lobbies/${code}/players`), {
+            [userId]: {
+                name: displayName,
+                ready: false,
+                joinedAt: serverTimestamp()
+            }
+        });
+        
+        console.log('Player added to room successfully');
+        return room;
+    },
+    
+    // Set player ready status
+    async setReady(code, userId, isReady) {
+        console.log('Setting ready status:', { code, userId, isReady });
+        await update(ref(rtdb, `lobbies/${code}/players/${userId}`), {
+            ready: isReady
+        });
+    },
+    
+    // Send chat message to lobby
+    async sendLobbyChat(code, userId, displayName, text) {
+        const chatRef = ref(rtdb, `lobbies/${code}/chat`);
+        const newMsgRef = push(chatRef);
+        await set(newMsgRef, {
+            userId: userId,
+            displayName: displayName,
+            text: text,
+            timestamp: serverTimestamp()
+        });
+    },
+    
+    // Listen to lobby chat
+    listenToLobbyChat(code, callback) {
+        const chatRef = ref(rtdb, `lobbies/${code}/chat`);
+        const listener = onValue(chatRef, (snapshot) => {
+            const messages = [];
+            snapshot.forEach(child => {
+                messages.push({ id: child.key, ...child.val() });
+            });
+            callback(messages);
+        });
+        AppState.listeners.push({ ref: chatRef, callback: listener });
+        return listener;
+    },
+    
+    async leaveRoom(code, userId) {
+        const roomRef = ref(rtdb, `lobbies/${code}`);
+        const snapshot = await get(roomRef);
+        
+        if (snapshot.exists()) {
+            const room = snapshot.val();
+            
+            // If host leaves, delete room
+            if (room.host === userId) {
+                await remove(roomRef);
+            } else {
+                // Remove player from room
+                await remove(ref(rtdb, `lobbies/${code}/players/${userId}`));
+            }
+        }
+    },
+    
+    listenToRoom(code, callback) {
+        const roomRef = ref(rtdb, `lobbies/${code}`);
+        const listener = onValue(roomRef, (snapshot) => {
+            callback(snapshot.val());
+        });
+        AppState.listeners.push({ ref: roomRef, callback: listener });
+        return listener;
+    }
+};
 
 // ===========================================
-// Match Manager (modular)
+// Match Manager (1v1 Gameplay)
 // ===========================================
-const MatchManager = createMatchManager({
-    rtdb,
-    appState: AppState
-});
+const MatchManager = {
+    async createMatch(roomCode, players, puzzle, solution) {
+        const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const playerIds = Object.keys(players);
+        
+        console.log('Creating match:', { matchId, roomCode, playerIds });
+        
+        // Create board state (flatten for easier updates)
+        const boardState = {};
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                const cellId = `${row}_${col}`;
+                boardState[cellId] = {
+                    value: puzzle[row][col],
+                    given: puzzle[row][col] !== 0,
+                    filledBy: null
+                };
+            }
+        }
+        
+        // Convert playerIds array to object for proper security rules
+        const playerIdsObject = {};
+        playerIds.forEach(id => playerIdsObject[id] = true);
+        
+        const matchData = {
+            id: matchId,
+            roomCode: roomCode,
+            players: players,
+            playerIds: playerIdsObject,
+            scores: {
+                [playerIds[0]]: 0,
+                [playerIds[1]]: 0
+            },
+            mistakes: {
+                [playerIds[0]]: 0,
+                [playerIds[1]]: 0
+            },
+            maxMistakes: 3,
+            board: boardState,
+            solution: solution.flat(), // Store flat solution for validation
+            status: 'active',
+            startedAt: serverTimestamp(),
+            winner: null,
+            winReason: null
+        };
+        
+        console.log('Match data prepared, writing to RTDB...');
+        
+        try {
+            await set(ref(rtdb, `matches/${matchId}`), matchData);
+            console.log('Match created successfully:', matchId);
+        } catch (error) {
+            console.error('Failed to create match:', error);
+            throw error;
+        }
+        
+        // Update room status
+        await update(ref(rtdb, `lobbies/${roomCode}`), {
+            status: 'playing',
+            matchId: matchId
+        });
+        
+        console.log('Room updated with matchId');
+        
+        return matchId;
+    },
+    
+    async makeMove(matchId, userId, row, col, value) {
+        const cellRef = ref(rtdb, `matches/${matchId}/board/${row}_${col}`);
+        const matchRef = ref(rtdb, `matches/${matchId}`);
+        
+        console.log('makeMove called:', { matchId, userId, row, col, value });
+        
+        try {
+            // Get match data first to check solution
+            const matchSnapshot = await get(matchRef);
+            const match = matchSnapshot.val();
+            
+            // Ensure the acting user is a participant in this match
+            const participants = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds || [];
+            if (!participants.includes(userId)) {
+                console.warn('makeMove rejected: user is not a participant of match', { userId, participants });
+                return { success: false, reason: 'Not a participant' };
+            }
+
+            if (!match || !match.solution) {
+                console.error('Match data invalid:', match);
+                return { success: false, reason: 'Match data invalid' };
+            }
+            
+            // Get current cell data to check if it exists
+            const cellSnapshot = await get(cellRef);
+            const cellData = cellSnapshot.val();
+            
+            console.log('Current cell data:', JSON.stringify(cellData));
+            
+            if (!cellData) {
+                console.error('Cell data not found - match may not exist');
+                return { success: false, reason: 'Match not found' };
+            }
+            
+            // Cell is a given (pre-filled)
+            if (cellData.given === true) {
+                console.log('Cell is a given number');
+                return { success: false, reason: 'Cell is given' };
+            }
+            
+            // Cell already filled by a player - check for truthy filledBy (not null/undefined)
+            if (cellData.filledBy) {
+                console.log('Cell already filled by:', cellData.filledBy);
+                return { success: false, reason: 'Cell already filled' };
+            }
+            
+            // Check if the guess is correct BEFORE writing to database
+            const cellIndex = row * 9 + col;
+            const isCorrect = match.solution[cellIndex] === value;
+            
+            console.log('Move result:', { isCorrect, solutionValue: match.solution[cellIndex], userValue: value });
+            
+            if (isCorrect) {
+                // Correct guess - write to database
+                await update(cellRef, {
+                    value: value,
+                    filledBy: userId
+                });
+                
+                // Update score
+                const newScore = (match.scores?.[userId] || 0) + 1;
+                await update(ref(rtdb, `matches/${matchId}/scores`), {
+                    [userId]: newScore
+                });
+                
+                // Check win condition (board complete)
+                await this.checkWinCondition(matchId);
+            } else {
+                // Wrong guess - increment mistakes (only for acting user)
+                const currentMistakes = (match.mistakes?.[userId] || 0) + 1;
+                console.log('About to record mistake', { matchId, userId, currentMistakes, previousMistakes: match.mistakes });
+                await update(ref(rtdb, `matches/${matchId}/mistakes`), {
+                    [userId]: currentMistakes
+                });
+                console.log('Mistake recorded:', { matchId, userId, currentMistakes, maxMistakes: match.maxMistakes || 3 });
+                
+                // Check if player has lost (3 mistakes)
+                if (currentMistakes >= (match.maxMistakes || 3)) {
+                    await this.endMatchByMistakes(matchId, userId);
+                    return { success: true, correct: false, gameOver: true, reason: 'mistakes' };
+                }
+            }
+            
+            return { success: true, correct: isCorrect, mistakes: match.mistakes?.[userId] || 0 };
+        } catch (error) {
+            console.error('makeMove error:', error);
+            return { success: false, reason: error.message };
+        }
+    },
+    
+    // Clear a cell after a wrong guess
+    async clearCell(matchId, row, col) {
+        const cellRef = ref(rtdb, `matches/${matchId}/board/${row}_${col}`);
+        
+        try {
+            await update(cellRef, {
+                value: 0,
+                filledBy: null
+            });
+            console.log('Cell cleared:', row, col);
+            return { success: true };
+        } catch (error) {
+            console.error('Clear cell error:', error);
+            return { success: false, reason: error.message };
+        }
+    },
+    
+    // End match when a player runs out of lives
+    async endMatchByMistakes(matchId, losingPlayerId) {
+        const matchRef = ref(rtdb, `matches/${matchId}`);
+        const snapshot = await get(matchRef);
+        const match = snapshot.val();
+        
+        if (!match || match.status !== 'active') return;
+        
+        // Find the winning player (the one who didn't lose)
+        const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds;
+        console.log('endMatchByMistakes invoked', { matchId, losingPlayerId, playerIds, matchMistakes: match.mistakes });
+        const winningPlayerId = playerIds.find(id => id !== losingPlayerId);
+        
+        console.log('Match ended by mistakes:', { losingPlayerId, winningPlayerId });
+        
+        await update(matchRef, {
+            status: 'finished',
+            winner: winningPlayerId,
+            winReason: 'opponent_mistakes',
+            finishedAt: serverTimestamp()
+        });
+    },
+    
+    async checkWinCondition(matchId) {
+        const matchRef = ref(rtdb, `matches/${matchId}`);
+        const snapshot = await get(matchRef);
+        const match = snapshot.val();
+        
+        if (!match || match.status !== 'active') return;
+        
+        // Convert playerIds object to array
+        const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds;
+        
+        // Check if board is complete
+        const board = match.board;
+        let filledCells = 0;
+        let correctCells = 0;
+        
+        for (const cellId in board) {
+            if (board[cellId].value !== 0) {
+                filledCells++;
+                // Check if the cell is correct
+                const [row, col] = cellId.split('_').map(Number);
+                const cellIndex = row * 9 + col;
+                if (match.solution[cellIndex] === board[cellId].value) {
+                    correctCells++;
+                }
+            }
+        }
+        
+        // Win condition: board is completely and correctly filled
+        if (correctCells === 81) {
+            const scores = match.scores;
+            let winner;
+            if (scores[playerIds[0]] > scores[playerIds[1]]) {
+                winner = playerIds[0];
+            } else if (scores[playerIds[1]] > scores[playerIds[0]]) {
+                winner = playerIds[1];
+            } else {
+                winner = 'tie';
+            }
+            
+            await update(matchRef, {
+                status: 'finished',
+                winner: winner,
+                winReason: 'board_complete',
+                finishedAt: serverTimestamp()
+            });
+        }
+    },
+    
+    listenToMatch(matchId, callback) {
+        console.log('Setting up match listener for:', matchId);
+        const matchRef = ref(rtdb, `matches/${matchId}`);
+        const listener = onValue(matchRef, (snapshot) => {
+            const data = snapshot.val();
+            console.log('Match update received:', data ? 'data present' : 'null');
+            if (data) {
+                console.log('Match status:', data.status, 'Board cells:', Object.keys(data.board || {}).length);
+            }
+            callback(data);
+        }, (error) => {
+            console.error('Match listener error:', error);
+        });
+        AppState.listeners.push({ ref: matchRef, callback: listener });
+        return listener;
+    },
+    
+    // Monitor opponent presence during a match with proper idle detection
+    startOpponentPresenceMonitor(matchId, opponentId, onDisconnect) {
+        console.log('Starting opponent presence monitor for:', opponentId);
+        
+        const opponentPresenceRef = ref(rtdb, `presence/${opponentId}`);
+        // Store timers so we can cancel if opponent returns
+        AppState.opponentDisconnectTimers = AppState.opponentDisconnectTimers || {};
+
+        const listener = onValue(opponentPresenceRef, (snapshot) => {
+            const presenceData = snapshot.val();
+            console.log('Opponent presence update:', presenceData);
+
+            // If opponent is online, clear any pending disconnect timer
+            if (presenceData && presenceData.status === 'online') {
+                const existing = AppState.opponentDisconnectTimers[opponentId];
+                if (existing) {
+                    clearTimeout(existing);
+                    delete AppState.opponentDisconnectTimers[opponentId];
+                    console.log('Cleared pending disconnect timer for opponent');
+                }
+                return;
+            }
+
+            // Opponent appears offline or presence missing — start a cancellable grace timer
+            console.log('Opponent appears offline, starting grace timeout...');
+            const graceMs = 30000; // 30s grace period
+            const timerId = setTimeout(() => {
+                console.log('Opponent disconnect timeout reached, invoking onDisconnect');
+                delete AppState.opponentDisconnectTimers[opponentId];
+                try {
+                    onDisconnect();
+                } catch (e) {
+                    console.error('onDisconnect handler threw:', e);
+                }
+            }, graceMs);
+
+            // Replace any existing timer
+            if (AppState.opponentDisconnectTimers[opponentId]) {
+                clearTimeout(AppState.opponentDisconnectTimers[opponentId]);
+            }
+            AppState.opponentDisconnectTimers[opponentId] = timerId;
+        });
+        
+        AppState.listeners.push({ 
+            ref: opponentPresenceRef, 
+            callback: listener
+        });
+        
+        return listener;
+    },
+    
+    // Handle when opponent disconnects
+    async handleOpponentDisconnect(matchId, currentUserId) {
+        const matchRef = ref(rtdb, `matches/${matchId}`);
+        
+        try {
+            const snapshot = await get(matchRef);
+            const match = snapshot.val();
+            
+            if (!match || match.status !== 'active') {
+                console.log('Match already ended or invalid');
+                return;
+            }
+            
+            // The remaining player wins by forfeit
+            await update(matchRef, {
+                status: 'finished',
+                winner: currentUserId,
+                finishedAt: serverTimestamp(),
+                endReason: 'opponent_disconnect'
+            });
+            
+            console.log('Match ended due to opponent disconnect');
+        } catch (error) {
+            console.error('Error handling opponent disconnect:', error);
+        }
+    },
+    
+    // Set up activity heartbeat for current player in a match
+    async setupMatchHeartbeat(matchId, userId) {
+        const matchActivityRef = ref(rtdb, `matches/${matchId}/activity/${userId}`);
+        
+        // Set initial activity
+        await set(matchActivityRef, {
+            lastActive: serverTimestamp(),
+            online: true
+        });
+        
+        // Update activity every 15 seconds
+        const heartbeatInterval = setInterval(async () => {
+            if (AppState.currentMatch !== matchId) {
+                clearInterval(heartbeatInterval);
+                return;
+            }
+            
+            try {
+                await update(matchActivityRef, {
+                    lastActive: serverTimestamp()
+                });
+            } catch (error) {
+                console.error('Heartbeat update failed:', error);
+            }
+        }, 15000);
+        
+        // Set up onDisconnect to mark player as offline
+        onDisconnect(matchActivityRef).update({
+            online: false,
+            disconnectedAt: serverTimestamp()
+        });
+        
+        return heartbeatInterval;
+    },
+
+    async endMatch(matchId) {
+        await update(ref(rtdb, `matches/${matchId}`), {
+            status: 'finished',
+            finishedAt: serverTimestamp()
+        });
+    }
+    ,
+
+    async resignMatch(matchId, userId) {
+        if (!matchId || !userId) return;
+        const matchRef = ref(rtdb, `matches/${matchId}`);
+        const snapshot = await get(matchRef);
+        const match = snapshot.val();
+        if (!match || match.status !== 'active') return;
+
+        const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds || [];
+        const opponentId = playerIds.find((id) => id !== userId);
+        if (!opponentId) return;
+
+        await update(matchRef, {
+            status: 'finished',
+            winner: opponentId,
+            finishedAt: serverTimestamp(),
+            winReason: 'resign',
+            resignedBy: userId
+        });
+    }
+};
 
 // Global cleanup after a match (hoisted so other modules can call it)
 async function cleanupAfterMatch() {
@@ -1058,305 +1645,288 @@ async function cleanupAfterMatch() {
             
             // Update error messages
             document.getElementById('email-error').textContent = 
-                handleGameCellClick(row, col) {
-                    // This function is still used by multiplayer code
-                    console.log('handleGameCellClick called', row, col);
-                    const cell = document.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
-                    if (!cell) return;
-
-                    const isGiven = cell.classList.contains('given');
-                    if (isGiven) return;
-
-                    const num = AppState.puzzle?.[row]?.[col] || 0;
-
-                    GameUI.selectCell(row, col);
-
-                    GameHelpers.highlightSameNumbers(num);
-                    GameUI.showNumberPad(row, col, isGiven, num);
-                },
-
-                handleNumberInput(num) {
-                    console.log('handleNumberInput called with', num);
-
-                    if (!AppState.selectedCell) return;
-                    const { row, col } = AppState.selectedCell;
-
-                    const cell = document.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
-                    if (!cell) return;
-
-                    // Don't allow input if the cell is a given in single player mode
-                    const isGiven = cell.classList.contains('given');
-                    if (isGiven && AppState.gameMode === 'single') return;
-
-                    // In single player mode, cannot overwrite a given
-                    if (AppState.gameMode === 'single' && AppState.originalPuzzle?.[row]?.[col] !== 0) {
-                        return;
-                    }
-
-                    // In versus mode, validate based on board state
-                    if (AppState.gameMode === 'versus') {
-                        const board = AppState.versusBoard;
-                        const cellData = board?.[`${row}_${col}`];
-                        if (!cellData) return;
-                        if (cellData.given) return;
-                        if (cellData.filledBy && cellData.filledBy !== AppState.currentUser?.uid) return;
-                    }
-
-                    if (AppState.notesMode) {
-                        GameUI.addNote(row, col, num);
-                        return;
-                    }
-
-                    const oldValue = AppState.puzzle[row][col];
-                    const valueEl = cell.querySelector('.cell-value');
-
-                    // In 1v1: just place the number, RTDB validator handles correctness
-                    if (AppState.gameMode === 'versus') {
-                        this.placeVersusNumber(row, col, num);
-                        return;
-                    }
-
-                    if (num === 0) {
-                        // Clear the cell
-                        GameHelpers.addToHistory(row, col, oldValue, 0);
-                        AppState.puzzle[row][col] = 0;
-                        if (valueEl) valueEl.textContent = '';
-                        else cell.textContent = '';
-                        cell.classList.remove('error', 'correct');
-                        GameHelpers.updateRemainingCounts();
-                        GameHelpers.updateProgress();
-                        GameHelpers.consumeEraseIfNeeded(oldValue !== 0);
-                        return;
-                    }
-
-                    const isCorrect = AppState.solution[row][col] === num;
-
-                    GameHelpers.addToHistory(row, col, oldValue, num);
-                    AppState.puzzle[row][col] = num;
-
-                    if (valueEl) valueEl.textContent = num;
-                    else cell.textContent = num;
-
-                    if (isCorrect) {
-                        cell.classList.add('correct');
-                        cell.classList.remove('error');
-                    } else {
-                        cell.classList.add('error');
-                        cell.classList.remove('correct');
-                        AppState.mistakes++;
-                        GameHelpers.updateMistakesDisplay();
-                        if (AppState.mistakes >= AppState.maxMistakes) {
-                            GameUI.endGame(false);
-                            return;
-                        }
-                    }
-
-                    GameHelpers.highlightConflicts(row, col, num);
-                    GameHelpers.highlightSameNumbers(num);
-                    GameHelpers.updateRemainingCounts();
-                    GameHelpers.updateProgress();
-                    BoardIntegritySystem.updateFromSingleState();
-                    GameUI.checkWinCondition();
-                },
-
-                placeVersusNumber(row, col, num) {
-                    const user = AppState.currentUser;
-                    if (!user || !AppState.currentLobbyId) return;
-                    const lobbyId = AppState.currentLobbyId;
-                    const gameId = AppState.activeGameId;
-                    if (!gameId) return;
-
-                    const matchStateRef = ref(db, `matches/${gameId}/state`);
-                    update(matchStateRef, {
-                        [`board/${row}_${col}`]: {
-                            value: num,
-                            given: false,
-                            filledBy: user.uid,
-                            filledAt: Date.now()
-                        }
-                    }).catch(error => {
-                        console.error('Error placing number:', error);
-                        showToast('Failed to place number');
-                    });
-                },
-
-                showNumberPad(row, col, isGiven, currentValue) {
-                    const pad = document.getElementById('number-pad');
-                    if (!pad) return;
-
-                    AppState.selectedCell = { row, col };
-
-                    pad.dataset.row = row;
-                    pad.dataset.col = col;
-
-                    // Position the pad near the cell
-                    const cell = document.querySelector(
-                        `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
-                    );
-                    if (!cell) return;
-                    const rect = cell.getBoundingClientRect();
-                    pad.style.top = `${rect.bottom + window.scrollY + 8}px`;
-                    pad.style.left = `${rect.left + window.scrollX}px`;
-
-                    pad.style.display = 'grid';
-                    if (isGiven) {
-                        pad.style.display = 'none';
-                        return;
-                    }
-
-                    // Highlight currently selected number in the pad
-                    pad.querySelectorAll('.num-btn').forEach(btn => {
-                        const num = parseInt(btn.dataset.num || '0', 10);
-                        btn.classList.toggle('selected', num === currentValue);
-                    });
-                },
-
-                addNote(row, col, num) {
-                    const key = `${row}_${col}`;
-                    if (!AppState.notes[key]) {
-                        AppState.notes[key] = new Set();
-                    }
-                    const notesSet = AppState.notes[key];
-
-                    if (notesSet.has(num)) {
-                        notesSet.delete(num);
-                    } else {
-                        notesSet.add(num);
-                    }
-
-                    const cell = document.querySelector(
-                        `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
-                    );
-                    if (!cell) return;
-
-                    const notesEl = cell.querySelector('.cell-notes');
-                    GameHelpers.renderNotesForCell(notesEl, notesSet);
-                },
-
-                updateTimerDisplay() {
-                    const timeElement = document.getElementById('game-timer');
-                    if (timeElement) {
-                        const seconds = Math.floor(AppState.gameTime / 1000);
-                        const minutes = Math.floor(seconds / 60);
-                        const remainingSeconds = seconds % 60;
-                        timeElement.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-                    }
-                },
-
-                updateVersusTimerDisplay() {
-                    const timeElement = document.getElementById('versus-timer');
-                    if (timeElement) {
-                        const totalSeconds = Math.floor(AppState.gameTime / 1000);
-                        const minutes = Math.floor(totalSeconds / 60);
-                        const seconds = totalSeconds % 60;
-                        timeElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                    }
-                },
-
-                startTimer() {
-                    if (AppState.gameMode === 'versus') {
-                        this.startVersusTimer();
-                        return;
-                    }
-                    GameUI.stopTimer();
-                    AppState.gameTime = 0;
-                    AppState.gameStartTime = Date.now();
-                    GameUI.updateTimerDisplay();
-                    AppState.timer = setInterval(() => {
-                        if (AppState.gameOver) return;
-                        AppState.gameTime = Date.now() - AppState.gameStartTime;
-                        GameUI.updateTimerDisplay();
-                    }, 1000);
-                },
-
-                stopTimer() {
-                    if (AppState.timer) {
-                        clearInterval(AppState.timer);
-                        AppState.timer = null;
-                    }
-                    if (AppState.versusTimer) {
-                        clearInterval(AppState.versusTimer);
-                        AppState.versusTimer = null;
-                    }
-                },
-
-                startVersusTimer() {
-                    GameUI.stopTimer();
-                    AppState.gameTime = 0;
-                    AppState.gameStartTime = Date.now();
-                    GameUI.updateVersusTimerDisplay();
-                    AppState.versusTimer = setInterval(() => {
-                        if (AppState.gameOver) return;
-                        AppState.gameTime = Date.now() - AppState.gameStartTime;
-                        GameUI.updateVersusTimerDisplay();
-                    }, 1000);
-                },
-
-                renderVersusBoard(boardState) {
-                    const grid = document.getElementById('sudoku-grid');
-                    if (!grid) return;
-
-                    // Update status overlay
-                    const statusEl = document.getElementById('versus-status');
-                    if (statusEl) {
-                        statusEl.textContent = AppState.gameOver ? 'Game Over' : '1v1 Match In Progress';
-                    }
-
-                    AppState.versusBoard = boardState;
-                    this.renderPuzzle(boardState?.puzzle || AppState.puzzle, boardState?.board || {});
-                },
-
-                checkWinCondition() {
-                    if (!AppState.puzzle || !AppState.solution) return;
-
-                    for (let row = 0; row < 9; row++) {
-                        for (let col = 0; col < 9; col++) {
-                            if (AppState.puzzle[row][col] !== AppState.solution[row][col]) {
-                                return;
-                            }
-                        }
-                    }
-
-                    GameUI.endGame(true);
-                },
-
-                endGame(won) {
-                    console.log('Game ended, won:', won);
-
-                    AppState.gameOver = true;
-                    GameUI.stopTimer();
-
-                    if (won) {
-                        GameUI.showWinDialog();
-                    } else {
-                        GameUI.showLossDialog();
-                    }
-                },
-
-                showWinDialog() {
-                    const dialog = document.getElementById('win-dialog');
-                    if (dialog) {
-                        dialog.style.display = 'block';
-                        dialog.setAttribute('aria-hidden', 'false');
-                        // Focus the first button for accessibility
-                        const firstBtn = dialog.querySelector('button');
-                        if (firstBtn) firstBtn.focus();
-                    }
-                },
-
-                showLossDialog() {
-                    const dialog = document.getElementById('loss-dialog');
-                    if (dialog) {
-                        dialog.style.display = 'block';
-                        dialog.setAttribute('aria-hidden', 'false');
-                        const firstBtn = dialog.querySelector('button');
-                        if (firstBtn) firstBtn.focus();
-                    }
+                email && !emailValid ? 'Please enter a valid email' : '';
+            const pwErrorEl = document.getElementById('password-error');
+            if (pwErrorEl) {
+                pwErrorEl.textContent = password ? (passwordValid ? '' : PasswordPolicy.message(password)) : '';
+            }
+            document.getElementById('confirm-error').textContent = 
+                confirm && !confirmValid ? 'Passwords do not match' : '';
+            
+            // Update password strength
+            this.updatePasswordStrength(password);
+            
+            nextBtn2.disabled = !(emailValid && passwordValid && confirmValid);
+            
+            if (emailValid && passwordValid && confirmValid) {
+                AppState.onboarding.data.email = email;
+                AppState.onboarding.data.password = password;
+            }
+        };
+        
+        emailInput?.addEventListener('input', validateStep2);
+        passwordInput?.addEventListener('input', validateStep2);
+        confirmInput?.addEventListener('input', validateStep2);
+        
+        backBtn2?.addEventListener('click', () => this.goToStep(1));
+        nextBtn2?.addEventListener('click', () => {
+            if (!nextBtn2.disabled) {
+                this.goToStep(3);
+            }
+        });
+        
+        // Step 3: Profile Picture
+        const uploadArea = document.getElementById('profile-upload-area');
+        const uploadPreview = document.getElementById('upload-preview');
+        const avatarInput = document.getElementById('onboard-avatar');
+        const previewImage = document.getElementById('preview-image');
+        const nextBtn3 = document.getElementById('onboard-next-3');
+        const skipBtn3 = document.getElementById('onboard-skip-3');
+        const backBtn3 = document.getElementById('onboard-back-3');
+        
+        uploadPreview?.addEventListener('click', () => avatarInput?.click());
+        
+        // Drag and drop
+        uploadPreview?.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadPreview.style.borderColor = 'var(--color-primary)';
+        });
+        
+        uploadPreview?.addEventListener('dragleave', () => {
+            uploadPreview.style.borderColor = '';
+        });
+        
+        uploadPreview?.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadPreview.style.borderColor = '';
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                this.handleAvatarSelect(file);
+            }
+        });
+        
+        avatarInput?.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                this.handleAvatarSelect(file);
+            }
+        });
+        
+        backBtn3?.addEventListener('click', () => this.goToStep(2));
+        skipBtn3?.addEventListener('click', () => this.createAccount());
+        nextBtn3?.addEventListener('click', () => this.createAccount());
+        
+        // Step 4: Tour
+        document.getElementById('start-tour')?.addEventListener('click', () => {
+            TourSystem.start();
+        });
+        
+        document.getElementById('skip-tour')?.addEventListener('click', () => {
+            this.complete();
+        });
+    },
+    
+    // Handle avatar file selection
+    handleAvatarSelect(file) {
+        if (file.size > 2 * 1024 * 1024) {
+            alert('Image must be less than 2MB');
+            return;
+        }
+        
+        AppState.onboarding.data.avatarFile = file;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const previewImage = document.getElementById('preview-image');
+            const placeholder = document.querySelector('.upload-placeholder');
+            const uploadPreview = document.getElementById('upload-preview');
+            
+            if (previewImage) {
+                previewImage.src = e.target.result;
+                previewImage.style.display = 'block';
+            }
+            if (placeholder) placeholder.style.display = 'none';
+            if (uploadPreview) uploadPreview.classList.add('has-image');
+        };
+        reader.readAsDataURL(file);
+    },
+    
+    // Update password strength indicator
+    updatePasswordStrength(password) {
+        const strengthBar = document.querySelector('.strength-bar');
+        const strengthText = document.querySelector('.strength-text');
+        
+        if (!strengthBar || !strengthText) return;
+        
+        let strength = 0;
+        let text = '';
+        let color = '';
+        
+        const minLen = PasswordPolicy.minLength;
+        if (password.length >= minLen) strength += 20;
+        if (/[A-Z]/.test(password)) strength += 20;
+        if (/[a-z]/.test(password)) strength += 20;
+        if (/[^A-Za-z0-9]/.test(password)) strength += 20;
+        if (password.length >= Math.max(minLen + 4, 10)) strength += 10;
+        if (/[0-9]/.test(password)) strength += 10;
+        
+        if (strength < 30) {
+            text = 'Weak';
+            color = 'var(--color-danger)';
+        } else if (strength < 60) {
+            text = 'Fair';
+            color = 'var(--color-warning)';
+        } else if (strength < 80) {
+            text = 'Good';
+            color = 'var(--color-success)';
+        } else {
+            text = 'Strong';
+            color = 'var(--color-cyan)';
+        }
+        
+        strengthBar.style.setProperty('--strength', `${strength}%`);
+        strengthBar.style.setProperty('--strength-color', color);
+        strengthText.textContent = password ? text : '';
+        strengthText.style.color = color;
+    },
+    
+    // Navigate to a specific step
+    goToStep(step) {
+        // Hide current step
+        document.querySelectorAll('.onboarding-step').forEach(el => {
+            el.classList.remove('active');
+        });
+        
+        // Show new step
+        const newStep = document.getElementById(`onboarding-step-${step}`);
+        if (newStep) {
+            newStep.classList.add('active');
+        }
+        
+        AppState.onboarding.step = step;
+        this.updateProgress();
+        
+        // Update display name on step 2
+        if (step === 2) {
+            const displayName = document.getElementById('onboard-display-name');
+            if (displayName) {
+                displayName.textContent = AppState.onboarding.data.username;
+            }
+        }
+    },
+    
+    // Update progress indicators
+    updateProgress() {
+        const currentStep = AppState.onboarding.step;
+        
+        document.querySelectorAll('.progress-step').forEach(el => {
+            const step = parseInt(el.dataset.step);
+            el.classList.remove('active', 'completed');
+            
+            if (step < currentStep) {
+                el.classList.add('completed');
+            } else if (step === currentStep) {
+                el.classList.add('active');
+            }
+        });
+    },
+    
+    // Create the account
+	    async createAccount() {
+        const { username, email, password, avatarFile } = AppState.onboarding.data;
+        
+        try {
+            // Show loading state
+            const buttons = document.querySelectorAll('#onboarding-step-3 .btn');
+            buttons.forEach(btn => btn.disabled = true);
+            
+            // Create the user account
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+            
+            // Upload avatar if provided (do this first so we have the URL)
+            let avatarUrl = null;
+            if (avatarFile) {
+                try {
+                    avatarUrl = await ProfileManager.uploadProfilePicture(user.uid, avatarFile);
+                } catch (uploadError) {
+                    console.error('Avatar upload error:', uploadError);
+                    // Continue without avatar
                 }
-            };
-            // ===========================================
-            // Event Handlers
-            // ===========================================
+            }
+            
+            // Update Firebase Auth profile with username and photo
+            await updateProfile(user, { 
+                displayName: username,
+                photoURL: avatarUrl 
+            });
+            
+            // Reserve the username in usernames collection
+	            await setDoc(doc(firestore, 'usernames', username.toLowerCase()), {
+	                userId: user.uid,
+	                createdAt: fsServerTimestamp()
+	            });
+            
+            // Create complete user profile in Firestore
+	            await setDoc(doc(firestore, 'users', user.uid), {
+	                userId: user.uid,
+	                displayName: username,
+	                username: username,
+	                usernameLower: username.toLowerCase(),
+	                email: email,
+	                profilePicture: avatarUrl,
+	                memberSince: fsServerTimestamp(),
+	                createdAt: fsServerTimestamp(),
+	                badges: [],
+	                stats: {
+	                    wins: 0,
+	                    losses: 0,
+	                    gamesPlayed: 0,
+	                    bestTime: null
+	                },
+                wins: 0,
+                losses: 0,
+                gamesPlayed: 0,
+                bio: '',
+                friends: [],
+                friendRequests: [],
+	                socialLinks: {},
+	                isPublic: true,
+	                isNewUser: true
+	            });
+
+            // Create vanity link mapping for this username (registered users only)
+	            try {
+	                await setDoc(doc(firestore, 'vanityLinks', username.toLowerCase()), {
+	                    userId: user.uid,
+	                    username: username,
+	                    path: `/u/${username.toLowerCase()}`,
+	                    createdAt: fsServerTimestamp()
+	                });
+	            } catch (e) {
+	                console.warn('Failed to create vanity link during onboarding:', e);
+	            }
+            
+            // Update AppState with user
+            AppState.currentUser = user;
+            
+            // Show success step
+            this.goToStep(4);
+            this.showConfetti();
+            
+        } catch (error) {
+            console.error('Account creation error:', error);
+            
+            // Re-enable buttons
+            const buttons = document.querySelectorAll('#onboarding-step-3 .btn');
+            buttons.forEach(btn => btn.disabled = false);
+            
+            // Show error
+            let message = 'Failed to create account. Please try again.';
+            if (error.code === 'auth/email-already-in-use') {
+                message = 'This email is already registered. Try signing in instead.';
+            } else if (error.code === 'auth/weak-password') {
+                message = PasswordPolicy.message(password) || 'Password does not meet requirements.';
             }
             alert(message);
         }
@@ -1431,8 +2001,8 @@ async function cleanupAfterMatch() {
 	            AppState.profile = profileData || null;
 	            
 	            // Use username as display name
-            const displayName = profileData?.username || profileData?.displayName || getFallbackDisplayName(user, profileData);
-            const truncatedName = displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName;
+	            const displayName = profileData?.username || profileData?.displayName || user.displayName || 'Player';
+	            const truncatedName = displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName;
 	            
 	            // Update UI
 	            document.getElementById('user-info').style.display = 'flex';
@@ -1442,7 +2012,7 @@ async function cleanupAfterMatch() {
 	            
 	            // Store friends in state
 	            AppState.friends = profileData?.friends || [];
-	            FriendsManager.render().catch(() => {});
+	            FriendsPanel.render().catch(() => {});
 	            
 	            // Update stats
 	            UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
@@ -1452,10 +2022,10 @@ async function cleanupAfterMatch() {
 	            window.ChatWidget?.setDmEnabled?.(allowDirectMessages);
 	            
 	            // Initialize presence
-	            PresenceManager.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
+	            PresenceSystem.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
 	            
 	            // Listen to online players
-	            PresenceManager.listenToOnlinePlayers((players) => {
+	            PresenceSystem.listenToOnlinePlayers((players) => {
 	                AppState.onlinePlayers = players;
 	                UI.updatePlayersList(players);
 	            });
@@ -1485,10 +2055,7 @@ async function cleanupAfterMatch() {
             if (chatFab) chatFab.style.display = 'flex';
             
             ViewManager.show('lobby');
-            PresenceManager.updateActivity('In Lobby');
-            if (AppState.pendingJoinCode) {
-                setTimeout(() => joinRoomHandler(AppState.pendingJoinCode), 50);
-            }
+            PresenceSystem.updateActivity('In Lobby');
             
         } catch (error) {
             console.error('Error completing onboarding:', error);
@@ -1700,33 +2267,33 @@ const PasswordReset = {
 const TourSystem = {
     steps: [
         {
-            target: '.sudoku-grid',
-            title: 'Guard the Grid',
-            description: 'Tap any empty cell to select it. The grid is your cathedral floor—every placement must support the structure.',
+            target: '.single-card',
+            title: 'Solo Practice',
+            description: 'Play classic Sudoku at your own pace. Choose from Easy, Medium, or Hard difficulty to sharpen your skills.',
+            position: 'right'
+        },
+        {
+            target: '.versus-card',
+            title: 'Challenge Friends',
+            description: 'Create a game room or join with a code to compete in real-time 1v1 battles. Race to fill the most cells correctly!',
             position: 'left'
         },
         {
-            target: '#number-pad',
-            title: 'Place Numbers',
-            description: 'Use the number pad to carve digits into the stone. The remaining counter shows how many of each number are left.',
+            target: '.stats-card',
+            title: 'Track Progress',
+            description: 'Your wins, losses, and win rate are tracked here. Watch yourself improve over time!',
             position: 'left'
         },
         {
-            target: '#notes-btn',
-            title: 'Sketch Notes',
-            description: 'Toggle Notes to mark possibilities in a cell. Notes keep the cathedral stable while you reason through options.',
-            position: 'left'
-        },
-        {
-            target: '#mistakes-display',
-            title: 'Mind the Integrity',
-            description: 'Each mistake weakens the structure. Watch your mistake pips here—three cracks and the board collapses.',
+            target: '.players-card',
+            title: 'See Who\'s Online',
+            description: 'View other players currently online. Click their name to see their profile or challenge them to a game.',
             position: 'left'
         },
         {
             target: '#chat-fab',
-            title: 'Share & Duel',
-            description: 'Open chat to coordinate, whisper, or DM. Share your room code or QR to invite an opponent, then defend your grid.',
+            title: 'Chat & Connect',
+            description: 'Use the chat to talk with other players or start direct messages.',
             position: 'top'
         }
     ],
@@ -1775,7 +2342,7 @@ const TourSystem = {
             this.end(false);
         });
     },
-
+    
     showStep(stepIndex) {
         const step = this.steps[stepIndex];
         if (!step) return;
@@ -1796,27 +2363,11 @@ const TourSystem = {
         // Update spotlight
         const rect = target.getBoundingClientRect();
         const padding = 10;
-
-        // Mobile-friendly fallback: if viewport is narrow, place tooltip full-width
-        const isMobile = window.innerWidth <= 640;
-        if (isMobile) {
-            // center spotlight on target but limit size to viewport
-            const w = Math.min(rect.width + padding * 2, window.innerWidth - 40);
-            const h = Math.min(rect.height + padding * 2, window.innerHeight - 160);
-            const left = Math.max(20, rect.left + rect.width / 2 - w / 2);
-            const top = Math.max(80, rect.top + rect.height / 2 - h / 2);
-            spotlight.style.left = `${left}px`;
-            spotlight.style.top = `${top}px`;
-            spotlight.style.width = `${w}px`;
-            spotlight.style.height = `${h}px`;
-            // Force tooltip to bottom for readability
-            tooltip.className = 'tour-tooltip position-bottom mobile';
-        } else {
-            spotlight.style.left = `${rect.left - padding}px`;
-            spotlight.style.top = `${rect.top - padding}px`;
-            spotlight.style.width = `${rect.width + padding * 2}px`;
-            spotlight.style.height = `${rect.height + padding * 2}px`;
-        }
+        
+        spotlight.style.left = `${rect.left - padding}px`;
+        spotlight.style.top = `${rect.top - padding}px`;
+        spotlight.style.width = `${rect.width + padding * 2}px`;
+        spotlight.style.height = `${rect.height + padding * 2}px`;
         
         // Update tooltip content
         document.getElementById('tour-title').textContent = step.title;
@@ -1889,59 +2440,6 @@ const TourSystem = {
 // ===========================================
 // Chat Manager
 // ===========================================
-// Global startup error capture and visible banner for tests
-window.__startupErrors = window.__startupErrors || [];
-window.addEventListener('error', (e) => {
-    try {
-        const msg = e && e.message ? e.message : String(e.error || e.reason || e);
-        window.__startupErrors.push(msg);
-        console.error('Startup error captured:', msg);
-        UI && UI.showStartupError && UI.showStartupError(msg);
-    } catch (_) {}
-});
-window.addEventListener('unhandledrejection', (ev) => {
-    try {
-        const msg = ev && ev.reason ? (ev.reason.message || String(ev.reason)) : 'Unhandled rejection';
-        window.__startupErrors.push(msg);
-        console.error('Unhandled rejection captured:', msg);
-        UI && UI.showStartupError && UI.showStartupError(msg);
-    } catch (_) {}
-});
-
-// Simple UI helper to show startup errors prominently so tests can see them
-if (typeof UI === 'undefined') window.UI = {};
-UI.showStartupError = UI.showStartupError || function(msg) {
-    try {
-        let el = document.getElementById('startup-error-banner');
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'startup-error-banner';
-            el.style.position = 'fixed';
-            el.style.left = '0';
-            el.style.right = '0';
-            el.style.top = '0';
-            el.style.zIndex = '99999';
-            el.style.background = 'rgba(200,50,50,0.95)';
-            el.style.color = 'white';
-            el.style.padding = '8px 12px';
-            el.style.fontFamily = 'monospace';
-            el.style.fontSize = '13px';
-            el.style.maxHeight = '120px';
-            el.style.overflow = 'auto';
-            document.body && document.body.appendChild(el);
-        }
-        el.textContent = 'Startup error: ' + msg;
-    } catch (_) {}
-};
-// Wire onboarding tutorial button (outside TourSystem to avoid syntax errors)
-document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('start-tutorial');
-    if (btn) {
-        btn.addEventListener('click', () => {
-            try { TutorialGame.start(); } catch (e) { console.warn('Failed to start tutorial', e); }
-        });
-    }
-});
 const ChatManager = {
     participantsEnsured: new Set(),
 
@@ -1960,12 +2458,6 @@ const ChatManager = {
             try {
                 await set(participantsRef, { a, b });
             } catch { /* ignore */ }
-            // Mirror participants to Firestore for security rules lookup
-            try {
-                await setDoc(doc(firestore, 'dmParticipants', dmId), { participants: [a, b] });
-            } catch (e) {
-                console.warn('Failed to write dmParticipants to Firestore', e);
-            }
             this.participantsEnsured.add(dmId);
         } catch (e) {
             console.warn('ensureDmParticipants failed', e);
@@ -2009,42 +2501,68 @@ const ChatManager = {
     },
 
     async sendGlobalMessage(userId, displayName, text) {
-        // Normal global message
+        // Check for whisper command
+        if (text.startsWith('/dm ') || text.startsWith('/d ')) {
+            if (!isRegisteredUser()) {
+                throw new Error('Sign in to use direct messages.');
+            }
+            const parts = text.match(/^@w(?:hisper)?\s+(\S+)\s+(.+)$/i);
+            if (!parts) throw new Error('Direct message format: /dm username message');
+            const targetUsername = parts[1];
+            const message = parts[2];
+            await this.sendWhisper(userId, displayName, targetUsername, message);
+            return { type: 'whisper', target: targetUsername };
+        }
         
-        // ProfanityFilter is now imported from its own module
         const filteredText = ProfanityFilter.filter(text);
         const chatRef = ref(rtdb, 'globalChat');
-
-        // Push to RTDB (legacy)
-        let pushRef = null;
-        try {
-            pushRef = await push(chatRef, {
-                userId: userId,
-                displayName: displayName,
-                text: filteredText,
-                timestamp: serverTimestamp()
-            });
-        } catch (e) {
-            console.warn('RTDB push for global chat failed', e);
-        }
-
-        // Also write to Firestore for migration / long-term storage
-        try {
-            await addDoc(collection(firestore, 'globalChat'), {
-                userId: userId,
-                displayName: displayName,
-                text: filteredText,
-                rtdbKey: pushRef?.key || null,
-                timestamp: fsServerTimestamp()
-            });
-        } catch (e) {
-            console.warn('Failed to write global chat message to Firestore', e);
-        }
-
+        
+        await push(chatRef, {
+            userId: userId,
+            displayName: displayName,
+            text: filteredText,
+            timestamp: serverTimestamp()
+        });
+        
         return { type: 'global' };
     },
     
-    // Whisper feature removed. Use direct messages / DM panel instead.
+    async sendWhisper(fromUserId, fromDisplayName, targetUsername, text) {
+        // Find target user by username
+        const targetProfile = await ProfileManager.getProfileByUsername(targetUsername);
+        if (!targetProfile) {
+            throw new Error(`User "${targetUsername}" not found`);
+        }
+        
+        const targetData = targetProfile.data() || {};
+        const targetUserId = targetData.userId;
+        const filteredText = ProfanityFilter.filter(text);
+        
+        // Create a DM conversation ID (sorted user IDs to ensure consistency)
+        const dmId = this.dmIdFor(fromUserId, targetUserId);
+        const dmRef = ref(rtdb, `directMessages/${dmId}`);
+
+        await this.ensureDmParticipants(dmId, fromUserId, targetUserId);
+        
+        await push(dmRef, {
+            from: fromUserId,
+            fromDisplayName: fromDisplayName,
+            to: targetUserId,
+            text: filteredText,
+            timestamp: serverTimestamp(),
+            read: false
+        });
+
+        await this.updateDmThreads({
+            fromUserId,
+            fromDisplayName,
+            toUserId: targetUserId,
+            toDisplayName: targetData.username || targetData.displayName || targetUsername,
+            text: filteredText
+        });
+        
+        return { dmId, targetUserId, targetUsername };
+    },
     
     async sendDirectMessage(fromUserId, fromDisplayName, toUserId, text, toDisplayName = null) {
         try {
@@ -2054,34 +2572,14 @@ const ChatManager = {
 
             await this.ensureDmParticipants(dmId, fromUserId, toUserId);
 
-            let pushRef = null;
-            try {
-                pushRef = await push(dmRef, {
-                    from: fromUserId,
-                    fromDisplayName: fromDisplayName,
-                    to: toUserId,
-                    text: filteredText,
-                    timestamp: serverTimestamp(),
-                    read: false
-                });
-            } catch (e) {
-                console.warn('RTDB push for DM failed', e);
-            }
-
-            // Mirror to Firestore
-            try {
-                await addDoc(collection(firestore, 'directMessages', dmId, 'messages'), {
-                    from: fromUserId,
-                    fromDisplayName: fromDisplayName,
-                    to: toUserId,
-                    text: filteredText,
-                    rtdbKey: pushRef?.key || null,
-                    timestamp: fsServerTimestamp(),
-                    read: false
-                });
-            } catch (e) {
-                console.warn('Failed to write DM to Firestore', e);
-            }
+            await push(dmRef, {
+                from: fromUserId,
+                fromDisplayName: fromDisplayName,
+                to: toUserId,
+                text: filteredText,
+                timestamp: serverTimestamp(),
+                read: false
+            });
 
             await this.updateDmThreads({
                 fromUserId,
@@ -2109,24 +2607,12 @@ const ChatManager = {
     
     listenToGlobalChat(callback) {
         const chatRef = ref(rtdb, 'globalChat');
-        // Load initial messages and build a seen-keys set to avoid duplicates
-        const seenKeys = new Set();
-        get(query(chatRef, limitToLast(50))).then((snapshot) => {
-            const initialMessages = [];
-            snapshot.forEach((child) => {
-                seenKeys.add(child.key);
-                initialMessages.push(child.val());
-            });
-            initialMessages.forEach(callback);
-        }).catch(e => console.warn('Failed to load initial global chat messages', e));
-
-        // Listen for new messages and skip ones we've already seen
+        
+        // Only get last 50 messages
         const listener = onChildAdded(chatRef, (snapshot) => {
-            if (seenKeys.has(snapshot.key)) return;
-            seenKeys.add(snapshot.key);
             callback(snapshot.val());
         });
-
+        
         AppState.listeners.push({ ref: chatRef, callback: listener });
         return listener;
     },
@@ -2145,7 +2631,6 @@ const ChatManager = {
     },
     
     async sendGameMessage(matchId, userId, displayName, text) {
-        // ProfanityFilter is now imported from its own module
         const filteredText = ProfanityFilter.filter(text);
         const chatRef = ref(rtdb, `matches/${matchId}/chat`);
         
@@ -2164,216 +2649,6 @@ const ChatManager = {
         });
         AppState.listeners.push({ ref: chatRef, callback: listener });
         return listener;
-    }
-};
-
-// ===========================================
-// Orientation Manager - encourage portrait on small devices
-// ===========================================
-const OrientationManager = {
-    init() {
-        try {
-            const dismissed = (() => {
-                try { return localStorage.getItem('stonedoku_orientation_dismissed') === '1'; } catch { return false; }
-            })();
-            this.dismissed = dismissed;
-        } catch { this.dismissed = false; }
-        this.checkAndShow();
-        window.addEventListener('resize', () => this.checkAndShow());
-        window.addEventListener('orientationchange', () => setTimeout(() => this.checkAndShow(), 250));
-    },
-    checkAndShow() {
-        if (this.dismissed) return;
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        const smallScreen = w <= 640;
-        const landscapeOnSmall = smallScreen && w > h;
-        const onboardingActive = !!AppState.onboarding.active;
-        // If onboarding or tour is active we should nudge users to rotate when in landscape on small screens
-        if (landscapeOnSmall) {
-            this.showOverlay(onboardingActive);
-        } else {
-            this.hideOverlay();
-        }
-    },
-    showOverlay(isOnboarding) {
-        let el = document.getElementById('orientation-overlay');
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'orientation-overlay';
-            el.className = 'orientation-overlay';
-            el.innerHTML = `
-                <div class="orientation-card">
-                    <h3>Rotate your device</h3>
-                    <p>For the best experience, rotate your phone to portrait while completing onboarding and the tour.</p>
-                    <div class="orientation-actions">
-                        <button class="btn btn-primary" id="orientation-dismiss">Continue anyway</button>
-                        <button class="btn btn-ghost" id="orientation-never">Don't show again</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(el);
-            document.getElementById('orientation-dismiss')?.addEventListener('click', () => { this.hideOverlay(); });
-            document.getElementById('orientation-never')?.addEventListener('click', () => { this.dismissed = true; try { localStorage.setItem('stonedoku_orientation_dismissed','1'); } catch{}; this.hideOverlay(); });
-        }
-        el.style.display = 'flex';
-    },
-    hideOverlay() {
-        const el = document.getElementById('orientation-overlay');
-        if (el) el.style.display = 'none';
-    }
-};
-
-// ===========================================
-// Tutorial Game - lightweight step-through tutorial
-// ===========================================
-const TutorialGame = {
-    steps: [
-        { title: 'Select a Cell', desc: 'Tap any empty cell to select it.' },
-        { title: 'Choose a Number', desc: 'Use the number pad to place a number in the selected cell.' },
-        { title: 'Use Notes', desc: 'Toggle notes to mark possibilities before committing.' },
-        { title: 'Finish', desc: 'Well done — you completed the quick tutorial.' }
-    ],
-    start() {
-        // Ensure player is registered into a lightweight tutorial mode
-        try {
-            ViewManager.show('game');
-        } catch { /* ignore */ }
-        AppState.tutorialActive = true;
-        AppState.tutorialStep = 0;
-        this.showOverlayStep(0);
-        // If running in automation or with explicit flag, auto-complete the tutorial for testing.
-        try {
-            const params = new URLSearchParams(window.location.search || '');
-            if (automationMode || params.get('autotutorial') === '1') {
-                setTimeout(() => { try { this.autoComplete(); } catch (e) { console.warn('autoComplete failed', e); } }, 400);
-            }
-        } catch (e) {}
-    },
-    showOverlayStep(idx) {
-        const step = this.steps[idx];
-        if (!step) return this.end();
-        let el = document.getElementById('tutorial-overlay');
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'tutorial-overlay';
-            el.className = 'tutorial-overlay';
-            el.innerHTML = `
-                <div class="tutorial-card">
-                    <h3 id="tutorial-title"></h3>
-                    <p id="tutorial-desc"></p>
-                    <div class="tutorial-actions">
-                        <button class="btn btn-ghost" id="tutorial-skip">Skip</button>
-                        <button class="btn btn-primary" id="tutorial-next">Next</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(el);
-            document.getElementById('tutorial-next')?.addEventListener('click', () => { this.next(); });
-            document.getElementById('tutorial-skip')?.addEventListener('click', () => { this.end(); });
-        }
-        document.getElementById('tutorial-title').textContent = step.title;
-        document.getElementById('tutorial-desc').textContent = step.desc;
-        el.style.display = 'flex';
-        // Highlight target UI when possible
-        try {
-            const target = this.steps[idx]?.target;
-            if (target) {
-                const tEl = document.querySelector(target);
-                if (tEl) {
-                    tEl.classList.add('tutorial-highlight');
-                    setTimeout(() => { try { tEl.classList.remove('tutorial-highlight'); } catch(e){} }, 2200);
-                }
-            }
-        } catch (e) {}
-        AppState.tutorialStep = idx;
-    },
-    next() {
-        const nextIdx = (AppState.tutorialStep || 0) + 1;
-        if (nextIdx >= this.steps.length) return this.end();
-        this.showOverlayStep(nextIdx);
-    },
-    async end() {
-        AppState.tutorialActive = false;
-        const el = document.getElementById('tutorial-overlay');
-        if (el) el.style.display = 'none';
-        UI.showToast('Tutorial finished.', 'success');
-
-        // Award tutorial badge for signed-in users
-        try {
-            const uid = AppState.currentUser?.uid;
-            if (uid) {
-                // Add badge to profile in Firestore (idempotent via arrayUnion in checkBadges path)
-                const profileRef = doc(firestore, 'users', uid);
-                try {
-                    await updateDoc(profileRef, { badges: arrayUnion('tutorial') });
-                } catch (e) {
-                    // If update fails (no profile), ignore
-                    console.debug('Failed to write tutorial badge', e);
-                }
-                // Record award
-                try {
-                    await addDoc(collection(firestore, 'badgeAwards'), {
-                        userId: uid,
-                        badge: 'tutorial',
-                        createdAt: Timestamp.now()
-                    });
-                } catch (e) {
-                    console.debug('Failed to record tutorial badge award', e);
-                }
-            }
-        } catch (e) {
-            console.warn('Error awarding tutorial badge', e);
-        }
-
-        // Return user to lobby
-        try { ViewManager.show('lobby'); } catch {}
-    },
-
-    // Automated completion for testing environments. Uses existing GameUI helpers.
-    async autoComplete() {
-        if (!AppState.puzzle || !AppState.solution) {
-            // Try to generate a lightweight puzzle for tutorial if missing
-            try {
-                const { puzzle, solution } = SudokuGenerator.createPuzzle('easy');
-                AppState.puzzle = puzzle;
-                AppState.solution = solution;
-                try { GameUI.renderPuzzle(puzzle); } catch (e) {}
-            } catch (e) { /* ignore */ }
-        }
-
-        // Step 0: select first editable cell
-        try {
-            outer: for (let r = 0; r < 9; r++) {
-                for (let c = 0; c < 9; c++) {
-                    const cell = document.querySelector(`.sudoku-cell[data-row="${r}"][data-col="${c}"]`);
-                    if (!cell) continue;
-                    if (cell.classList.contains('given')) continue;
-                    GameUI.selectCell(r, c);
-                    break outer;
-                }
-            }
-        } catch (e) { console.warn('autoComplete select failed', e); }
-
-        // Wait then input the correct number for selected cell
-        await new Promise(r => setTimeout(r, 300));
-        try {
-            const sel = AppState.selectedCell;
-            if (sel) {
-                const num = AppState.solution?.[sel.row]?.[sel.col] || 1;
-                GameUI.inputNumber(num);
-            }
-        } catch (e) { console.warn('autoComplete input failed', e); }
-
-        // Wait then toggle notes (step 2)
-        await new Promise(r => setTimeout(r, 420));
-        try {
-            GameHelpers.toggleNotesMode();
-            await new Promise(r => setTimeout(r, 220));
-            GameHelpers.toggleNotesMode();
-        } catch (e) { console.warn('autoComplete notes toggle failed', e); }
-
-        // Wait and then finish tutorial
-        await new Promise(r => setTimeout(r, 420));
-        try { this.end(); } catch (e) { console.warn('autoComplete end failed', e); }
     }
 };
 
@@ -2449,8 +2724,7 @@ function getCurrentDisplayName() {
     const base = profile?.username || profile?.displayName || AppState.currentUser?.displayName;
     if (base) return base;
     const uid = AppState.currentUser?.uid || '';
-    if (!uid) return AppState.currentUser?.isAnonymous ? 'guest' : 'Player';
-    return AppState.currentUser?.isAnonymous ? `guest_${uid.substring(0, 6)}` : `Player_${uid.substring(0, 6)}`;
+    return uid ? `Player_${uid.substring(0, 6)}` : 'Player';
 }
 
 async function handleChallengeNotification(otherUserId, notification) {
@@ -2482,7 +2756,7 @@ async function handleChallengeNotification(otherUserId, notification) {
             const codeEl = document.getElementById('display-room-code');
             if (codeEl) codeEl.textContent = code;
             ViewManager.show('waiting');
-            PresenceManager.updateActivity('Joining match');
+            PresenceSystem.updateActivity('Joining match');
             LobbyManager.listenToRoom(code, handleRoomUpdate);
 
             // Cleanup notifications
@@ -2511,10 +2785,10 @@ async function handleNotification(otherUserId, notification) {
 
     try {
         if (notification.type === 'friend_request') {
-            FriendsManager.refresh().catch(() => {});
+            FriendsPanel.refresh().catch(() => {});
             UI.showToast('New friend request received.', 'info');
         } else if (notification.type === 'friend_accept') {
-            FriendsManager.refresh().catch(() => {});
+            FriendsPanel.refresh().catch(() => {});
             UI.showToast('Friend request accepted.', 'success');
         } else if (notification.type === 'friend_decline') {
             UI.showToast('Friend request declined.', 'info');
@@ -2534,24 +2808,1096 @@ async function handleNotification(otherUserId, notification) {
 }
 
 // ===========================================
-// UI Helpers (modular)
+// UI Helpers
 // ===========================================
-const UI = createUIHelpers({
-    AppState,
-    ViewManager,
-    ProfileManager,
-    FriendsManager,
-    ChallengeSystem: () => ChallengeSystem,
-    isRegisteredUser,
-    getCurrentDisplayName,
-    rtdb,
-    ref,
-    get
-});
-window.UI = UI;
+const UI = {
+    hoverTimeout: null,
+    
+    updatePlayersList(players) {
+        const container = document.getElementById('players-list');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        for (const [id, player] of Object.entries(players)) {
+            if (player.status === 'online') {
+                const item = document.createElement('div');
+                item.className = 'player-item';
+                item.dataset.userId = id;
+                item.innerHTML = `
+                    <div class="player-item-info">
+                        <span class="player-item-status status-dot ${player.status}"></span>
+                        <span class="player-item-name player-name-hoverable" data-user-id="${id}">${this.escapeHtml(player.displayName || 'Anonymous')}</span>
+                    </div>
+                    <span class="player-item-activity">${this.escapeHtml(player.current_activity || '')}</span>
+                `;
+                
+                // Add hover profile listeners
+                const nameEl = item.querySelector('.player-name-hoverable');
+                nameEl.addEventListener('mouseenter', (e) => this.showHoverProfile(e, id, player));
+                nameEl.addEventListener('mouseleave', () => this.hideHoverProfile());
+                
+                item.addEventListener('click', () => this.showPlayerProfile(id));
+                container.appendChild(item);
+            }
+        }
+        
+        // Update online count
+        const onlineCount = Object.values(players).filter(p => p.status === 'online').length;
+        const countEl = document.getElementById('online-count');
+        if (countEl) countEl.textContent = onlineCount;
+    },
+    
+    async showHoverProfile(event, userId, basicData) {
+        // Clear any existing timeout
+        if (this.hoverTimeout) {
+            clearTimeout(this.hoverTimeout);
+        }
+        
+        const tooltip = document.getElementById('hover-profile');
+        if (!tooltip) return;
+        
+        // Position the tooltip
+        const rect = event.target.getBoundingClientRect();
+        tooltip.style.left = `${rect.right + 10}px`;
+        tooltip.style.top = `${rect.top - 10}px`;
+        
+        // Check if tooltip would go off screen
+        const tooltipRect = tooltip.getBoundingClientRect();
+        if (rect.right + 200 > window.innerWidth) {
+            tooltip.style.left = `${rect.left - 200}px`;
+        }
+        
+        // Set basic data first
+        tooltip.querySelector('.hover-profile-name').textContent = basicData?.displayName || 'Anonymous';
+        tooltip.querySelector('#hover-activity').textContent = basicData?.current_activity || 'Online';
+        
+        // Show tooltip
+        tooltip.style.display = 'block';
+        
+        // Fetch more detailed stats
+        try {
+            const profile = await ProfileManager.getProfile(userId);
+            if (profile.exists()) {
+                const data = profile.data();
+                const wins = data.stats?.wins || 0;
+                const losses = data.stats?.losses || 0;
+                const total = wins + losses;
+                const winrate = total > 0 ? Math.round((wins / total) * 100) : 0;
+                
+                tooltip.querySelector('#hover-wins').textContent = wins;
+                tooltip.querySelector('#hover-losses').textContent = losses;
+                tooltip.querySelector('#hover-winrate').textContent = `${winrate}%`;
+            }
+        } catch (e) {
+            console.warn('Could not fetch profile for hover:', e);
+        }
+    },
+    
+    hideHoverProfile() {
+        this.hoverTimeout = setTimeout(() => {
+            const tooltip = document.getElementById('hover-profile');
+            if (tooltip) {
+                tooltip.style.display = 'none';
+            }
+        }, 100);
+    },
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    },
+    
+    async showPlayerProfile(userId) {
+        const profile = await ProfileManager.getProfile(userId);
+        if (!profile.exists()) return;
+        
+        const data = profile.data();
+        
+        document.getElementById('profile-name').textContent = data.displayName || 'Anonymous';
+        document.getElementById('profile-member-since').textContent = 
+            `Member since: ${data.memberSince?.toDate?.()?.toLocaleDateString() || 'Unknown'}`;
+        document.getElementById('profile-wins').textContent = data.stats?.wins || 0;
+        document.getElementById('profile-losses').textContent = data.stats?.losses || 0;
+        
+        // Show badges
+        const badgesContainer = document.getElementById('profile-badges');
+        badgesContainer.innerHTML = '';
+        (data.badges || []).forEach(badge => {
+            const badgeEl = document.createElement('span');
+            badgeEl.className = `badge ${badge}`;
+            badgeEl.textContent = badge;
+            badgesContainer.appendChild(badgeEl);
+        });
+        
+        // Set up challenge button
+        document.getElementById('challenge-player').onclick = async () => {
+            await ChallengeSystem.sendChallenge(
+                AppState.currentUser.uid,
+                AppState.currentUser.displayName || 'Player',
+                userId
+            );
+            ViewManager.hideModal('profile-modal');
+            alert('Challenge sent!');
+        };
+        
+        ViewManager.showModal('profile-modal');
+    },
+    
+    // Full profile page view
+    async showProfilePage(userId) {
+        const isOwnProfile = userId === AppState.currentUser?.uid;
+        
+        const profile = await ProfileManager.getProfile(userId);
+        if (!profile.exists()) {
+            alert('Profile not found');
+            return;
+        }
+        
+        const data = profile.data();
+        AppState.viewingProfileId = userId;
+        const profileView = document.getElementById('profile-view');
+        if (profileView) profileView.dataset.userId = userId;
+        
+        // Update profile page elements
+        const username = data.username || data.displayName || 'Anonymous';
+        document.getElementById('profile-page-title').textContent = isOwnProfile ? 'Your Profile' : `${username}'s Profile`;
+        document.getElementById('profile-page-username').textContent = username;
+        document.getElementById('profile-page-bio').textContent = data.bio || 'No bio yet...';
+        
+        // Profile picture
+        const pictureEl = document.getElementById('profile-page-picture');
+        const placeholderEl = document.getElementById('profile-picture-placeholder');
+        if (data.profilePicture) {
+            // Prefer signed URL from backend API (falls back to stored URL)
+            try {
+                const resp = await fetch(`/api/avatar/${userId}`);
+                if (resp.ok) {
+                    const json = await resp.json();
+                    pictureEl.src = json.url;
+                } else {
+                    pictureEl.src = data.profilePicture;
+                }
+            } catch (e) {
+                pictureEl.src = data.profilePicture;
+            }
+            pictureEl.style.display = 'block';
+            placeholderEl.style.display = 'none';
+        } else {
+            pictureEl.style.display = 'none';
+            placeholderEl.style.display = 'flex';
+        }
+        
+        // Show edit button only for own profile
+        document.getElementById('profile-picture-edit').style.display = isOwnProfile ? 'block' : 'none';
+        
+        // Member since
+        let memberDate = null;
+        try {
+            if (data.memberSince?.toDate) memberDate = data.memberSince.toDate();
+            else if (typeof data.memberSince === 'number') memberDate = new Date(data.memberSince);
+            else if (typeof data.memberSince === 'string') memberDate = new Date(data.memberSince);
+        } catch { /* ignore */ }
+        const memberText = memberDate && !Number.isNaN(memberDate.getTime())
+            ? memberDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+            : 'Unknown';
+        document.getElementById('profile-page-member-since').textContent = memberText;
+        
+        // Vanity URL - show only for registered users (not anonymous guest accounts)
+        const vanityEl = document.getElementById('profile-vanity-url');
+        const vanityLinkEl = document.getElementById('profile-vanity-link');
+        const hostBase = window.location.origin || 'https://stone-doku.web.app';
+        const vanityUrl = `${hostBase}/u/${encodeURIComponent(username.toLowerCase())}`;
+        // Consider a user 'registered' if they have an email on their profile
+        const isRegistered = !!data.email;
+        if (isRegistered && vanityEl && vanityLinkEl) {
+            vanityLinkEl.href = `/u/${encodeURIComponent(username.toLowerCase())}`;
+            vanityLinkEl.textContent = vanityUrl;
+            vanityEl.style.display = 'flex';
+        } else if (vanityEl) {
+            // Hide vanity URL for anonymous/guest profiles
+            vanityEl.style.display = 'none';
+        }
+        
+        // Stats
+        const stats = data.stats || { wins: 0, losses: 0, gamesPlayed: 0 };
+        document.getElementById('profile-page-wins').textContent = stats.wins || 0;
+        document.getElementById('profile-page-losses').textContent = stats.losses || 0;
+        const totalGames = (stats.wins || 0) + (stats.losses || 0);
+        const winRate = totalGames > 0 ? Math.round((stats.wins / totalGames) * 100) : 0;
+        document.getElementById('profile-page-winrate').textContent = `${winRate}%`;
+        document.getElementById('profile-page-games').textContent = totalGames;
+        
+        // Badges
+        const badgesContainer = document.getElementById('profile-page-badges');
+        badgesContainer.innerHTML = '';
+        const badges = data.badges || [];
+        if (badges.length === 0) {
+            badgesContainer.innerHTML = '<div class="badge-empty">No badges yet. Keep playing to earn badges!</div>';
+        } else {
+            const badgeInfo = {
+                rookie: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Rookie' },
+                learner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Learner' },
+                veteran: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Veteran' },
+                marathoner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Marathoner' },
+                legend: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Legend' },
+                winner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: 'Winner' },
+                champion: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Champion' },
+                unstoppable: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Unstoppable' },
+                undefeated: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg>', name: 'Undefeated' },
+                tactician: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-target"></use></svg>', name: 'Tactician' },
+                speedster: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>', name: 'Speedster' },
+                socialite: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Socialite' },
+                connector: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Connector' },
+                ambassador: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Ambassador' },
+                storyteller: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg>', name: 'Storyteller' },
+                portrait: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>', name: 'Portrait' },
+                warden: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-lock"></use></svg>', name: 'Warden' }
+            };
+            badges.forEach(badge => {
+                const info = badgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: String(badge) };
+                const badgeEl = document.createElement('div');
+                badgeEl.className = 'badge-item';
+                const iconEl = document.createElement('span');
+                iconEl.className = 'badge-icon';
+                iconEl.setAttribute('aria-hidden', 'true');
+                iconEl.innerHTML = info.iconHtml;
 
-// BoardIntegritySystem extracted to src/client/ui/boardIntegrity.js
+                const nameEl = document.createElement('span');
+                nameEl.className = 'badge-name';
+                nameEl.textContent = info.name;
 
+                badgeEl.appendChild(iconEl);
+                badgeEl.appendChild(nameEl);
+                badgesContainer.appendChild(badgeEl);
+            });
+        }
+        
+        // Show appropriate action buttons
+        document.getElementById('profile-own-actions').style.display = isOwnProfile ? 'flex' : 'none';
+        document.getElementById('profile-other-actions').style.display = isOwnProfile ? 'none' : 'flex';
+        
+	        // Check friend status if viewing other profile
+	        if (!isOwnProfile) {
+	            const isFriend = AppState.friends.includes(userId);
+	            const friendBtn = document.getElementById('profile-friend-btn');
+	            const labelEl = friendBtn?.querySelector('.btn-label');
+	            const dmBtn = document.getElementById('profile-dm-btn');
+	            const socialEnabled = isRegisteredUser();
+
+	            if (!socialEnabled) {
+	                if (friendBtn) friendBtn.style.display = 'none';
+	                if (dmBtn) dmBtn.style.display = 'none';
+	            } else {
+	                if (friendBtn) friendBtn.style.display = '';
+	                if (dmBtn) dmBtn.style.display = '';
+
+	                let hasIncomingRequest = false;
+	                let hasOutgoingRequest = false;
+	                try {
+	                    const reqSnap = await ProfileManager.getFriendRequestBetween(AppState.currentUser.uid, userId);
+	                    if (reqSnap) {
+	                        const reqData = reqSnap.data() || {};
+	                        if (reqData.status === 'pending') {
+	                            hasIncomingRequest = reqData.toUid === AppState.currentUser.uid;
+	                            hasOutgoingRequest = reqData.fromUid === AppState.currentUser.uid;
+	                        }
+	                    }
+	                } catch (e) {
+	                    console.warn('Failed to check friend request state', e);
+	                }
+
+	                if (hasIncomingRequest) {
+	                    if (labelEl) labelEl.textContent = 'Accept Request';
+	                    else if (friendBtn) friendBtn.textContent = 'Accept Request';
+	                    if (friendBtn) friendBtn.disabled = false;
+	                } else if (hasOutgoingRequest) {
+	                    if (labelEl) labelEl.textContent = 'Request Sent';
+	                    else if (friendBtn) friendBtn.textContent = 'Request Sent';
+	                    if (friendBtn) friendBtn.disabled = true;
+	                } else if (isFriend) {
+	                    if (labelEl) labelEl.textContent = 'Remove Friend';
+	                    else if (friendBtn) friendBtn.textContent = 'Remove Friend';
+	                    if (friendBtn) friendBtn.disabled = false;
+	                } else {
+	                    if (labelEl) labelEl.textContent = 'Add Friend';
+	                    else if (friendBtn) friendBtn.textContent = 'Add Friend';
+	                    if (friendBtn) friendBtn.disabled = false;
+	                }
+	            }
+	        }
+        
+        ViewManager.show('profile');
+    },
+    
+    addChatMessage(containerId, sender, text, timestamp, userId = null) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        const messageEl = document.createElement('div');
+        messageEl.className = 'chat-message';
+        
+        const time = timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        
+        // Create sender element with hover capability
+        const senderEl = document.createElement('span');
+        senderEl.className = 'chat-sender';
+        if (userId) {
+            senderEl.classList.add('clickable-user');
+            senderEl.dataset.userId = userId;
+        }
+        senderEl.textContent = sender;
+        
+        const textEl = document.createElement('span');
+        textEl.className = 'chat-text';
+        textEl.textContent = text;
+        
+        const timeEl = document.createElement('span');
+        timeEl.className = 'chat-time';
+        timeEl.textContent = time;
+        
+        const headerRow = document.createElement('div');
+        headerRow.className = 'chat-header-row';
+        headerRow.appendChild(senderEl);
+        headerRow.appendChild(timeEl);
+        
+        messageEl.appendChild(headerRow);
+        messageEl.appendChild(textEl);
+        
+        container.appendChild(messageEl);
+        container.scrollTop = container.scrollHeight;
+        
+        // Add hover listener for profile
+        if (userId) {
+            senderEl.addEventListener('mouseenter', (e) => {
+                this.showMiniProfile(userId, sender, e.target);
+            });
+            senderEl.addEventListener('mouseleave', () => {
+                this.hideMiniProfile();
+            });
+        }
+    },
+    
+    miniProfileTimeout: null,
+    miniProfileHideTimer: null,
+    
+    async showMiniProfile(userId, displayName, targetEl) {
+        // Clear any pending hide
+        if (this.miniProfileTimeout) {
+            clearTimeout(this.miniProfileTimeout);
+            this.miniProfileTimeout = null;
+        }
+        if (this.miniProfileHideTimer) {
+            clearTimeout(this.miniProfileHideTimer);
+            this.miniProfileHideTimer = null;
+        }
+        
+        // Get or create mini profile element
+        let miniProfile = document.getElementById('chat-mini-profile');
+        if (!miniProfile) {
+            miniProfile = document.createElement('div');
+            miniProfile.id = 'chat-mini-profile';
+            miniProfile.className = 'chat-mini-profile';
+            document.body.appendChild(miniProfile);
+            miniProfile.addEventListener('mouseenter', () => {
+                if (this.miniProfileHideTimer) {
+                    clearTimeout(this.miniProfileHideTimer);
+                    this.miniProfileHideTimer = null;
+                }
+            });
+            miniProfile.addEventListener('mouseleave', () => {
+                this.hideMiniProfile(400);
+            });
+        }
+        
+        // Position near the target
+        const rect = targetEl.getBoundingClientRect();
+        miniProfile.style.left = `${rect.left}px`;
+        miniProfile.style.top = `${rect.bottom + 8}px`;
+        
+        // Show loading state
+        miniProfile.innerHTML = `
+            <div class="mini-profile-header">
+                <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
+                <div class="mini-profile-name">${this.escapeHtml(displayName)}</div>
+            </div>
+            <div class="mini-profile-loading">Loading...</div>
+        `;
+        miniProfile.classList.add('visible');
+        
+        // Fetch profile data and presence status
+        try {
+            const [profileSnap, presenceSnapshot] = await Promise.all([
+                ProfileManager.getProfile(userId),
+                get(ref(rtdb, `presence/${userId}`))
+            ]);
+            
+            const presenceData = presenceSnapshot.val();
+            const isOnline = presenceData?.status === 'online';
+            const profileData = profileSnap?.data?.() || {};
+            const stats = profileData.stats || { wins: 0, losses: 0 };
+            const total = stats.wins + stats.losses;
+            const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
+            const statusClass = isOnline ? 'online' : 'offline';
+            const statusText = isOnline ? 'Online' : 'Offline';
+            const name = profileData.username || profileData.displayName || displayName;
+            const isRegistered = !!(profileData?.email || profileData?.username);
+            const isSelf = AppState.currentUser && userId === AppState.currentUser.uid;
+            
+            if (miniProfile.classList.contains('visible')) {
+                miniProfile.innerHTML = `
+                    <div class="mini-profile-header">
+                        <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
+                        <div class="mini-profile-info">
+                            <div class="mini-profile-name">${this.escapeHtml(name)}</div>
+                            <div class="mini-profile-status ${statusClass}">
+                                <span class="status-dot"></span>
+                                ${statusText}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mini-profile-stats">
+                        <div class="mini-stat">
+                            <span class="mini-stat-value">${stats.wins || 0}</span>
+                            <span class="mini-stat-label">Wins</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-stat-value">${stats.losses || 0}</span>
+                            <span class="mini-stat-label">Losses</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-stat-value">${winrate}%</span>
+                            <span class="mini-stat-label">Win Rate</span>
+                        </div>
+                    </div>
+                    ${(isRegistered && !isSelf) ? `
+                    <div class="mini-profile-actions">
+                        <button type="button" class="btn btn-secondary btn-sm mini-dm-btn">DM</button>
+                        <button type="button" class="btn btn-ghost btn-sm mini-friend-btn">Add Friend</button>
+                    </div>
+                    ` : ''}
+                `;
+                if (isRegistered && !isSelf) {
+                    const dmBtn = miniProfile.querySelector('.mini-dm-btn');
+                    const friendBtn = miniProfile.querySelector('.mini-friend-btn');
+                    dmBtn?.addEventListener('click', async () => {
+                        try { await window.ChatWidget?.openDm?.(userId); } catch (e) { console.warn('Mini profile DM failed', e); }
+                    });
+                    friendBtn?.addEventListener('click', async () => {
+                        if (!isRegisteredUser()) {
+                            UI.showToast('Sign in with email to add friends.', 'error');
+                            return;
+                        }
+                        try {
+                            await ProfileManager.sendFriendRequest(AppState.currentUser.uid, userId);
+                            UI.showToast('Friend request sent.', 'success');
+                            friendBtn.disabled = true;
+                            friendBtn.textContent = 'Request Sent';
+                        } catch (e) {
+                            console.warn('Mini profile add friend failed', e);
+                            UI.showToast(e?.message || 'Failed to send friend request.', 'error');
+                        }
+                    });
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching mini profile:', err);
+        }
+    },
+    
+    hideMiniProfile(delay = 900) {
+        if (this.miniProfileTimeout) {
+            clearTimeout(this.miniProfileTimeout);
+            this.miniProfileTimeout = null;
+        }
+        this.miniProfileHideTimer = setTimeout(() => {
+            const miniProfile = document.getElementById('chat-mini-profile');
+            if (miniProfile) {
+                miniProfile.classList.remove('visible');
+            }
+        }, delay);
+    },
+    
+    updateStats(stats) {
+        document.getElementById('stat-wins').textContent = stats.wins || 0;
+        document.getElementById('stat-losses').textContent = stats.losses || 0;
+        
+        const total = (stats.wins || 0) + (stats.losses || 0);
+        const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
+        document.getElementById('stat-winrate').textContent = `${winrate}%`;
+    },
+    
+    updateBadges(badges) {
+        const container = document.getElementById('badges-list');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        (badges || []).forEach(badge => {
+            const badgeEl = document.createElement('span');
+            badgeEl.className = `badge ${badge}`;
+            badgeEl.textContent = badge;
+            container.appendChild(badgeEl);
+        });
+    },
+
+    showToast(message, type = 'info') {
+        const text = String(message || '').trim();
+        if (!text) return;
+
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.setAttribute('aria-live', 'polite');
+            container.setAttribute('aria-atomic', 'true');
+            document.body.appendChild(container);
+        }
+
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.textContent = text;
+        container.appendChild(el);
+
+        setTimeout(() => {
+            el.classList.add('toast-hide');
+            setTimeout(() => el.remove(), 350);
+        }, 2400);
+    },
+    
+    formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+};
+
+// ===========================================
+// Board Integrity (fractured -> repaired per 3x3)
+// ===========================================
+const BoardIntegritySystem = {
+    gridEl: null,
+    boxCells: Array.from({ length: 9 }, () => []),
+    boxRepair: Array(9).fill(0),
+
+    clamp01(n) {
+        return Math.max(0, Math.min(1, Number(n) || 0));
+    },
+
+    initGrid(gridEl) {
+        this.gridEl = gridEl || document.getElementById('sudoku-grid');
+        this.boxCells = Array.from({ length: 9 }, () => []);
+        this.boxRepair = Array(9).fill(0);
+
+        if (this.gridEl) {
+            this.gridEl.classList.add('is-fractured');
+        }
+    },
+
+    registerCell(cell, row, col) {
+        const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+        cell.dataset.box = String(box);
+        this.boxCells[box].push(cell);
+
+        const fx = (Math.random() - 0.5) * 4; // px
+        const fy = (Math.random() - 0.5) * 4; // px
+        const fr = (Math.random() - 0.5) * 0.8; // deg
+
+        cell.style.setProperty('--repair', '0');
+        cell.style.setProperty('--fracture-x0', `${fx.toFixed(2)}px`);
+        cell.style.setProperty('--fracture-y0', `${fy.toFixed(2)}px`);
+        cell.style.setProperty('--fracture-r0', `${fr.toFixed(3)}deg`);
+        cell.style.setProperty('--fracture-x', `${fx.toFixed(2)}px`);
+        cell.style.setProperty('--fracture-y', `${fy.toFixed(2)}px`);
+        cell.style.setProperty('--fracture-r', `${fr.toFixed(3)}deg`);
+    },
+
+    setBoxRepair(box, repair) {
+        const r = this.clamp01(repair);
+        this.boxRepair[box] = r;
+        const list = this.boxCells[box] || [];
+        const scale = 1 - r;
+        for (const cell of list) {
+            cell.style.setProperty('--repair', r.toFixed(3));
+
+            const baseX = parseFloat(cell.style.getPropertyValue('--fracture-x0')) || 0;
+            const baseY = parseFloat(cell.style.getPropertyValue('--fracture-y0')) || 0;
+            const baseR = parseFloat(cell.style.getPropertyValue('--fracture-r0')) || 0;
+
+            cell.style.setProperty('--fracture-x', `${(baseX * scale).toFixed(2)}px`);
+            cell.style.setProperty('--fracture-y', `${(baseY * scale).toFixed(2)}px`);
+            cell.style.setProperty('--fracture-r', `${(baseR * scale).toFixed(3)}deg`);
+        }
+    },
+
+    updateFromSingleState() {
+        if (!AppState.puzzle || !AppState.solution || !AppState.originalPuzzle) return;
+
+        const totals = Array(9).fill(0);
+        const correct = Array(9).fill(0);
+
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                if (AppState.originalPuzzle[row][col] !== 0) continue;
+                const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+                totals[box]++;
+                if (AppState.puzzle[row][col] === AppState.solution[row][col]) {
+                    correct[box]++;
+                }
+            }
+        }
+
+        for (let box = 0; box < 9; box++) {
+            const r = totals[box] > 0 ? correct[box] / totals[box] : 1;
+            this.setBoxRepair(box, r);
+        }
+    },
+
+    updateFromVersusBoard(board) {
+        if (!board) return;
+
+        const totals = Array(9).fill(0);
+        const filled = Array(9).fill(0);
+
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                const cellData = board[`${row}_${col}`];
+                if (!cellData || cellData.given) continue;
+                const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+                totals[box]++;
+                if (cellData.filledBy && cellData.value) {
+                    filled[box]++;
+                }
+            }
+        }
+
+        for (let box = 0; box < 9; box++) {
+            const r = totals[box] > 0 ? filled[box] / totals[box] : 1;
+            this.setBoxRepair(box, r);
+        }
+    }
+};
+
+// ===========================================
+// Game UI Helper Functions
+// ===========================================
+const GameHelpers = {
+    toolLimitForDifficulty(difficulty) {
+        const d = String(difficulty || '').toLowerCase();
+        if (d === 'easy') return 4;
+        if (d === 'medium') return 3;
+        if (d === 'hard') return 0;
+        // Daily/custom default to medium-like.
+        return 3;
+    },
+
+    resetToolLimits(difficulty) {
+        const max = this.toolLimitForDifficulty(difficulty);
+        AppState.toolLimits.undoMax = max;
+        AppState.toolLimits.eraseMax = max;
+        AppState.toolLimits.undoLeft = max;
+        AppState.toolLimits.eraseLeft = max;
+        this.updateToolUi();
+    },
+
+    updateToolUi() {
+        const el = document.getElementById('tool-uses-value');
+        if (!el) return;
+        const { undoLeft, eraseLeft, undoMax, eraseMax } = AppState.toolLimits;
+        if (undoMax === 0 && eraseMax === 0) {
+            el.textContent = 'Locked';
+        } else {
+            el.textContent = `Undo ${undoLeft}/${undoMax} · Erase ${eraseLeft}/${eraseMax}`;
+        }
+        const undoBtn = document.getElementById('undo-btn');
+        const eraseBtn = document.getElementById('erase-btn');
+        if (undoBtn) undoBtn.disabled = (undoMax === 0) || (AppState.gameMode === 'single' && undoLeft <= 0);
+        if (eraseBtn) eraseBtn.disabled = (eraseMax === 0) || (AppState.gameMode === 'single' && eraseLeft <= 0);
+    },
+
+    tryUndo() {
+        if (AppState.gameMode === 'single') {
+            if (AppState.toolLimits.undoLeft <= 0) return false;
+            const did = this.undo();
+            if (did) {
+                AppState.toolLimits.undoLeft = Math.max(0, AppState.toolLimits.undoLeft - 1);
+                this.updateToolUi();
+            }
+            return did;
+        }
+        return this.undo();
+    },
+
+    consumeEraseIfNeeded(changedSomething) {
+        if (!changedSomething) return;
+        if (AppState.gameMode !== 'single') return;
+        if (AppState.toolLimits.eraseLeft <= 0) return;
+        AppState.toolLimits.eraseLeft = Math.max(0, AppState.toolLimits.eraseLeft - 1);
+        this.updateToolUi();
+    },
+
+    // Count how many of each number are placed
+    countNumbers() {
+        const counts = {};
+        for (let i = 1; i <= 9; i++) counts[i] = 0;
+        
+        if (!AppState.puzzle) return counts;
+        
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                const num = AppState.puzzle[row][col];
+                if (num > 0) counts[num]++;
+            }
+        }
+        return counts;
+    },
+    
+    // Update the remaining count display for each number
+    updateRemainingCounts() {
+        const counts = this.countNumbers();
+        for (let i = 1; i <= 9; i++) {
+            const remaining = 9 - counts[i];
+            const el = document.getElementById(`remaining-${i}`);
+            const btn = document.querySelector(`.num-btn[data-num="${i}"]`);
+            if (el) {
+                el.textContent = remaining > 0 ? `${remaining} left` : 'done';
+            }
+            if (btn) {
+                btn.classList.toggle('completed', remaining === 0);
+            }
+        }
+    },
+    
+    // Update progress display - only count user-filled cells, not given cells
+    updateProgress() {
+        if (!AppState.puzzle || !AppState.solution || !AppState.originalPuzzle) return;
+        
+        let filled = 0;
+        let total = 0;
+        
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                // Only count cells that were originally empty (not given)
+                if (AppState.originalPuzzle[row][col] === 0) {
+                    total++;
+                    // Count if correctly filled by user
+                    if (AppState.puzzle[row][col] === AppState.solution[row][col]) {
+                        filled++;
+                    }
+                }
+            }
+        }
+        
+        const percent = total > 0 ? Math.round((filled / total) * 100) : 0;
+        const progressEl = document.getElementById('progress-percent');
+        const fillEl = document.getElementById('progress-fill');
+        
+        if (progressEl) progressEl.textContent = `${percent}%`;
+        if (fillEl) fillEl.style.width = `${percent}%`;
+
+        BoardIntegritySystem.updateFromSingleState();
+    },
+    
+    // Update mistakes display
+    updateMistakesDisplay() {
+        const container = document.getElementById('mistakes-display');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        for (let i = 0; i < AppState.maxMistakes; i++) {
+            const dot = document.createElement('span');
+            dot.className = `mistake-dot${i >= AppState.mistakes ? ' empty' : ''}`;
+            container.appendChild(dot);
+        }
+    },
+    
+    // Highlight cells with the same number
+    highlightSameNumbers(num) {
+        document.querySelectorAll('.sudoku-cell').forEach(cell => {
+            cell.classList.remove('same-number');
+        });
+        
+        if (!AppState.settings.highlightSameNumbers || num === 0) return;
+        
+        document.querySelectorAll('.sudoku-cell').forEach(cell => {
+            const valueEl = cell.querySelector('.cell-value');
+            const valueText = valueEl ? valueEl.textContent : cell.textContent;
+            if (valueText === String(num)) {
+                cell.classList.add('same-number');
+            }
+        });
+    },
+    
+    // Highlight conflicting cells
+    highlightConflicts(row, col, num) {
+        if (!AppState.settings.highlightConflicts || num === 0) return [];
+        
+        const conflicts = [];
+        
+        // Check row
+        for (let c = 0; c < 9; c++) {
+            if (c !== col && AppState.puzzle[row][c] === num) {
+                conflicts.push({ row, col: c });
+            }
+        }
+        
+        // Check column
+        for (let r = 0; r < 9; r++) {
+            if (r !== row && AppState.puzzle[r][col] === num) {
+                conflicts.push({ row: r, col });
+            }
+        }
+        
+        // Check 3x3 box
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        for (let r = boxRow; r < boxRow + 3; r++) {
+            for (let c = boxCol; c < boxCol + 3; c++) {
+                if ((r !== row || c !== col) && AppState.puzzle[r][c] === num) {
+                    conflicts.push({ row: r, col: c });
+                }
+            }
+        }
+        
+        return conflicts;
+    },
+    
+    // Add move to history for undo
+    addToHistory(row, col, oldValue, newValue) {
+        AppState.moveHistory.push({ row, col, oldValue, newValue });
+        // Limit history size
+        if (AppState.moveHistory.length > 100) {
+            AppState.moveHistory.shift();
+        }
+    },
+    
+    // Undo last move
+    undo() {
+        if (AppState.moveHistory.length === 0) return false;
+        
+        const lastMove = AppState.moveHistory.pop();
+        const { row, col, oldValue } = lastMove;
+        
+        AppState.puzzle[row][col] = oldValue;
+        
+        const cell = document.querySelector(
+            `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
+        );
+        if (cell) {
+            const valueEl = cell.querySelector('.cell-value');
+            if (valueEl) valueEl.textContent = oldValue !== 0 ? oldValue : '';
+            else cell.textContent = oldValue !== 0 ? oldValue : '';
+        }
+        
+        this.updateRemainingCounts();
+        this.updateProgress();
+        
+        return true;
+    },
+    
+    // Toggle notes mode
+    toggleNotesMode() {
+        AppState.notesMode = !AppState.notesMode;
+        const btn = document.getElementById('notes-btn');
+        if (btn) {
+            btn.classList.toggle('active', AppState.notesMode);
+        }
+    },
+    
+    // Reset game state for new game
+    resetGameState() {
+        AppState.mistakes = 0;
+        AppState.moveHistory = [];
+        AppState.notes = {};
+        AppState.notesMode = false;
+        AppState.playerScore = 0;
+        
+        this.updateMistakesDisplay();
+        this.updateProgress();
+        this.updateRemainingCounts();
+        
+        const notesBtn = document.getElementById('notes-btn');
+        if (notesBtn) notesBtn.classList.remove('active');
+        this.updateToolUi();
+    }
+};
+// ===========================================
+// Game UI
+// ===========================================
+const GameUI = {
+    createGrid() {
+        const grid = document.getElementById('sudoku-grid');
+        if (!grid) return;
+        
+        grid.innerHTML = '';
+        BoardIntegritySystem.initGrid(grid);
+        
+        // Add ARIA attributes for accessibility
+        grid.setAttribute('role', 'grid');
+        grid.setAttribute('aria-label', 'Sudoku puzzle board');
+        
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                const cell = document.createElement('div');
+                cell.className = 'sudoku-cell';
+                cell.dataset.row = row;
+                cell.dataset.col = col;
+                BoardIntegritySystem.registerCell(cell, row, col);
+
+                const valueEl = document.createElement('span');
+                valueEl.className = 'cell-value';
+                valueEl.setAttribute('aria-hidden', 'true');
+                cell.appendChild(valueEl);
+
+                const notesEl = document.createElement('div');
+                notesEl.className = 'cell-notes';
+                notesEl.setAttribute('aria-hidden', 'true');
+                cell.appendChild(notesEl);
+                
+                // Accessibility attributes
+                cell.setAttribute('role', 'gridcell');
+                cell.setAttribute('tabindex', '0');
+                cell.setAttribute('aria-label', `Row ${row + 1}, Column ${col + 1}, empty`);
+                
+                cell.addEventListener('click', () => this.selectCell(row, col));
+                
+                // Allow keyboard selection
+                cell.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        this.selectCell(row, col);
+                    }
+                });
+                
+                grid.appendChild(cell);
+            }
+        }
+    },
+    
+    renderPuzzle(puzzle, board = null) {
+        console.log('renderPuzzle called, board:', board ? 'present' : 'null');
+        
+        let cellsFound = 0;
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                const cell = document.querySelector(
+                    `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
+                );
+                
+                if (!cell) {
+                    continue;
+                }
+                cellsFound++;
+                
+                cell.classList.remove('given', 'selected', 'error', 'correct', 
+                                      'player-fill', 'opponent-fill');
+                
+                let value, isGiven, filledBy;
+                
+                if (board) {
+                    // 1v1 mode - use board state from RTDB
+                    const cellData = board[`${row}_${col}`];
+                    value = cellData?.value || 0;
+                    isGiven = cellData?.given || false;
+                    filledBy = cellData?.filledBy;
+                } else {
+                    // Single player mode
+                    value = puzzle[row][col];
+                    // A cell is "given" if it was part of the original puzzle
+                    isGiven = AppState.originalPuzzle?.[row]?.[col] !== 0;
+                }
+                const valueEl = cell.querySelector('.cell-value');
+                const notesEl = cell.querySelector('.cell-notes');
+                if (valueEl) valueEl.textContent = value !== 0 ? String(value) : '';
+                else cell.textContent = value !== 0 ? String(value) : '';
+
+                // Notes only exist in single player mode and only for empty (non-given) cells.
+                if (!board && !isGiven && value === 0 && notesEl) {
+                    const key = `${row}_${col}`;
+                    const set = AppState.notes?.[key];
+                    this.renderNotesForCell(notesEl, set);
+                } else if (notesEl) {
+                    notesEl.innerHTML = '';
+                }
+                
+                // Update ARIA label for accessibility
+                let ariaLabel = `Row ${row + 1}, Column ${col + 1}`;
+                if (value !== 0) {
+                    ariaLabel += `, ${value}`;
+                    if (isGiven) {
+                        ariaLabel += ' (given)';
+                    } else if (filledBy) {
+                        ariaLabel += filledBy === AppState.currentUser?.uid ? ' (your entry)' : ' (opponent entry)';
+                    }
+                } else {
+                    ariaLabel += ', empty';
+                }
+                cell.setAttribute('aria-label', ariaLabel);
+                
+                if (isGiven) {
+                    cell.classList.add('given');
+                } else if (filledBy) {
+                    if (filledBy === AppState.currentUser?.uid) {
+                        cell.classList.add('player-fill');
+                    } else {
+                        cell.classList.add('opponent-fill');
+                    }
+                }
+            }
+        }
+        
+        console.log('renderPuzzle complete, cells found:', cellsFound);
+
+        if (board) {
+            BoardIntegritySystem.updateFromVersusBoard(board);
+        } else {
+            BoardIntegritySystem.updateFromSingleState();
+        }
+        
+        // Store puzzle state for versus mode
+        if (board) {
+            AppState.puzzle = puzzle;
+        }
+    },
+
+    renderNotesForCell(notesEl, set) {
+        if (!notesEl) return;
+        const nums = Array.isArray(set) ? set : (set instanceof Set ? Array.from(set) : []);
+        const sorted = nums.map(n => Number(n)).filter(n => n >= 1 && n <= 9).sort((a, b) => a - b);
+        notesEl.innerHTML = '';
+        for (let i = 1; i <= 9; i++) {
+            const s = document.createElement('span');
+            s.textContent = String(i);
+            s.className = sorted.includes(i) ? 'on' : '';
+            notesEl.appendChild(s);
+        }
+    },
+    
+    selectCell(row, col) {
+        // Remove previous selection
+        document.querySelectorAll('.sudoku-cell.selected').forEach(c => {
+            c.classList.remove('selected');
+        });
+        document.querySelectorAll('.sudoku-cell.same-number').forEach(c => {
+            c.classList.remove('same-number');
+        });
+        
+        const cell = document.querySelector(
+            `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
+        );
+        
+        if (cell) {
+            cell.classList.add('selected');
+            AppState.selectedCell = { row, col };
+            
+            // Highlight same numbers
+            const num = AppState.puzzle?.[row]?.[col];
+            if (num && num !== 0) {
+                GameHelpers.highlightSameNumbers(num);
+            }
+        }
+    },
+    
     async inputNumber(num) {
         console.log('inputNumber called:', num, 'gameMode:', AppState.gameMode, 'currentMatch:', AppState.currentMatch);
         
@@ -2791,12 +4137,6 @@ window.UI = UI;
         }
         
         AudioManager.playCellFill();
-        // If tutorial is active and the user just placed a number for the number-step, advance.
-        try {
-            if (AppState.tutorialActive && (AppState.tutorialStep || 0) === 1) {
-                setTimeout(() => { try { TutorialGame.next(); } catch (e) { console.warn('Tutorial next failed', e); } }, 260);
-            }
-        } catch (e) {}
     },
     
     checkSinglePlayerComplete() {
@@ -3282,7 +4622,7 @@ function setupEventListeners() {
         try {
             console.log('Starting logout process...');
             const user = auth.currentUser;
-            await PresenceManager.cleanup();
+            await PresenceSystem.cleanup();
             console.log('Presence cleaned up');
 
             if (user?.isAnonymous) {
@@ -3357,7 +4697,8 @@ function setupEventListeners() {
     document.getElementById('create-room')?.addEventListener('click', async () => {
         console.log('Create room button clicked');
         try {
-            const displayName = getCurrentDisplayName();
+            const displayName = AppState.currentUser?.displayName || 
+                              `Player_${AppState.currentUser?.uid.substring(0, 6)}`;
             console.log('Creating room for:', displayName);
             const code = await LobbyManager.createRoom(AppState.currentUser.uid, displayName);
             console.log('Room created with code:', code);
@@ -3366,7 +4707,7 @@ function setupEventListeners() {
             document.getElementById('display-room-code').textContent = code;
             
             ViewManager.show('waiting');
-            PresenceManager.updateActivity('Waiting for opponent');
+            PresenceSystem.updateActivity('Waiting for opponent');
             
             // Listen for player joins
             LobbyManager.listenToRoom(code, handleRoomUpdate);
@@ -3377,9 +4718,9 @@ function setupEventListeners() {
     });
     
     // Join room
-    const joinRoomHandler = async (overrideCode = null) => {
+    const joinRoomHandler = async () => {
         const codeInput = document.getElementById('room-code-input');
-        const code = (overrideCode || codeInput?.value || '').trim();
+        const code = codeInput?.value?.trim();
         
         console.log('Attempting to join room with code:', code);
         
@@ -3387,23 +4728,16 @@ function setupEventListeners() {
             alert('Please enter a valid 4-digit room code');
             return;
         }
-        if (!AppState.currentUser) {
-            alert('Sign in to join a room.');
-            ViewManager.show('auth');
-            AppState.pendingJoinCode = code;
-            return;
-        }
         
         try {
-            const displayName = getCurrentDisplayName();
+            const displayName = AppState.currentUser?.displayName || 
+                              `Player_${AppState.currentUser?.uid.substring(0, 6)}`;
             console.log('User:', AppState.currentUser?.uid, 'Display:', displayName);
             
             await LobbyManager.joinRoom(code, AppState.currentUser.uid, displayName);
             console.log('Successfully joined room');
             
             AppState.currentRoom = code;
-            AppState.pendingJoinCode = null;
-            try { window.history.replaceState({}, document.title, window.location.pathname + window.location.search); } catch { /* ignore */ }
             ViewManager.show('waiting');
             document.getElementById('display-room-code').textContent = code;
             
@@ -3441,7 +4775,7 @@ function setupEventListeners() {
         const widgetGameTab = document.getElementById('widget-game-tab');
         if (widgetGameTab) widgetGameTab.style.display = 'none';
         ViewManager.show('lobby');
-        PresenceManager.updateActivity('In Lobby');
+        PresenceSystem.updateActivity('In Lobby');
     });
     
     // Copy room code
@@ -3450,34 +4784,6 @@ function setupEventListeners() {
         navigator.clipboard.writeText(code).then(() => {
             alert('Code copied to clipboard!');
         });
-    });
-
-    // Share room code (if supported)
-    document.getElementById('share-code')?.addEventListener('click', async () => {
-        const code = document.getElementById('display-room-code').textContent;
-        const joinUrl = `${window.location.origin}/#/join/${encodeURIComponent(code)}`;
-        if (navigator.share) {
-            try {
-                await navigator.share({ title: 'Join my Stonedoku room', text: `Room code: ${code}`, url: joinUrl });
-            } catch { /* ignore */ }
-        } else {
-            try { await navigator.clipboard.writeText(joinUrl); } catch { /* ignore */ }
-            alert('Share link copied: ' + joinUrl);
-        }
-    });
-
-    // QR code for joining
-    document.getElementById('qr-code')?.addEventListener('click', () => {
-        const code = document.getElementById('display-room-code').textContent;
-        if (!code || code.includes('-')) return;
-        const joinUrl = `${window.location.origin}/#/join/${encodeURIComponent(code)}`;
-        const img = document.getElementById('room-qr-img');
-        const qrWrap = document.getElementById('room-qr');
-        if (img && qrWrap) {
-            img.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(joinUrl)}`;
-            img.alt = `QR code for room ${code}`;
-            qrWrap.style.display = 'block';
-        }
     });
     
     // ===========================================
@@ -3518,7 +4824,7 @@ function setupEventListeners() {
             countdownInterval = null;
         }
         ViewManager.show('lobby');
-        PresenceManager.updateActivity('In Lobby');
+        PresenceSystem.updateActivity('In Lobby');
     });
     
     // Pre-game chat
@@ -3569,14 +4875,14 @@ function setupEventListeners() {
         // Clean up and go to lobby
         cleanupAfterMatch();
         ViewManager.show('lobby');
-        PresenceManager.updateActivity('In Lobby');
+        PresenceSystem.updateActivity('In Lobby');
     });
     
     // Back to lobby from post-match
     document.getElementById('postmatch-back-lobby')?.addEventListener('click', () => {
         cleanupAfterMatch();
         ViewManager.show('lobby');
-        PresenceManager.updateActivity('In Lobby');
+        PresenceSystem.updateActivity('In Lobby');
     });
     
 
@@ -3619,7 +4925,7 @@ function setupEventListeners() {
             }
             
             ViewManager.show('lobby');
-            PresenceManager.updateActivity('In Lobby');
+            PresenceSystem.updateActivity('In Lobby');
         }
     });
     
@@ -3638,7 +4944,7 @@ function setupEventListeners() {
     document.getElementById('back-to-lobby')?.addEventListener('click', () => {
         ViewManager.hideModal('game-over-modal');
         ViewManager.show('lobby');
-        PresenceManager.updateActivity('In Lobby');
+        PresenceSystem.updateActivity('In Lobby');
     });
     
     // Global chat (legacy - keeping for any remaining forms)
@@ -3670,7 +4976,7 @@ function setupEventListeners() {
             if (codeEl) codeEl.textContent = code;
             ViewManager.hideModal('challenge-modal');
             ViewManager.show('waiting');
-            PresenceManager.updateActivity('Waiting for opponent');
+            PresenceSystem.updateActivity('Waiting for opponent');
             LobbyManager.listenToRoom(code, handleRoomUpdate);
             AppState.pendingChallenge = null;
         } catch (e) {
@@ -3817,13 +5123,11 @@ function setupEventListeners() {
     handleVanityUrl();
     handleUpdatesUrl();
     handleAdminUrl();
-    handleJoinUrl();
 
     window.addEventListener('hashchange', () => {
         handleUpdatesUrl();
         handleAdminUrl();
         handleVanityUrl();
-        handleJoinUrl();
     });
 }
 
@@ -3840,7 +5144,7 @@ function initProfilePage() {
     // Back button
     document.getElementById('profile-back-btn')?.addEventListener('click', () => {
         ViewManager.show('lobby');
-        PresenceManager.updateActivity('In Lobby');
+        PresenceSystem.updateActivity('In Lobby');
     });
     
     // Edit profile button
@@ -3864,51 +5168,11 @@ function initProfilePage() {
         document.getElementById('edit-profile-btn').style.display = 'none';
     });
 
-    // Run orientation tour again (from profile) — offer choice: Tour or Tutorial
-    document.getElementById('run-tour-btn')?.addEventListener('click', (e) => {
-        const btn = e.currentTarget;
-        // Position menu near button
-        try {
-            // Remove existing menu
-            const existing = document.getElementById('profile-orientation-menu');
-            if (existing) existing.remove();
-
-            const rect = btn.getBoundingClientRect();
-            const menu = document.createElement('div');
-            menu.id = 'profile-orientation-menu';
-            menu.className = 'profile-orientation-menu';
-            menu.style.position = 'absolute';
-            menu.style.left = `${Math.max(8, rect.left)}px`;
-            menu.style.top = `${rect.bottom + 8}px`;
-            menu.style.zIndex = 10050;
-            menu.innerHTML = `
-                <button class="btn btn-sm btn-primary" id="profile-run-tour">Run Tour</button>
-                <button class="btn btn-sm btn-ghost" id="profile-run-tutorial">Try Tutorial Game</button>
-                <button class="btn btn-sm btn-outline" id="profile-run-close">Close</button>
-            `;
-            document.body.appendChild(menu);
-
-            document.getElementById('profile-run-tour')?.addEventListener('click', () => {
-                try { ViewManager.show('lobby'); PresenceManager.updateActivity('In Lobby'); setTimeout(() => TourSystem.start(true), 250); } catch (e) { console.warn('Failed to start tour', e); }
-                menu.remove();
-            });
-            document.getElementById('profile-run-tutorial')?.addEventListener('click', () => {
-                try { TutorialGame.start(); } catch (e) { console.warn('Failed to start tutorial', e); }
-                menu.remove();
-            });
-            document.getElementById('profile-run-close')?.addEventListener('click', () => menu.remove());
-
-            // Auto-remove when clicking outside
-            const onDocClick = (evt) => {
-                if (!menu.contains(evt.target) && evt.target !== btn) {
-                    menu.remove();
-                    document.removeEventListener('click', onDocClick);
-                }
-            };
-            setTimeout(() => document.addEventListener('click', onDocClick), 50);
-        } catch (e) {
-            console.warn('Orientation menu failed', e);
-        }
+    // Run orientation tour again (from profile)
+    document.getElementById('run-tour-btn')?.addEventListener('click', () => {
+        ViewManager.show('lobby');
+        PresenceSystem.updateActivity('In Lobby');
+        setTimeout(() => TourSystem.start(true), 250);
     });
     
     // Save profile changes
@@ -4061,16 +5325,14 @@ function initProfilePage() {
 	        
 	        const btn = document.getElementById('profile-friend-btn');
 	        const currentText = btn?.textContent || '';
-        const labelEl = btn?.querySelector('.btn-label');
-        
+	        const labelEl = btn?.querySelector('.btn-label');
+	        
         try {
             if (currentText.includes('Add Friend')) {
-                const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, profileUserId);
-                const accepted = result === 'accepted_existing';
-                if (labelEl) labelEl.textContent = accepted ? 'Friends' : 'Request Sent';
-                else if (btn) btn.textContent = accepted ? 'Friends' : 'Request Sent';
-                alert(accepted ? 'Friend request accepted.' : 'Friend request sent!');
-                if (accepted) await FriendsManager.refresh();
+                await ProfileManager.sendFriendRequest(AppState.currentUser.uid, profileUserId);
+                if (labelEl) labelEl.textContent = 'Request Sent';
+                else if (btn) btn.textContent = 'Request Sent';
+                alert('Friend request sent!');
             } else if (currentText.includes('Remove Friend')) {
                 await ProfileManager.removeFriend(AppState.currentUser.uid, profileUserId);
                 if (labelEl) labelEl.textContent = 'Add Friend';
@@ -4145,52 +5407,7 @@ function shareToSocial(platform) {
             return;
     }
     
-        window.open(shareUrl, '_blank', 'width=600,height=400');
-}
-
-function isProfileDeepLink(hash = window.location.hash || '', path = window.location.pathname || '') {
-    return /^#\/?(?:profile|user|u)\/.+/i.test(hash) || /^\/(?:profile|user|u)\/.+/i.test(path);
-}
-
-function clearProfileDeepLink() {
-    try {
-        if (!isProfileDeepLink()) return;
-        const search = window.location.search || '';
-        const target = search ? `/${search}` : '/';
-        window.history.replaceState({}, document.title, target);
-    } catch (e) {
-        console.warn('Failed to clear profile URL', e);
-    }
-}
-
-function isUpdatesDeepLink(hash = window.location.hash || '') {
-    return /^#\/updates/i.test(hash);
-}
-
-function clearUpdatesDeepLink() {
-    try {
-        if (!isUpdatesDeepLink()) return;
-        const path = window.location.pathname || '/';
-        const search = window.location.search || '';
-        window.history.replaceState({}, document.title, `${path}${search}`);
-    } catch (e) {
-        console.warn('Failed to clear updates URL', e);
-    }
-}
-
-function isAdminDeepLink(hash = window.location.hash || '') {
-    return /^#\/admin/i.test(hash);
-}
-
-function clearAdminDeepLink() {
-    try {
-        if (!isAdminDeepLink()) return;
-        const path = window.location.pathname || '/';
-        const search = window.location.search || '';
-        window.history.replaceState({}, document.title, `${path}${search}`);
-    } catch (e) {
-        console.warn('Failed to clear admin URL', e);
-    }
+    window.open(shareUrl, '_blank', 'width=600,height=400');
 }
 
 // ===========================================
@@ -4288,26 +5505,6 @@ function handleAdminUrl() {
         return false;
     } catch (e) {
         console.warn('Failed to handle admin URL', e);
-        return false;
-    }
-}
-
-// ===========================================
-// Join Room Deep Link (#/join/<code>)
-// ===========================================
-function handleJoinUrl() {
-    try {
-        const hash = window.location.hash || '';
-        const match = hash.match(/^#\/join\/(\d{4})$/i);
-        if (!match) return false;
-        const code = match[1];
-        AppState.pendingJoinCode = code;
-        if (AppState.authReady && AppState.currentUser) {
-            joinRoomHandler(code);
-        }
-        return true;
-    } catch (e) {
-        console.warn('Failed to handle join URL', e);
         return false;
     }
 }
@@ -4644,8 +5841,6 @@ function initFloatingChat() {
     const NotificationCenter = (() => {
         const defaults = { global: true, game: true, dms: true, sound: true, badges: true };
         const counts = { global: 0, game: 0, dm: new Map() };
-        const LAST_SEEN_KEY = 'stonedoku_chat_seen_v1';
-        let lastSeen = { global: Date.now(), game: Date.now(), dm: {} };
 
         const loadPrefs = () => {
             try {
@@ -4657,25 +5852,6 @@ function initFloatingChat() {
 
         const prefs = Object.assign({}, defaults, AppState.settings.notifications || {}, loadPrefs());
         AppState.settings.notifications = prefs;
-
-        const loadLastSeen = () => {
-            try {
-                const raw = localStorage.getItem(LAST_SEEN_KEY);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (parsed && typeof parsed === 'object') {
-                        lastSeen = Object.assign(lastSeen, parsed);
-                        if (!lastSeen.dm) lastSeen.dm = {};
-                    }
-                }
-            } catch { /* ignore */ }
-        };
-
-        const persistLastSeen = () => {
-            try { localStorage.setItem(LAST_SEEN_KEY, JSON.stringify(lastSeen)); } catch { /* ignore */ }
-        };
-
-        loadLastSeen();
 
         const persist = () => {
             AppState.settings.notifications = Object.assign({}, prefs);
@@ -4736,42 +5912,11 @@ function initFloatingChat() {
 
         const markRead = (channel) => {
             if (!channel) return;
-            if (channel === 'dms') {
-                // Clear all DM unread counts locally and in RTDB.
-                counts.dm.clear();
-                const uid = AppState.currentUser?.uid;
-                const threads = AppState.dmThreads || {};
-                if (uid && threads && Object.keys(threads).length > 0) {
-                    const updates = {};
-                    Object.keys(threads).forEach((otherId) => {
-                        updates[`${otherId}/unread`] = 0;
-                        lastSeen.dm[otherId] = Date.now();
-                    });
-                    update(ref(rtdb, `dmThreads/${uid}`), updates).catch(() => {});
-                }
-                persistLastSeen();
-                updateBadgeUi();
-                return;
-            }
-            if (channel === 'global') {
-                counts.global = 0;
-                lastSeen.global = Date.now();
-                persistLastSeen();
-            }
-            else if (channel === 'game') {
-                counts.game = 0;
-                lastSeen.game = Date.now();
-                persistLastSeen();
-            }
+            if (channel === 'global') counts.global = 0;
+            else if (channel === 'game') counts.game = 0;
             else if (channel.startsWith && channel.startsWith('dm_')) {
                 const id = channel.replace('dm_', '');
                 counts.dm.delete(id);
-                const uid = AppState.currentUser?.uid;
-                if (uid && id) {
-                    update(ref(rtdb, `dmThreads/${uid}/${id}`), { unread: 0 }).catch(() => {});
-                }
-                lastSeen.dm[id] = Date.now();
-                persistLastSeen();
             }
             updateBadgeUi();
         };
@@ -4781,18 +5926,10 @@ function initFloatingChat() {
             if (active) markRead(active);
         };
 
-        const markIncoming = (channel, senderId = null, dmId = null, timestamp = null) => {
+        const markIncoming = (channel, senderId = null, dmId = null) => {
             if (senderId && AppState.currentUser && senderId === AppState.currentUser.uid) return;
             if (!shouldCount(channel)) return;
             if (isChannelActive(channel)) return;
-
-            const ts = typeof timestamp === 'number' ? timestamp : null;
-            if (channel === 'global' && ts && ts <= (lastSeen.global || 0)) return;
-            if (channel === 'game' && ts && ts <= (lastSeen.game || 0)) return;
-            if (channel && channel.startsWith && channel.startsWith('dm_') && ts) {
-                const id = dmId || channel.replace('dm_', '');
-                if (lastSeen.dm?.[id] && ts <= lastSeen.dm[id]) return;
-            }
 
             if (channel === 'global') counts.global += 1;
             else if (channel === 'game') counts.game += 1;
@@ -4928,13 +6065,6 @@ function initFloatingChat() {
         }
         return existing;
     };
-
-    function updateDmHeader(otherUserId = null) {
-        const titleEl = document.getElementById('dm-view-title');
-        if (titleEl) {
-            titleEl.textContent = otherUserId ? getDmDisplayName(otherUserId) : 'Direct messages';
-        }
-    }
     const markThreadRead = async (otherUserId) => {
         if (!otherUserId || !AppState.currentUser) return;
         try {
@@ -4968,7 +6098,7 @@ function initFloatingChat() {
 	            }
 	            setChatHint('Sign in to start direct messages.');
         } else {
-            setChatHint('Tip: Use the DM tab or Friends panel to start private conversations');
+            setChatHint('Tip: Use direct messages to send private messages');
         }
     }
 
@@ -4988,123 +6118,51 @@ function initFloatingChat() {
             return;
         }
 
-        const showMessages = isDmConversation || !(isDmArea || isFriends);
-        if (messagesEl) messagesEl.style.display = showMessages ? 'flex' : 'none';
         if (dmConversationsSection) dmConversationsSection.style.display = isDmList ? 'block' : 'none';
         if (dmFriendsSection) dmFriendsSection.style.display = isFriends ? 'block' : 'none';
-        if (chatHintEl) chatHintEl.style.display = (isDmArea || isFriends) ? 'none' : 'block';
+        if (messagesEl) messagesEl.style.display = isDmConversation ? 'flex' : 'none';
+        if (chatHintEl) chatHintEl.style.display = isDmList ? 'block' : 'none';
     }
 
 	    async function renderDmFriends() {
-	        const requestsList = document.getElementById('dm-friend-requests-list');
-	        const friendsList = document.getElementById('dm-friends-list');
-	        if (!requestsList || !friendsList) return;
-
-	        if (!isRegisteredUser()) {
-	            requestsList.innerHTML = '<div class="dm-empty">Friend features are for registered users.</div>';
-	            friendsList.innerHTML = '';
-	            return;
-	        }
-
-	        // --- Fetch and render friend requests ---
-	        let incomingRequests = [];
-	        try {
-	            const reqQ = query(
-	                collection(firestore, 'friendRequests'),
-	                where('toUid', '==', AppState.currentUser.uid),
-	                where('status', '==', 'pending'),
-	                limit(30)
-	            );
-	            const snap = await getDocs(reqQ);
-	            incomingRequests = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
-	        } catch (e) {
-	            console.warn('Failed to load incoming friend requests for chat widget', e);
-	        }
-
-	        const loadProfiles = async (ids) => {
-	            const unique = Array.from(new Set(ids.filter(Boolean)));
-	            if (unique.length === 0) return [];
-	            const results = await Promise.all(unique.map(async (id) => {
-	                try {
-	                    const snap = await ProfileManager.getProfile(id);
-	                    if (!snap.exists()) return { id, data: null };
-	                    return { id, data: snap.data() || null };
-	                } catch {
-	                    return { id, data: null };
-	                }
-	            }));
-	            return results;
-	        };
-
-	        const requestIds = incomingRequests.map((r) => r?.fromUid).filter(Boolean);
-	        const requestProfiles = await loadProfiles(requestIds);
-	        requestsList.innerHTML = '';
-	        if (requestProfiles.length === 0) {
-	            requestsList.innerHTML = '<div class="friend-empty">No incoming requests.</div>';
-	        } else {
-	            for (const r of requestProfiles) {
-	                const name = r.data?.username || r.data?.displayName || `Player_${String(r.id).substring(0, 6)}`;
-	                const row = document.createElement('div');
-	                row.className = 'friend-item';
-	                row.innerHTML = `
-	                    <div class="friend-name">${UI.escapeHtml(name)}</div>
-	                    <div class="friend-actions">
-	                        <button class="btn btn-icon btn-sm" type="button" title="Accept"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg></button>
-	                        <button class="btn btn-icon btn-sm" type="button" title="Decline"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
-	                    </div>
-	                `;
-	                const [acceptBtn, declineBtn] = row.querySelectorAll('button');
-	                acceptBtn?.addEventListener('click', async () => {
-	                    try {
-	                        await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, r.id);
-	                        await renderDmFriends(); // Re-render this tab
-	                        await FriendsManager.refresh(); // Also refresh lobby panel if open
-	                    } catch (e) {
-	                        console.error('Failed to accept friend request', e);
-	                        UI.showToast('Failed to accept request.', 'error');
-	                    }
-	                });
-	                declineBtn?.addEventListener('click', async () => {
-	                    try {
-	                        await ProfileManager.declineFriendRequest(AppState.currentUser.uid, r.id);
-	                        await renderDmFriends(); // Re-render this tab
-	                        await FriendsManager.refresh(); // Also refresh lobby panel if open
-	                    } catch (e) {
-	                        console.error('Failed to decline friend request', e);
-	                        UI.showToast('Failed to decline request.', 'error');
-	                    }
-	                });
-	                requestsList.appendChild(row);
-	            }
-	        }
-
-	        // --- Fetch and render friends ---
+	        if (!dmFriendsListEl) return;
 	        const friendIds = Array.isArray(AppState.friends) ? AppState.friends : [];
-	        const friendProfiles = await loadProfiles(friendIds);
-	        friendsList.innerHTML = '';
-	        if (friendProfiles.length === 0) {
-	            friendsList.innerHTML = '<div class="dm-empty">No friends yet.</div>';
+	        dmFriendsListEl.innerHTML = '';
+	        if (friendIds.length === 0) {
+	            dmFriendsListEl.innerHTML = '<div class="dm-empty">No friends yet.</div>';
 	            return;
 	        }
-
-	        for (const f of friendProfiles) {
-	            const name = f.data?.username || f.data?.displayName || `Player_${String(f.id).substring(0, 6)}`;
-	            const isOnline = AppState.onlinePlayers[f.id]?.status === 'online';
+	        const profiles = await Promise.all(friendIds.map(async (id) => {
+	            try {
+	                const snap = await ProfileManager.getProfile(id);
+	                return snap.exists() ? { id, ...(snap.data() || {}) } : { id };
+	            } catch {
+	                return { id };
+	            }
+	        }));
+	        for (const p of profiles) {
 	            const row = document.createElement('div');
-	            row.className = 'friend-item';
-	            row.dataset.userId = f.id;
+	            row.className = 'dm-friend-item';
+	            const name = p.username || p.displayName || `Player_${String(p.id).substring(0, 6)}`;
 	            row.innerHTML = `
-	                <div class="friend-status-dot ${isOnline ? 'online' : ''}" title="${isOnline ? 'Online' : 'Offline'}"></div>
-	                <div class="friend-name">${UI.escapeHtml(name)}</div>
-	                <div class="friend-actions">
-	                    <button class="btn btn-icon btn-sm" type="button" title="Profile"><svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg></button>
-	                    <button class="btn btn-icon btn-sm" type="button" title="Message"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg></button>
+	                <div class="dm-friend-name">${UI.escapeHtml(name)}</div>
+	                <div class="dm-friend-actions">
+	                    <button type="button" class="btn btn-secondary btn-sm">DM</button>
 	                </div>
 	            `;
-	            const [profileBtn, messageBtn] = row.querySelectorAll('button');
-	            profileBtn?.addEventListener('click', () => UI.showProfilePage(f.id));
-	            messageBtn?.addEventListener('click', () => openDmConversation(f.id));
-	            friendsList.appendChild(row);
+	            row.querySelector('button')?.addEventListener('click', async () => {
+	                if (!dmEnabled) {
+	                    alert('Sign in with email to use direct messages.');
+	                    return;
+	                }
+	                try {
+	                    await openDmConversation(p.id);
+	                } catch (e) {
+	                    console.warn('Failed to open DM from friends list', e);
+	                    alert('Failed to open DM.');
+	                }
+	            });
+	            dmFriendsListEl.appendChild(row);
 	        }
 	    }
 
@@ -5145,9 +6203,6 @@ function initFloatingChat() {
         const messagesVisible = messagesEl && messagesEl.style.display !== 'none';
         if (isActive && messagesVisible && !widget.classList.contains('minimized')) {
             UI.addChatMessage('chat-widget-messages', msg.displayName, msg.text, msg.timestamp, msg.userId);
-            requestAnimationFrame(() => {
-                if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
-            });
         }
     }
 
@@ -5162,20 +6217,12 @@ function initFloatingChat() {
             headerMsg.className = 'chat-system-msg';
             headerMsg.textContent = `Direct messages with ${name}`;
             messagesEl.appendChild(headerMsg);
-            updateDmHeader(otherId);
-        } else {
-            updateDmHeader(null);
         }
 
         const list = messageStore.get(channel) || [];
         for (const msg of list) {
             UI.addChatMessage('chat-widget-messages', msg.displayName, msg.text, msg.timestamp, msg.userId);
         }
-
-        // Always keep most recent in view
-        requestAnimationFrame(() => {
-            if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
-        });
 
         clearActiveUnread();
     }
@@ -5337,7 +6384,7 @@ function initFloatingChat() {
                 update(ref(rtdb, `dmThreads/${AppState.currentUser.uid}/${otherUserId}`), { unread: 0 }).catch(() => {});
             }
             if (msg?.from && msg.from !== AppState.currentUser?.uid) {
-                NotificationCenter.markIncoming(`dm_${otherUserId}`, msg.from, otherUserId, normalizeTimestamp(msg.timestamp));
+                NotificationCenter.markIncoming(`dm_${otherUserId}`, msg.from, otherUserId);
             }
         });
     }
@@ -5348,7 +6395,7 @@ function initFloatingChat() {
             const msg = normalizeChatMessage(raw);
             storeAppend(channel, raw);
             if (channel === 'game' || channel === 'global') {
-                NotificationCenter.markIncoming(channel, msg.userId, null, msg.timestamp);
+                NotificationCenter.markIncoming(channel, msg.userId);
             }
         },
         setDmThreads(threads) {
@@ -5550,10 +6597,8 @@ function initFloatingChat() {
 	        try {
 	            const resolved = await getDmQuickTarget();
 	            if (!resolved) return;
-	            const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
-	            const accepted = result === 'accepted_existing';
-	            setDmQuickStatus(accepted ? `Accepted pending request with @${resolved.username}` : `Friend request sent to @${resolved.username}`, false);
-	            if (accepted) await FriendsManager.refresh();
+	            await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
+	            setDmQuickStatus(`Friend request sent to @${resolved.username}`, false);
 	        } catch (e) {
 	            console.error('Quick add friend failed', e);
 	            setDmQuickStatus(e?.message || 'Failed to send friend request.', true);
@@ -5577,10 +6622,8 @@ function initFloatingChat() {
 	                UI.showToast('User not found.', 'error');
 	                return;
 	            }
-	            const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
-	            const accepted = result === 'accepted_existing';
-	            UI.showToast(accepted ? `Accepted pending request with @${resolved.username}` : `Friend request sent to @${resolved.username}`, 'success');
-	            if (accepted) await FriendsManager.refresh();
+	            await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
+	            UI.showToast(`Friend request sent to @${resolved.username}`, 'success');
 	            if (friendHandleInput) friendHandleInput.value = '';
 	        } catch (e) {
 	            console.error('Friend add failed', e);
@@ -5731,15 +6774,19 @@ function initFloatingChat() {
                 alert('Messaging is disabled for your account. Please contact an administrator.');
                 return;
             }
-            // No inline whisper command supported; use DMs or Friends panel for private messages.
-            const displayName = getCurrentDisplayName();
+            if ((text.startsWith('/dm ') || text.startsWith('/d ')) && !dmEnabled) {
+                alert('Sign in to use direct messages.');
+                return;
+            }
+            const displayName = AppState.currentUser.displayName || 
+                              `Player_${AppState.currentUser.uid.substring(0, 6)}`;
             
             const activeTab = document.querySelector('.widget-tab.active');
             const chatMode = activeTab?.dataset.chat || 'global';
             
             try {
-                if (chatMode === 'dms' && !(AppState.widgetChatMode && AppState.widgetChatMode.startsWith('dm_'))) {
-                    // In DM list view, do nothing.
+                if ((chatMode === 'dms' || chatMode === 'friends') && !(AppState.widgetChatMode && AppState.widgetChatMode.startsWith && AppState.widgetChatMode.startsWith('dm_'))) {
+                    alert('Select a conversation to send a message.');
                     return;
                 }
                 if (chatMode === 'game') {
@@ -5766,7 +6813,14 @@ function initFloatingChat() {
         }
     });
 
-    // Whisper/autocomplete removed: no-op
+    // Autocomplete deprecated whisper command to /dm
+    input?.addEventListener('input', (e) => {
+        if (!dmEnabled) return;
+        const val = e.target.value;
+        if (/^@whi(?!s)/i.test(val)) {
+            e.target.value = val.replace(/^@whi/i, '/dm');
+        }
+    });
     
     // Helper to update unread badge
     function updateUnreadBadge() {
@@ -5906,22 +6960,6 @@ const CreativeFeatures = {
     }
 };
 
-// Game UI now lives in src/client/ui/gameUi.js (instantiated once dependencies exist)
-GameUI = createGameUI({
-    AppState,
-    BoardIntegritySystem,
-    GameHelpers,
-    AudioManager,
-    CreativeFeatures,
-    ArchitecturalStateSystem,
-    UI,
-    ProfileManager,
-    ViewManager,
-    MatchManager,
-    showPostMatchScreen
-});
-window.GameUI = GameUI;
-
 // ===========================================
 // Game Functions
 // ===========================================
@@ -5997,7 +7035,7 @@ function startSinglePlayerGame(difficulty, options = null) {
     
     ViewManager.show('game');
     GameUI.startTimer();
-    PresenceManager.updateActivity(`Playing: ${difficultyLabel} Mode`);
+    PresenceSystem.updateActivity(`Playing: ${difficultyLabel} Mode`);
 }
 
 async function startVersusGame(roomData) {
@@ -6100,7 +7138,7 @@ async function startVersusGame(roomData) {
     
     ViewManager.show('game');
     GameUI.startTimer();
-    PresenceManager.updateActivity('Playing: Bust the Board');
+    PresenceSystem.updateActivity('Playing: Bust the Board');
     
     // Listen for match updates
     MatchManager.listenToMatch(matchId, handleMatchUpdate);
@@ -6197,7 +7235,7 @@ function showPregameLobby(room) {
     console.log('Showing pre-game lobby');
     
     ViewManager.show('pregame-lobby');
-    PresenceManager.updateActivity('In Pre-Game Lobby');
+    PresenceSystem.updateActivity('In Pre-Game Lobby');
     
     updatePregameLobbyUI(room);
 
@@ -6409,7 +7447,7 @@ function showPostMatchScreen(match, userId, opponentId, isWinner, isTie, isDisco
     
     // Show postmatch view
     ViewManager.show('postmatch');
-    PresenceManager.updateActivity('Post-Match');
+    PresenceSystem.updateActivity('Post-Match');
 }
 
 async function initRematchVoting(matchId, userId, opponentId) {
@@ -6482,7 +7520,7 @@ function handleRematchVoteUpdate(votes, userId, opponentId) {
         setTimeout(() => {
             cleanupAfterMatch();
             ViewManager.show('lobby');
-            PresenceManager.updateActivity('In Lobby');
+            PresenceSystem.updateActivity('In Lobby');
         }, 2000);
     }
 }
@@ -6535,7 +7573,7 @@ async function startRematch() {
     
     // Go back to pre-game lobby
     ViewManager.show('pregame-lobby');
-    PresenceManager.updateActivity('In Pre-Game Lobby');
+    PresenceSystem.updateActivity('In Pre-Game Lobby');
     
     // Re-fetch room data to update UI
     const freshSnapshot = await get(roomRef);
@@ -6618,8 +7656,7 @@ function handleMatchUpdate(match) {
 	// Auth State Handler
 	// ===========================================
 	let authListenerRegistered = false;
-    let userProfileUnsub = null;
-    let friendRequestsUnsub = null;
+	let userProfileUnsub = null;
 	async function configureAuthPersistence() {
 	    try {
 	        await setPersistence(auth, browserLocalPersistence);
@@ -6688,7 +7725,7 @@ function registerAuthListener() {
                     const lastSignIn = Date.parse(user.metadata?.lastSignInTime || '') || 0;
                     if (lastSignIn && Date.now() - lastSignIn > ANON_TTL_MS) {
                         try {
-                            await PresenceManager.cleanup();
+                            await PresenceSystem.cleanup();
                         } catch { /* ignore */ }
                         try {
                             await deleteDoc(doc(firestore, 'users', user.uid));
@@ -6708,12 +7745,8 @@ function registerAuthListener() {
 	                AppState.passwordReset.active = false;
 
 	                // Reset prior profile listener (user switching / logout-login).
-                    try { if (typeof userProfileUnsub === 'function') userProfileUnsub(); } catch { /* ignore */ }
-                    userProfileUnsub = null;
-                    try { if (typeof friendRequestsUnsub === 'function') friendRequestsUnsub(); } catch { /* ignore */ }
-                    friendRequestsUnsub = null;
-                    try { if (typeof friendRequestsUnsub === 'function') friendRequestsUnsub(); } catch { /* ignore */ }
-                    friendRequestsUnsub = null;
+	                try { if (typeof userProfileUnsub === 'function') userProfileUnsub(); } catch { /* ignore */ }
+	                userProfileUnsub = null;
                 
                 // If we're in the middle of onboarding, don't redirect to lobby
                 if (AppState.onboarding.active) {
@@ -6756,7 +7789,7 @@ function registerAuthListener() {
                 UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
                 UI.updateBadges(profileData?.badges || []);
                 AppState.friends = profileData?.friends || [];
-                FriendsManager.render().catch(() => {});
+                FriendsPanel.render().catch(() => {});
                 if (user.isAnonymous) {
                     UI.showToast('You are playing as a guest. Create an account to save progress.', 'info');
                 }
@@ -6771,7 +7804,7 @@ function registerAuthListener() {
                         applyProfileModeration(data);
                         UI.updateStats(data.stats || { wins: 0, losses: 0 });
                         UI.updateBadges(data.badges || []);
-                        FriendsManager.render().catch(() => {});
+                        FriendsPanel.render().catch(() => {});
                         const name = data.username || data.displayName || `Player_${user.uid.substring(0, 6)}`;
                         const truncated = name.length > 15 ? name.substring(0, 15) + '...' : name;
                         const headerName = document.getElementById('user-name');
@@ -6784,29 +7817,9 @@ function registerAuthListener() {
 	                    console.warn('Failed to attach profile listener', e);
 	                }
 
-                    // Real-time incoming friend requests for this user (so requests appear instantly)
-                    try {
-                        // Clean any previous listener first
-                        try { if (typeof friendRequestsUnsub === 'function') friendRequestsUnsub(); } catch {}
-                        const frQuery = query(
-                            collection(firestore, 'friendRequests'),
-                            where('toUid', '==', user.uid),
-                            where('status', '==', 'pending')
-                        );
-                        friendRequestsUnsub = onSnapshot(frQuery, (qsnap) => {
-                            // Rerender the friends panel so the incoming requests list updates immediately.
-                            // Keep this lightweight: render handles fetching profiles and UI updates.
-                            try { FriendsManager.render().catch(() => {}); } catch (e) { console.warn('FriendRequests onSnapshot handler failed', e); }
-                        }, (err) => {
-                            console.warn('FriendRequests listener error', err);
-                        });
-                    } catch (e) {
-                        console.warn('Failed to attach friendRequests listener', e);
-                    }
-
                 // Initialize realtime systems (best-effort; do not block view transitions).
-                PresenceManager.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
-                PresenceManager.listenToOnlinePlayers((players) => {
+                PresenceSystem.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
+                PresenceSystem.listenToOnlinePlayers((players) => {
                     AppState.onlinePlayers = players;
                     UI.updatePlayersList(players);
                 });
@@ -6997,28 +8010,6 @@ window.StonedokuDebug = {
 // Expose a few helpers for E2E and integration tests
 window.startSinglePlayerGame = startSinglePlayerGame;
 window.AppState = AppState;
-
-// Expose core managers for incremental splitting/refactor
-window.Stonedoku = window.Stonedoku || {};
-window.Stonedoku.Managers = Object.assign(window.Stonedoku.Managers || {}, {
-    ViewManager,
-    PresenceManager,
-    ProfileManager,
-    FriendsManager,
-    LobbyManager,
-    MatchManager,
-    UpdatesCenter,
-    AdminConsole,
-    AudioManager,
-    GameHelpers,
-    GameUI,
-    SudokuGenerator,
-    ArchitecturalStateSystem,
-    MotionSystem,
-    AccessibilityManager,
-    CookieConsent,
-    LegalModals
-});
 
 // ===========================================
 // Cookie Consent Manager (UK PECR Compliant)
@@ -7497,7 +8488,6 @@ const UpdatesCenter = {
 const AdminConsole = {
     isAdmin: false,
     unsub: null,
-    editingUpdateId: null, // Add this line
     allowlistForm: null,
     allowlistInput: null,
     allowlistStatus: null,
@@ -7870,15 +8860,6 @@ const AdminConsole = {
         this.modClearGlobalBtn?.addEventListener('click', wrapMod('clearGlobalChat', false));
         this.modClearUserGlobalBtn?.addEventListener('click', wrapMod('clearUserGlobalChat'));
 
-        const cancelBtn = document.createElement('button');
-        cancelBtn.type = 'button';
-        cancelBtn.id = 'admin-update-cancel';
-        cancelBtn.className = 'btn btn-secondary';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.style.display = 'none';
-        this.form.querySelector('.admin-form-actions').appendChild(cancelBtn);
-        cancelBtn.addEventListener('click', () => this.cancelEdit());
-
         this.form?.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!this.isAdmin) return;
@@ -7892,33 +8873,27 @@ const AdminConsole = {
             if (!title || !body) return;
             if (this.statusEl) this.statusEl.textContent = '';
 
-            const data = {
-                title,
-                body,
-                kind,
-                severity,
-                active: true,
-                banner,
-                pinned,
-                updatedAt: Timestamp.now(),
-                authorUid: AppState.currentUser?.uid || null
-            };
-
             try {
-                if (this.editingUpdateId) {
-                    const docRef = doc(firestore, 'updates', this.editingUpdateId);
-                    await updateDoc(docRef, data);
-                    if (this.statusEl) this.statusEl.textContent = 'Update saved.';
-                } else {
-                    data.createdAt = Timestamp.now();
-                    await addDoc(collection(firestore, 'updates'), data);
-                    if (this.statusEl) this.statusEl.textContent = 'Published.';
-                }
-                this.cancelEdit();
+                await addDoc(collection(firestore, 'updates'), {
+                    title,
+                    body,
+                    kind,
+                    severity,
+                    active: true,
+                    banner,
+                    pinned,
+                    createdAt: Timestamp.now(),
+                    updatedAt: Timestamp.now(),
+                    authorUid: AppState.currentUser?.uid || null
+                });
+                this.form.reset();
+                const bannerToggle = document.getElementById('admin-update-banner');
+                if (bannerToggle) bannerToggle.checked = true;
+                if (this.statusEl) this.statusEl.textContent = 'Published.';
                 setTimeout(() => { if (this.statusEl) this.statusEl.textContent = ''; }, 1500);
             } catch (err) {
-                console.error('Admin publish/update failed', err);
-                if (this.statusEl) this.statusEl.textContent = 'Failed to save.';
+                console.error('Admin publish failed', err);
+                if (this.statusEl) this.statusEl.textContent = 'Failed to publish.';
             }
         });
     },
@@ -7934,10 +8909,28 @@ const AdminConsole = {
             return false;
         }
         try {
+            // Allow either a Firestore allowlist doc or a profile flag (legacy/escape hatch).
+            const profileAdmin = AppState.profile?.isAdmin === true;
+            if (profileAdmin) {
+                this.isAdmin = true;
+            }
             const adminDocRef = doc(firestore, 'admins', AppState.currentUser.uid);
             const snap = await getDoc(adminDocRef);
             if (snap.exists()) {
                 this.isAdmin = true;
+            } else if (profileAdmin) {
+                // Self-heal: if profile says admin but allowlist doc missing, recreate it.
+                try {
+                    await setDoc(adminDocRef, {
+                        userId: AppState.currentUser.uid,
+                        addedBy: AppState.currentUser.uid,
+                        addedAt: Timestamp.now(),
+                        restoredFromProfile: true
+                    });
+                    this.isAdmin = true;
+                } catch (e) {
+                    console.warn('Failed to restore admin allowlist doc', e);
+                }
             }
         } catch (e) {
             console.warn('Admin check failed', e);
@@ -8021,15 +9014,13 @@ const AdminConsole = {
                     <label class="admin-update-toggle"><input type="checkbox" class="admin-toggle-banner"> Banner</label>
                     <label class="admin-update-toggle"><input type="checkbox" class="admin-toggle-pinned"> Pinned</label>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm admin-update-edit">Edit</button>
                 <button type="button" class="btn btn-secondary btn-sm admin-update-danger">Delete</button>
             `;
 
             const activeEl = actions.querySelector('.admin-toggle-active');
             const bannerEl = actions.querySelector('.admin-toggle-banner');
             const pinnedEl = actions.querySelector('.admin-toggle-pinned');
-            const editBtn = actions.querySelector('.admin-update-edit');
-            const deleteBtn = actions.querySelector('button.admin-update-danger');
+            const deleteBtn = actions.querySelector('button');
 
             if (activeEl) activeEl.checked = !!item.active;
             if (bannerEl) bannerEl.checked = !!item.banner;
@@ -8047,7 +9038,6 @@ const AdminConsole = {
             activeEl?.addEventListener('change', () => updateFlags({ active: !!activeEl.checked }));
             bannerEl?.addEventListener('change', () => updateFlags({ banner: !!bannerEl.checked }));
             pinnedEl?.addEventListener('change', () => updateFlags({ pinned: !!pinnedEl.checked }));
-            editBtn?.addEventListener('click', () => this.startEdit(item));
             deleteBtn?.addEventListener('click', async () => {
                 if (!confirm('Delete this update?')) return;
                 try {
@@ -8063,34 +9053,6 @@ const AdminConsole = {
             row.appendChild(actions);
             this.listEl.appendChild(row);
         }
-    },
-
-    startEdit(item) {
-        this.editingUpdateId = item.id;
-        document.getElementById('admin-update-title').value = item.title;
-        document.getElementById('admin-update-body').value = item.body;
-        document.getElementById('admin-update-kind').value = item.kind;
-        document.getElementById('admin-update-severity').value = item.severity;
-        document.getElementById('admin-update-banner').checked = item.banner;
-        document.getElementById('admin-update-pinned').checked = item.pinned;
-
-        const submitBtn = this.form.querySelector('button[type="submit"]');
-        if (submitBtn) submitBtn.textContent = 'Save Changes';
-
-        const cancelBtn = document.getElementById('admin-update-cancel');
-        if (cancelBtn) cancelBtn.style.display = 'inline-block';
-
-        this.form.scrollIntoView({ behavior: 'smooth' });
-    },
-
-    cancelEdit() {
-        this.editingUpdateId = null;
-        this.form.reset();
-        const submitBtn = this.form.querySelector('button[type="submit"]');
-        if (submitBtn) submitBtn.textContent = 'Publish';
-
-        const cancelBtn = document.getElementById('admin-update-cancel');
-        if (cancelBtn) cancelBtn.style.display = 'none';
     }
 };
 
@@ -8213,38 +9175,13 @@ const AccessibilityManager = {
 // ===========================================
 // Initialize App
 // ===========================================
-async function bootstrapApp() {
-    console.log('Stonedoku initialized - v2.1 (Europe DB, WCAG 2.1 AA)');
-    console.log('Database URL:', firebaseConfig.databaseURL);
-    console.log('Debug tools available at window.StonedokuDebug');
+	async function bootstrapApp() {
+	    console.log('Stonedoku initialized - v2.1 (Europe DB, WCAG 2.1 AA)');
+	    console.log('Database URL:', firebaseConfig.databaseURL);
+	    console.log('Debug tools available at window.StonedokuDebug');
 
-    try { document.body.classList.toggle('front-page', FRONT_PAGE_VIEWS.includes(AppState.currentView)); } catch { /* ignore */ }
-
-    await configureAuthPersistence();
-    registerAuthListener();
-    // If auth credential already present synchronously, show authenticated UI early
-    try {
-        if (auth && auth.currentUser) {
-            try { showAuthenticatedShell(getFallbackDisplayName(auth.currentUser)); } catch (e) { /* ignore */ }
-        }
-    } catch (e) {}
-    // Some test environments set auth asynchronously; poll briefly so E2E sees the authenticated shell quickly.
-    try {
-        if (typeof window !== 'undefined') {
-            const start = Date.now();
-            const earlyPoll = setInterval(() => {
-                try {
-                    if (auth && auth.currentUser) {
-                        try { showAuthenticatedShell(getFallbackDisplayName(auth.currentUser)); } catch (e) { /* ignore */ }
-                        clearInterval(earlyPoll);
-                    }
-                    if (Date.now() - start > 5000) clearInterval(earlyPoll);
-                } catch (e) { clearInterval(earlyPoll); }
-            }, 200);
-        }
-    } catch (e) { /* ignore polling failures */ }
-    // Initialize orientation manager early so onboarding/tour get nudges on mobile
-    try { OrientationManager.init(); } catch (e) { console.warn('OrientationManager init failed', e); }
+	    await configureAuthPersistence();
+	    registerAuthListener();
     
     // Initialize audio
     AudioManager.init();
