@@ -1,4 +1,4 @@
-import { AppState } from '../appState.js';
+import { AppState } from '../core/appState.js';
 
 // Manages visual fracture/repair effects on the Sudoku board.
 export const BoardIntegritySystem = {

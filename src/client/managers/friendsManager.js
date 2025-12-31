@@ -1,4 +1,4 @@
-import { AppState } from '../appState.js';
+import { AppState } from '../core/appState.js';
 import { collection, getDocs, limit, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 export function createFriendsManager({

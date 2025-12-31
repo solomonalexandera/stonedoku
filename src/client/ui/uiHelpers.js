@@ -1,4 +1,4 @@
-import { AppState as defaultAppState } from '../appState.js';
+import { AppState as defaultAppState } from '../core/appState.js';
 
 const defaultBadgeInfo = {
     rookie: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Rookie' },

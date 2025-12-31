@@ -33,7 +33,7 @@ This document indexes the primary "manager" objects and domain modules implement
 ### `ViewManager`
 - **Purpose:** Controls which SPA view is visible (`auth`, `lobby`, `game`, etc.).
 - **Key responsibilities:** Show/hide views, route-like navigation, and coordinate view-level lifecycle (mount/unmount) handlers.
-- **Location:** `src/client/ui/viewManager.js`
+- **Location:** `src/client/managers/viewManager.js`
 
 ### `LogManager`
 - **Purpose:** Centralized client-side logging and diagnostics.
@@ -87,9 +87,13 @@ This document indexes the primary "manager" objects and domain modules implement
 - **Purpose:** Keyboard navigation, ARIA labels, screen reader announcements.
 - **Location:** `src/client/managers/accessibilityManager.js`
 
+### `TourSystem`
+- **Purpose:** Onboarding tour for new users.
+- **Location:** `src/client/managers/tourSystem.js`
+
 ## UI Modules (`src/client/ui/`)
 
-### `GameHelpers` & `GameUI`
+### `GameHelpers` & `GameUi`
 - **Purpose:** Helpers and UI rendering for the Sudoku board.
 - **Key responsibilities:** Render grid, handle cell selection/input, maintain move history, update remaining counts, and highlight conflicts.
 - **Location:** `src/client/ui/gameHelpers.js`, `src/client/ui/gameUi.js`
@@ -122,10 +126,6 @@ This document indexes the primary "manager" objects and domain modules implement
 ### `ProfilePage`
 - **Purpose:** Profile page initialization, editing, social sharing, and URL routing.
 - **Location:** `src/client/ui/profilePage.js`
-
-### `TourSystem`
-- **Purpose:** Onboarding tour for new users.
-- **Location:** `src/client/ui/tourSystem.js`
 
 ### `PasswordReset`
 - **Purpose:** Password reset flow UI.

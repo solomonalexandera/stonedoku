@@ -1,4 +1,4 @@
-import { AppState } from '../appState.js';
+import { AppState } from '../core/appState.js';
 import { ProfanityFilter } from '../lib/profanityFilter.js';
 import {
     addDoc,

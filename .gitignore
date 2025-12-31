@@ -30,6 +30,11 @@ manuals
 functions/lib/
 dist/
 
+# Test outputs
+test-results/
+playwright-report/
+.playwright/
+
 # Logs
 *.log
 

@@ -14,3 +14,5 @@ export { createArchitecturalStateSystem } from './architecturalStateSystem.js';
 export { createChallengeSystem } from './challengeSystem.js';
 export { createCreativeFeatures, CreativeFeatures } from './creativeFeatures.js';
 export { createAccessibilityManager, AccessibilityManager } from './accessibilityManager.js';
+export { createViewManager } from './viewManager.js';
+export { createTourSystem } from './tourSystem.js';

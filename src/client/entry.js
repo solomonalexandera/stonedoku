@@ -113,14 +113,14 @@ import { createCreativeFeatures, CreativeFeatures } from './managers/creativeFea
 import { createAccessibilityManager, AccessibilityManager } from './managers/accessibilityManager.js';
 
 // UI
-import { createViewManager } from './ui/viewManager.js';
+import { createViewManager } from './managers/viewManager.js';
 import { createUiHelpers } from './ui/uiHelpers.js';
 import { createUiCore } from './ui/uiCore.js';
 import { createGameHelpers } from './ui/gameHelpers.js';
 import { createGameUi } from './ui/gameUi.js';
 import { BoardIntegritySystem } from './ui/boardIntegrity.js';
 import { createPasswordReset } from './ui/passwordReset.js';
-import { createTourSystem } from './ui/tourSystem.js';
+import { createTourSystem } from './managers/tourSystem.js';
 import { createCookieConsent, CookieConsent } from './ui/cookieConsent.js';
 import { createLegalModals, LegalModals } from './ui/legalModals.js';
 import { createUpdatesCenter, UpdatesCenter } from './ui/updatesCenter.js';

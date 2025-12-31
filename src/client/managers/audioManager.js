@@ -1,4 +1,4 @@
-import { AppState } from '../appState.js';
+import { AppState } from '../core/appState.js';
 
 // Audio cues used across the app. Mirrors legacy implementation from app.js.
 export const AudioManager = {

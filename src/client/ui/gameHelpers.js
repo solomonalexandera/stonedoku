@@ -1,4 +1,4 @@
-import { AppState } from '../appState.js';
+import { AppState } from '../core/appState.js';
 import { BoardIntegritySystem } from './boardIntegrity.js';
 
 export function createGameHelpers({ AppState: appState = AppState, BoardIntegritySystem: boardIntegrity = BoardIntegritySystem } = {}) {
