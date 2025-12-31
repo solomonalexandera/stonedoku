@@ -111,6 +111,7 @@ import { MotionManager } from './managers/motionManager.js';
 import { createArchitecturalStateManager } from './managers/architecturalStateManager.js';
 import { createCreativeFeatures, CreativeFeatures } from './managers/creativeFeatures.js';
 import { createAccessibilityManager, AccessibilityManager } from './managers/accessibilityManager.js';
+import { createOnboardingManager } from './managers/onboardingManager.js';
 
 // UI
 import { createViewManager } from './managers/viewManager.js';
@@ -275,6 +276,32 @@ function initProfilePage() {
 }
 
 // ===========================================
+// Event Setup (DOM listeners)
+// ===========================================
+const eventSetup = createEventSetup({
+    // Firebase
+    auth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+    updateProfile, signOut, deleteUser, deleteDoc, doc, firestore, rtdb, ref, get, update,
+    // State & Managers
+    AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager, MatchManager, ChatManager,
+    GameUi, GameHelpers, AudioManager, UI, ChallengeSystemManager,
+    // Utilities
+    PasswordPolicy, PasswordReset, CookieConsent, OnboardingManager: null, TourManager,
+    getCurrentDisplayName, isRegisteredUser,
+    startSinglePlayerGame: gameFlow.startSinglePlayerGame,
+    handleRoomUpdate: gameFlow.handleRoomUpdate,
+    quitGame: gameFlow.quitGame,
+    navigateCell: gameFlow.navigateCell,
+    cleanupAfterMatch: gameFlow.cleanupAfterMatch,
+    // Sub-initializers
+    initFloatingChat,
+    initProfilePage,
+    handleVanityUrl: () => handleVanityUrl({ AppState, ProfileManager, UI }),
+    handleUpdatesUrl: () => handleUpdatesUrl(UpdatesCenter),
+    handleAdminUrl: () => handleAdminUrl(AppState, AdminConsole)
+});
+
+// ===========================================
 // Auth State Handler
 // ===========================================
 const authFlow = createAuthFlow({
@@ -290,6 +317,12 @@ async function handleAuthStateChange(user) {
         
         // Configure persistence based on cookie consent
         await authFlow.configureAuthPersistence();
+
+        if (AppState.onboarding?.active) {
+            console.log('Onboarding active, deferring lobby bootstrap');
+            AppState.authReady = true;
+            return;
+        }
         
         // Load profile
         try {
@@ -336,6 +369,10 @@ async function handleAuthStateChange(user) {
         AppState.currentUser = null;
         AppState.profile = null;
         AppState.friends = [];
+                if (AppState.onboarding) {
+                    AppState.onboarding.active = false;
+                    AppState.onboarding.step = 1;
+                }
         PresenceManager.cleanup();
         window.ChatWidget?.reset?.();
         ViewManager.show('auth');
@@ -344,30 +381,33 @@ async function handleAuthStateChange(user) {
     AppState.authReady = true;
 }
 
-// ===========================================
-// Event Setup
-// ===========================================
-const eventSetup = createEventSetup({
-    // Firebase
-    auth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-    updateProfile, signOut, deleteUser, deleteDoc, doc, firestore, rtdb, ref, get, update,
-    // State & Managers
-    AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager, MatchManager, ChatManager,
-    GameUi, GameHelpers, AudioManager, UI, ChallengeSystemManager,
-    // Utilities
-    PasswordPolicy, PasswordReset, CookieConsent, OnboardingManager: null, TourManager,
-    getCurrentDisplayName, isRegisteredUser,
-    startSinglePlayerGame: gameFlow.startSinglePlayerGame,
-    handleRoomUpdate: gameFlow.handleRoomUpdate,
-    quitGame: gameFlow.quitGame,
-    navigateCell: gameFlow.navigateCell,
-    cleanupAfterMatch: gameFlow.cleanupAfterMatch,
-    // Sub-initializers
-    initFloatingChat,
-    initProfilePage,
-    handleVanityUrl: () => handleVanityUrl({ AppState, ProfileManager, UI }),
-    handleUpdatesUrl: () => handleUpdatesUrl(UpdatesCenter),
-    handleAdminUrl: () => handleAdminUrl(AppState, AdminConsole)
+        const OnboardingManager = createOnboardingManager({
+            AppState,
+            ViewManager,
+            PasswordPolicy,
+            ProfileManager,
+            auth,
+            createUserWithEmailAndPassword,
+            updateProfile,
+            TourManager,
+            MotionManager,
+            UI,
+            startSinglePlayerGame: gameFlow.startSinglePlayerGame,
+            onCompleteBootstrap: async () => {
+                if (auth.currentUser) {
+                    await handleAuthStateChange(auth.currentUser);
+                }
+    },
+    // storage deps for avatar upload
+    storage,
+    storageRef,
+    uploadBytes,
+    getDownloadURL
+});
+
+// Rebind onboarding start button to the real manager (created after eventSetup initialization)
+document.getElementById('start-onboarding')?.addEventListener('click', () => {
+    try { OnboardingManager?.start?.(); } catch { /* ignore */ }
 });
 
 // ===========================================
@@ -419,6 +459,7 @@ window.Stonedoku = {
         GameHelpers,
         UI,
         TourManager,
+        OnboardingManager,
         PasswordReset,
         UpdatesCenter,
         AdminConsole,

@@ -181,11 +181,130 @@ export const api = onRequest(async (req, res) => {
       return;
     }
 
-    res.status(400).json({error: "unknown endpoint"});
-    return;
-  } catch (e: any) {
-    console.error("api error", e);
-    res.status(500).json({error: "server error"});
-    return;
-  }
-});
+    // Auth helpers: POST /auth/finalize { username, displayName, profilePicture }
+    if (parts[0] === 'auth' && parts[1] === 'finalize') {
+      if (req.method !== 'POST') {
+        res.status(405).json({error: 'Method not allowed'});
+        return;
+      }
+
+      let body: any = req.body;
+      const rawBody2: any = (req as any).rawBody;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch { body = null; }
+      } else if (!body && rawBody2) {
+        try { body = JSON.parse(rawBody2.toString('utf8')); } catch { body = null; }
+      }
+
+      const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || null;
+      if (!token) {
+        res.status(401).json({error: 'missing auth token'});
+        return;
+      }
+
+      let decoded: any = null;
+      try {
+        decoded = await auth.verifyIdToken(token);
+      } catch (e) {
+        console.error('Invalid ID token', e);
+        res.status(401).json({error: 'invalid token'});
+        return;
+      }
+
+      const uid = decoded.uid;
+      if (!uid) {
+        res.status(400).json({error: 'invalid token payload'});
+        return;
+      }
+
+      const usernameRaw = (body?.username || '').trim();
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(usernameRaw)) {
+        res.status(400).json({error: 'invalid username'});
+        return;
+      }
+
+      const displayName = (body?.displayName || usernameRaw || '').trim();
+      const email = (body?.email || '').trim() || null;
+      const profilePicture = (body?.profilePicture || null);
+
+      try {
+        await firestore.runTransaction(async (tx) => {
+          const usernameLower = usernameRaw.toLowerCase();
+          const usernameRef = firestore.collection('usernames').doc(usernameLower);
+          const existing = await tx.get(usernameRef);
+          if (existing.exists) {
+            const owner = existing.data()?.userId || null;
+            if (!owner) throw new Error('username_taken');
+            if (owner !== uid) throw new Error('username_taken');
+          }
+
+          tx.set(usernameRef, {
+            userId: uid,
+            username: usernameRaw,
+            usernameLower,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          const profileRef = firestore.collection('users').doc(uid);
+          const profileSnap = await tx.get(profileRef);
+          const base = {
+            userId: uid,
+            displayName,
+            username: usernameRaw,
+            usernameLower,
+            email,
+            profilePicture: profilePicture || null,
+            memberSince: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            badges: [],
+            stats: { wins: 0, losses: 0, gamesPlayed: 0 },
+            wins: 0, losses: 0, gamesPlayed: 0, bio: '', friends: [], friendRequests: [], socialLinks: {}, isPublic: true, isNewUser: true
+          };
+          if (profileSnap.exists) {
+            tx.set(profileRef, Object.assign({}, profileSnap.data(), base), { merge: true });
+          } else {
+            tx.set(profileRef, base, { merge: true });
+          }
+
+          // Vanity link
+          try {
+            const vanityRef = firestore.collection('vanityLinks').doc(usernameLower);
+            const vSnap = await tx.get(vanityRef);
+            if (!vSnap.exists) {
+              tx.set(vanityRef, {
+                userId: uid,
+                username: usernameRaw,
+                path: `/u/${usernameLower}`,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+          } catch (e) {
+            console.warn('Failed to set vanity link', e);
+          }
+
+        });
+
+        // Enqueue onboarding email
+        try {
+          await firestore.collection('mailQueue').add({
+            to: email,
+            subject: 'Welcome to Stonedoku',
+            template: 'welcome_onboarding',
+            data: { username: usernameRaw, displayName },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            processed: false
+          });
+        } catch (e) {
+          console.warn('Failed to enqueue welcome email', e);
+        }
+
+        res.json({ok: true});
+        return;
+      } catch (e: any) {
+        console.error('auth finalize failed', e);
+        const msg = e?.message || 'failed to finalize account';
+        if (msg === 'username_taken') res.status(409).json({error: 'username_taken'});
+        else res.status(500).json({error: msg});
+        return;
+      }
+    }

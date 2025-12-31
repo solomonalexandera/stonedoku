@@ -16,3 +16,4 @@ export { createCreativeFeatures, CreativeFeatures } from './creativeFeatures.js'
 export { createAccessibilityManager, AccessibilityManager } from './accessibilityManager.js';
 export { createViewManager } from './viewManager.js';
 export { createTourManager } from './tourManager.js';
+export { createOnboardingManager } from './onboardingManager.js';

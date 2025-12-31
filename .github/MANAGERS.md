@@ -95,6 +95,11 @@ This document indexes the primary "manager" objects and domain modules implement
 - **Purpose:** Handles animations with reduced motion support.
 - **Location:** `src/client/managers/motionManager.js`
 
+### `OnboardingManager`
+- **Purpose:** Multi-step registration flow (username, credentials, avatar) and account creation pipeline.
+- **Key responsibilities:** Validate usernames/passwords, create Firebase Auth users, upload optional avatars, trigger final lobby bootstrap, and offer tour/tutorial links.
+- **Location:** `src/client/managers/onboardingManager.js`
+
 ### `ArchitecturalStateManager`
 - **Purpose:** Manages visual states (calm, strain, collapse, restore) for gameplay effects.
 - **Location:** `src/client/managers/architecturalStateManager.js`
