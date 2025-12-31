@@ -16,3 +16,13 @@ export {
     normalizeTimestamp,
     normalizeChatMessage
 } from './floatingChat.js';
+export {
+    createProfilePage,
+    initProfilePage,
+    generateShareText,
+    shareToSocial,
+    handleVanityUrl,
+    handleUpdatesUrl,
+    handleAdminUrl,
+    waitForAuthReady
+} from './profilePage.js';
