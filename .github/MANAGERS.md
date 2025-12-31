@@ -14,18 +14,22 @@ This document indexes the primary "manager" objects and domain modules implement
 ### `LogManager`
 - **Purpose:** Centralized client-side logging and diagnostics.
 - **Key responsibilities:** Override console methods, capture logs into `window._capturedConsole`, and persist logs to Firestore `clientLogs` when permitted.
+- **Location:** `src/client/managers/logManager.js`
 
 ### `ProfileManager`
 - **Purpose:** CRUD and helper operations for user profiles stored in Firestore (`users` collection).
 - **Key responsibilities:** Create/update profiles, check username availability, manage friendships (send/accept/decline), and load friend/profile data.
+- **Location:** `src/client/managers/profileManager.js`
 
-### `FriendsPanel` (Friends UI)
+### `FriendsManager` (Friends UI)
 - **Purpose:** UI manager for displaying friends, incoming requests, and friend actions.
 - **Key responsibilities:** Render friend list, handle accept/decline actions, and refresh friend state.
+- **Location:** `src/client/managers/friendsManager.js`
 
-### `PresenceSystem`
+### `PresenceManager`
 - **Purpose:** Track online presence and current activity via the RTDB `presence/` path.
 - **Key responsibilities:** Manage `.info/connected` listeners, write presence status, and clear presence on disconnect.
+- **Location:** `src/client/managers/presenceManager.js` (factory `createPresenceManager`, instance created in `app.js`).
 
 ### `LobbyManager`
 - **Purpose:** Manage lobby creation and state in the RTDB (`lobbies/`).
@@ -34,6 +38,7 @@ This document indexes the primary "manager" objects and domain modules implement
 ### `MatchManager`
 - **Purpose:** Manage active match lifecycle and game rules for 1v1 matches.
 - **Key responsibilities:** Create matches in RTDB (`matches/`), apply moves, scorekeeping, mistake limits, and determining match end.
+- **Location:** `src/client/managers/matchManager.js`
 
 ### `ChatManager`
 - **Purpose:** Global and in-match chat messaging via RTDB.
@@ -53,6 +58,7 @@ This document indexes the primary "manager" objects and domain modules implement
 
 ### `AudioManager`
 - **Purpose:** Play audio cues for game events.
+- **Location:** `src/client/managers/audioManager.js`
 
 ### `SudokuGenerator`
 - **Purpose:** Create and solve Sudoku puzzles for different difficulties.
@@ -63,6 +69,7 @@ This document indexes the primary "manager" objects and domain modules implement
 ### `GameHelpers` & `GameUI`
 - **Purpose:** Helpers and UI rendering for the Sudoku board.
 - **Key responsibilities:** Render grid, handle cell selection/input, maintain move history, update remaining counts, and highlight conflicts.
+- **Location:** `src/client/ui/gameHelpers.js`, `src/client/ui/gameUi.js`
 
 ### `CreativeFeatures`
 - **Purpose:** Cosmetic UI features (confetti, streaks, micro-animations).
@@ -70,6 +77,7 @@ This document indexes the primary "manager" objects and domain modules implement
 ## Notes and contributor guidance
 - This file should reflect the managers implemented in `app.js`. If you add or rename a manager, update this document.
 - Prefer adding new domain logic as a manager object to keep `app.js` organized. Keep each manager focused and well-documented.
+- Naming: use descriptive, human-readable names. Exported managers are PascalCase (e.g., `ProfileManager`), factories use `createX`, and file names mirror the export in lowerCamelCase (e.g., `profileManager.js`).
 
 - Managers are also exposed at `window.Stonedoku.Managers` to support incremental refactoring and modular imports.
 - AI agents and contributors: before modifying managers, read this MANAGERS.md and the `.github/prompts/AI_PROMPTS.prompt.md` guidance (if present) so changes align with project conventions.

@@ -3,24 +3,20 @@
 <head><meta charset="utf-8"><title>Permissions Runner</title></head>
 <body>
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import '/src/client/entry.js';
 import { getAuth, signInAnonymously, signOut as authSignOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { getFirestore, doc, setDoc, updateDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import { getDatabase, ref, set as rset, get as rget } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { doc, setDoc, updateDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { ref, set as rset, get as rget } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
-const firebaseConfig = {
-    apiKey: "AIzaSyCp7BkBGFmgjSL_28iexOAO7X4RoY_7tQ4",
-    authDomain: "stonedoku-c0898.firebaseapp.com",
-    projectId: "stonedoku-c0898",
-    storageBucket: "stonedoku-c0898.firebasestorage.app",
-    messagingSenderId: "755062989426",
-    appId: "1:755062989426:web:446a5be32bf4d6b66198eb",
-    databaseURL: "https://stonedoku-c0898-default-rtdb.europe-west1.firebasedatabase.app"
-};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const firestore = getFirestore(app);
-const rtdb = getDatabase(app);
+const firebaseServices = window.Stonedoku?.firebase || window.firebase;
+if (!firebaseServices) {
+  throw new Error('Stonedoku entry bootstrap missing in permissions-runner');
+}
+
+const app = firebaseServices.app;
+const auth = firebaseServices.auth || getAuth(app);
+const firestore = firebaseServices.firestore;
+const rtdb = firebaseServices.rtdb;
 
 window.testHelpers = {
   signInAnonymously: async () => {

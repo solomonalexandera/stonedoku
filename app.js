@@ -40,8 +40,7 @@ import {
     serverTimestamp,
     runTransaction,
     goOffline,
-    goOnline,
-    limitToLast
+    goOnline
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 	import {
 	    getFirestore,
@@ -74,66 +73,240 @@ import {
     uploadBytes,
     getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+import {
+    createFriendsManager,
+    createMatchManager,
+    createPresenceManager,
+    createProfileManager
+} from './src/client/managers/index.js';
+import { createLogManager } from './src/client/managers/logManager.js';
+import { BoardIntegritySystem, createGameHelpers, createGameUI, createUIHelpers } from './src/client/ui/index.js';
 
+// ===========================================
+// Firebase Configuration
+// ===========================================
+// NOTE: Replace these placeholder values with your actual Firebase project config
+// For production, consider using environment variables or a separate config file
+const firebaseConfig = {
+    apiKey: "AIzaSyCp7BkBGFmgjSL_28iexOAO7X4RoY_7tQ4",
+    authDomain: "stonedoku-c0898.firebaseapp.com",
+    projectId: "stonedoku-c0898",
+    storageBucket: "stonedoku-c0898.firebasestorage.app",
+    messagingSenderId: "755062989426",
+    appId: "1:755062989426:web:446a5be32bf4d6b66198eb",
+    databaseURL: "https://stonedoku-c0898-default-rtdb.europe-west1.firebasedatabase.app"
+};
 
+// Initialize Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const rtdb = getDatabase(firebaseApp);
+// Force long-polling to avoid QUIC/WebChannel transport errors in constrained networks.
+const firestore = initializeFirestore(firebaseApp, {
+    experimentalAutoDetectLongPolling: true,
+    useFetchStreams: false
+});
+const functions = getFunctions(firebaseApp);
+const storage = getStorage(firebaseApp);
 
-// Firebase services and core modules are now initialized in src/client/entry.js
-const { AppState, LogManager, SudokuGenerator, ProfanityFilter, firebase } = window.Stonedoku;
-const { auth, rtdb, firestore, functions, storage } = firebase;
+// ===========================================
+// Password Policy (matches Firebase enforcement)
+// ===========================================
+const PasswordPolicy = {
+    minLength: 6,
+    maxLength: 4096,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireSpecial: true,
 
+    validate(password) {
+        const value = String(password || '');
+        const issues = [];
 
-// LogManager has been extracted to src/client/lib/logManager.js
+        if (value.length < this.minLength) issues.push(`at least ${this.minLength} characters`);
+        if (value.length > this.maxLength) issues.push(`no more than ${this.maxLength} characters`);
+        if (this.requireUppercase && !/[A-Z]/.test(value)) issues.push('an uppercase letter');
+        if (this.requireLowercase && !/[a-z]/.test(value)) issues.push('a lowercase letter');
+        if (this.requireSpecial && !/[^A-Za-z0-9]/.test(value)) issues.push('a special character');
 
-// Also capture console output into an in-memory buffer for E2E diagnostics
-try {
-    (function(){
-        const realLog = console.log.bind(console);
-        const realInfo = console.info.bind(console);
-        const realWarn = console.warn.bind(console);
-        const realError = console.error.bind(console);
-        console.log = function(...args){
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'log', args: args.map(a=>String(a)), ts: Date.now() }); } catch (e) {}
-            return realLog(...args);
-        };
-        console.info = function(...args){
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'info', args: args.map(a=>String(a)), ts: Date.now() }); } catch (e) {}
-            return realInfo(...args);
-        };
-        console.warn = function(...args){
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'warn', args: args.map(a=>String(a)), ts: Date.now() }); } catch (e) {}
-            return realWarn(...args);
-        };
-        console.error = function(...args){
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'error', args: args.map(a=>String(a)), ts: Date.now() }); } catch (e) {}
-            return realError(...args);
-        };
-    })();
-} catch (e) {}
+        return { ok: issues.length === 0, issues };
+    },
+
+    message(password) {
+        const result = this.validate(password);
+        if (result.ok) return '';
+        const parts = result.issues;
+        const list = parts.length <= 2 ? parts.join(' and ') : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+        return `Password must include ${list}.`;
+    }
+};
+
+// ==========================
+// App version + cache management
+// Fetches ` /version.txt ` at startup. If it differs from the stored
+// `stonedoku_app_version`, clear caches, cookies, indexedDB and service
+// workers to ensure clients pick up new assets after a deploy.
+// To activate, update `version.txt` during your deploys.
+// ==========================
+async function clearAllCachesAndServiceWorkers() {
+    try {
+        // Clear the CacheStorage entries
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+        }
+
+        // Unregister service workers
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.unregister()));
+        }
+    } catch (e) {
+        console.error('Cache clearing failed', e);
+    }
+}
+
+function clearAllCookies() {
+    try {
+        const cookies = document.cookie ? document.cookie.split(';') : [];
+        for (const cookie of cookies) {
+            const eqPos = cookie.indexOf('=');
+            const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+            // Expire cookie for root path
+            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+            // Also try without path
+            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+    } catch (e) {
+        console.error('Cookie clearing failed', e);
+    }
+}
+
+async function ensureAppVersionFresh() {
+    try {
+        const res = await fetch('/version.txt', { cache: 'no-store' });
+        if (!res.ok) return; // no version file
+        const remote = (await res.text()).trim();
+        if (!remote) return;
+        const local = localStorage.getItem('stonedoku_app_version');
+        if (!local) {
+            // First run: record version without clearing persistence/auth data
+            localStorage.setItem('stonedoku_app_version', remote);
+            return;
+        }
+        if (local === remote) return; // same version
+
+        // New version detected — clear caches/cookies and reload once
+        console.info('New app version detected', { from: local, to: remote });
+        await clearAllCachesAndServiceWorkers();
+        clearAllCookies();
+        localStorage.setItem('stonedoku_app_version', remote);
+        // Use setTimeout so any in-flight operations can complete
+        setTimeout(() => location.reload(true), 200);
+    } catch (e) {
+        console.error('ensureAppVersionFresh failed', e);
+    }
+}
+
+// Kick off version check early
+ensureAppVersionFresh();
+
+// ==========================
+// Client-side Log Manager
+// Writes debug/info/error logs to Firestore `clientLogs` collection.
+// Overrides console methods so logs are persisted and removed from console output.
+// ==========================
+const LogManager = createLogManager(firestore, () => window.AppState);
 
 // ===========================================
 // Application State
 // ===========================================
-// AppState has been extracted to src/client/appState.js
-// Provide lightweight stubs early so tests that check for globals don't race.
-try { window.startSinglePlayerGame = window.startSinglePlayerGame || function() { console.warn('startSinglePlayerGame (stub) called before init'); }; } catch (e) {}
+const AppState = {
+    currentUser: null,
+    currentView: 'auth',
+    gameMode: null, // 'single' or 'versus'
+    currentMatch: null,
+    currentRoom: null,
+    selectedCell: null,
+    puzzle: null,
+    solution: null,
+    originalPuzzle: null, // Store original puzzle to track user-filled cells
+    playerScore: 0,
+    opponentScore: 0,
+    gameTimer: null,
+    gameSeconds: 0,
+    timeLimitSeconds: 0, // 0 = none (used in Custom Sudoku)
+    soundEnabled: true,
+    listeners: [],
+    onlinePlayers: {},
+    currentOpponent: null, // opponent ID in 1v1 mode
+    pendingChallenge: null, // { fromUserId, fromName } for incoming challenge modal
+    pendingUsername: null, // Username pending for new signups
+    authReady: false, // Flag for auth state ready
+    // Onboarding state
+    onboarding: {
+        active: false,
+        step: 1,
+        data: {
+            username: '',
+            email: '',
+            password: '',
+            avatarFile: null,
+            avatarUrl: null
+        }
+    },
+    passwordReset: {
+        active: false,
+        oobCode: null,
+        email: null
+    },
+    profile: null,
+    // Tour state
+    tour: {
+        active: false,
+        step: 0
+    },
+    // New QOL features
+    mistakes: 0,
+    maxMistakes: 3,
+    notesMode: false,
+    notes: {}, // cellIndex -> Set of numbers
+    moveHistory: [], // for undo
+    toolLimits: {
+        undoMax: 0,
+        eraseMax: 0,
+        undoLeft: 0,
+        eraseLeft: 0,
+    },
+    currentDifficulty: 'medium',
+    widgetChatMode: 'global', // 'global', 'game', or 'dm_[userId]'
+    widgetGameChatContext: null, // 'lobby:<code>' | 'match:<id>'
+    widgetGameChatUnsub: null, // function to stop current game-channel listener
+    activeDMs: {}, // userId -> { messages: [], unread: 0 }
+    dmThreads: {}, // otherUserId -> { otherDisplayName, lastText, lastTimestamp, unread }
+    friends: [], // Array of friend user IDs
+    settings: {
+        highlightConflicts: true,
+        highlightSameNumbers: true,
+        autoCheck: true,
+        notifications: {
+            global: true,
+            game: true,
+            dms: true,
+            sound: true,
+            badges: true
+        }
+    },
+    moderation: {
+        muted: false,
+        blocked: false
+    },
+    moderationChatNotified: false
+};
 
-// Minimal UI stub so early code can call `UI.*` before the full `UI` helper is defined.
-if (typeof window.UI === 'undefined') {
-    // Capture toasts and console errors for e2e debugging
-    try { window._capturedToasts = window._capturedToasts || []; } catch (e) {}
-    try { window._capturedConsole = window._capturedConsole || []; } catch (e) {}
-    window.UI = {
-        showToast: function(message, type) {
-            try { window._capturedToasts.push({ message: message, type: type || 'info', ts: Date.now(), stack: (new Error()).stack }); } catch (e) {}
-            try { console.log('CAPTURE_TOAST', message, type); } catch (e) {}
-        },
-        showStartupError: function(msg) { try { console.error('Startup error (stub):', msg); } catch(e){} }
-    };
-}
-
-
-// Transient set to avoid duplicate badge reveal popups in a single session
-AppState._recentBadgeReveals = new Set();
+// Instantiate modular game helpers using shared AppState and BoardIntegritySystem.
+const GameHelpers = createGameHelpers({ AppState, BoardIntegritySystem });
+window.GameHelpers = GameHelpers;
 
 function setModerationState(partial = {}, { notify = true } = {}) {
     const prevMuted = !!AppState.moderation.muted;
@@ -399,6 +572,27 @@ const isAutomationEnv = () => {
 
 const automationMode = isAutomationEnv();
 
+// ===========================================
+// Profanity Filter (Basic)
+// ===========================================
+const ProfanityFilter = {
+    // Basic list of common inappropriate words
+    // In production, consider using a more comprehensive third-party service
+    badWords: [
+        'spam', 'scam', 'hack', 'cheat', 'exploit',
+        // Common mild profanity that should be filtered in a game context
+        'stupid', 'idiot', 'loser', 'noob'
+    ],
+    
+    filter(text) {
+        let filtered = text;
+        for (const word of this.badWords) {
+            const regex = new RegExp(`\\b${word}\\b`, 'gi');
+            filtered = filtered.replace(regex, '*'.repeat(word.length));
+        }
+        return filtered;
+    }
+};
 
 // ===========================================
 // View Manager
@@ -651,16 +845,6 @@ const ArchitecturalStateSystem = {
 	        });
 
         AppState.currentView = viewName;
-        if (prev === 'profile' && viewName !== 'profile') {
-            clearProfileDeepLink();
-        }
-        if (viewName !== 'updates') {
-            clearUpdatesDeepLink();
-        }
-        if (viewName !== 'admin') {
-            clearAdminDeepLink();
-        }
-        try { document.body.classList.toggle('front-page', FRONT_PAGE_VIEWS.includes(viewName)); } catch { /* ignore */ }
     },
     
 	    showModal(modalId) {
@@ -687,1310 +871,42 @@ const ArchitecturalStateSystem = {
 	};
 
 // ===========================================
-// Presence System
+// Presence Manager
 // ===========================================
-	const PresenceSystem = {
-	    presenceRef: null,
-	    connectedRef: null,
-	    _ready: false,
-	    _readyPromise: null,
-	    
-	    async init(userId, displayName) {
-	        this.presenceRef = ref(rtdb, `presence/${userId}`);
-	        this.connectedRef = ref(rtdb, '.info/connected');
-	        this._ready = false;
-
-	        let resolveReady;
-	        this._readyPromise = new Promise((resolve) => { resolveReady = resolve; });
-	        
-	        // Set up presence on connect/disconnect
-	        onValue(this.connectedRef, async (snapshot) => {
-	            if (snapshot.val() === true) {
-	                // We're connected
-	                try {
-	                    await set(this.presenceRef, {
-	                        status: 'online',
-	                        displayName: displayName,
-	                        last_changed: serverTimestamp(),
-	                        current_activity: 'In Lobby'
-	                    });
-	                    this._ready = true;
-	                } catch (e) {
-	                    this._ready = false;
-	                    console.warn('Presence init write failed', e);
-	                } finally {
-	                    try { resolveReady?.(); } catch { /* ignore */ }
-	                }
-
-	                // Set offline on disconnect
-	                try {
-	                    onDisconnect(this.presenceRef).set({
-	                        status: 'offline',
-	                        displayName: displayName,
-	                        last_changed: serverTimestamp(),
-	                        current_activity: null
-	                    });
-	                } catch (e) {
-	                    console.warn('Presence onDisconnect setup failed', e);
-	                }
-	            }
-	        });
-	    },
-	    
-	    async updateActivity(activity) {
-	        if (!this.presenceRef || !AppState.currentUser) return;
-	        try { await this._readyPromise; } catch { /* ignore */ }
-	        if (!this._ready) return;
-	        try {
-	            await update(this.presenceRef, {
-	                current_activity: activity,
-	                last_changed: serverTimestamp()
-	            });
-	        } catch (e) {
-	            console.warn('Presence updateActivity failed', e);
-	        }
-	    },
-	    
-	    async setStatus(status) {
-	        if (!this.presenceRef || !AppState.currentUser) return;
-	        try { await this._readyPromise; } catch { /* ignore */ }
-	        if (!this._ready) return;
-	        try {
-	            await update(this.presenceRef, {
-	                status: status,
-	                last_changed: serverTimestamp()
-	            });
-	        } catch (e) {
-	            console.warn('Presence setStatus failed', e);
-	        }
-	    },
-    
-    listenToOnlinePlayers(callback) {
-        const presenceListRef = ref(rtdb, 'presence');
-        const listener = onValue(presenceListRef, (snapshot) => {
-            const players = {};
-            const now = Date.now();
-            const graceMs = 45000; // consider online only if last_changed within this window
-            snapshot.forEach((child) => {
-                if (child.key === AppState.currentUser?.uid) return;
-                const val = child.val() || {};
-                // Normalize serverTimestamp values (may be number)
-                const lastChanged = val.last_changed || 0;
-                const isRecentlyActive = typeof lastChanged === 'number' ? (now - lastChanged) < graceMs : true;
-                const effectiveStatus = (val.status === 'online' && isRecentlyActive) ? 'online' : 'offline';
-                players[child.key] = Object.assign({}, val, { status: effectiveStatus });
-            });
-            callback(players);
-        });
-        AppState.listeners.push({ ref: presenceListRef, callback: listener });
-    },
-    
-	    async cleanup() {
-	        if (!this.presenceRef) return;
-	        try {
-	            await remove(this.presenceRef);
-	        } catch (e) {
-	            console.warn('Presence cleanup failed', e);
-	        } finally {
-	            this._ready = false;
-	        }
-	    }
-	};
+const PresenceManager = createPresenceManager({ rtdb, appState: AppState });
 
 // ===========================================
-// User Profile Manager
+// User Profile Manager (modular)
 // ===========================================
-const friendRequestId = (a, b) => {
-    const ids = [String(a), String(b)].sort();
-    return `${ids[0]}_${ids[1]}`;
-};
-const friendParticipants = (a, b) => [String(a), String(b)].sort();
-
-	const ProfileManager = {
-    _defaults(userId, usernameRaw, email) {
-        const username = usernameRaw || `Player_${String(userId).substring(0, 6)}`;
-        const usernameLower = username.toLowerCase();
-        return {
-            userId,
-            username,
-            usernameLower,
-            displayName: username,
-            email: email || null,
-            memberSince: Timestamp.now(),
-            badges: [],
-            stats: {
-                wins: 0,
-                losses: 0,
-                gamesPlayed: 0,
-                bestTime: null
-            },
-            bio: '',
-            profilePicture: null,
-            friends: [],
-            socialLinks: {},
-            isPublic: true,
-            preferences: {}
-        };
-    },
-
-    async checkUsernameAvailable(username) {
-        const cleaned = (username || '').trim().toLowerCase();
-        if (!cleaned) return false;
-        const usernameRef = doc(firestore, 'usernames', cleaned);
-        const snapshot = await getDoc(usernameRef);
-        return !snapshot.exists();
-    },
-
-	    async _reserveUsername(tx, usernameRaw, userId) {
-	        const username = (usernameRaw || '').trim();
-	        const usernameLower = username.toLowerCase();
-	        const usernameRef = doc(firestore, 'usernames', usernameLower);
-	        const existingUsername = await tx.get(usernameRef);
-	        if (existingUsername.exists()) {
-	            const owner = existingUsername.data()?.userId || null;
-	            if (!owner) throw new Error('username_taken');
-	            if (owner !== userId) throw new Error('username_taken');
-	        }
-	        // If the username is already reserved by this user, do not attempt an update.
-	        // (Rules allow create, but deny update; updating here causes PERMISSION_DENIED on later sign-ins.)
-	        if (existingUsername.exists() && existingUsername.data()?.userId === userId) {
-	            return;
-	        }
-	        tx.set(usernameRef, {
-	            userId,
-	            username,
-	            usernameLower,
-	            createdAt: Timestamp.now()
-	        });
-	    },
-
-    async createOrUpdateProfile(userId, data) {
-        const profileRef = doc(firestore, 'users', userId);
-
-        await runFsTransaction(firestore, async (tx) => {
-            const existingSnap = await tx.get(profileRef);
-            const existing = existingSnap.exists() ? existingSnap.data() : {};
-            const existingLower = existing.usernameLower || (existing.username ? existing.username.toLowerCase() : null);
-            let chosenUsername = data.username || existing.username || data.displayName || `Player_${String(userId).substring(0, 6)}`;
-            let usernameLower = chosenUsername.toLowerCase();
-
-            // Only attempt to reserve when creating or when the username is changing/missing.
-            const needsReservation = !existingSnap.exists() || !!data.username || !existingLower;
-            if (needsReservation) {
-                try {
-                    await this._reserveUsername(tx, chosenUsername, userId);
-                } catch (e) {
-                    if (e.message === 'username_taken') {
-                        // If this is a returning user without a username change, fall back to existing username to avoid blocking sign-in.
-                        if (existingSnap.exists() && !data.username && existingLower) {
-                            chosenUsername = existing.username || chosenUsername;
-                            usernameLower = existingLower;
-                        } else {
-                            throw e;
-                        }
-                    } else {
-                        throw e;
-                    }
-                }
-            }
-            const email = data.email || existing.email || null;
-            const base = this._defaults(userId, chosenUsername, email);
-            // Preserve memberSince if present.
-            if (existing.memberSince) base.memberSince = existing.memberSince;
-            tx.set(profileRef, Object.assign({}, base, existing, data, {
-                username: chosenUsername,
-                usernameLower,
-                displayName: data.displayName || existing.displayName || chosenUsername,
-                email
-            }), { merge: true });
-        });
-
-        // Vanity mapping for registered users
-        const vanitySnapshot = await getDoc(profileRef);
-        const vanityEmail = vanitySnapshot?.data()?.email;
-        const vanityUsername = vanitySnapshot?.data()?.username;
-	        const vanityLower = vanitySnapshot?.data()?.usernameLower;
-	        if (vanityEmail && vanityUsername && vanityLower) {
-	            try {
-	                const vanityRef = doc(firestore, 'vanityLinks', vanityLower);
-	                const existingVanity = await getDoc(vanityRef);
-	                if (!existingVanity.exists()) {
-	                    await setDoc(vanityRef, {
-	                        userId,
-	                        username: vanityUsername,
-	                        path: `/u/${vanityLower}`,
-	                        createdAt: Timestamp.now()
-	                    });
-	                }
-	            } catch (e) {
-	                console.warn('Failed to set vanity link', e);
-	            }
-	        }
-	        return vanitySnapshot;
-	    },
-
-    async getProfileByUsername(username) {
-        const usernameLower = (username || '').toLowerCase();
-        const q = query(collection(firestore, 'users'), where('usernameLower', '==', usernameLower), limit(1));
-        const snapshot = await getDocs(q);
-        if (snapshot.empty) return null;
-        return snapshot.docs[0];
-    },
-
-    async getProfile(userId) {
-        const profileRef = doc(firestore, 'users', userId);
-        return await getDoc(profileRef);
-    },
-
-    async updateProfile(userId, data) {
-        const profileRef = doc(firestore, 'users', userId);
-        const wantsUsernameChange = !!data.username;
-        const existingSnap = await getDoc(profileRef);
-        const existingLower = existingSnap.exists() ? existingSnap.data()?.usernameLower : null;
-        if (wantsUsernameChange) {
-            const newUsername = data.username.trim();
-            const newLower = newUsername.toLowerCase();
-            await runFsTransaction(firestore, async (tx) => {
-                await this._reserveUsername(tx, newUsername, userId);
-                const existingSnap = await tx.get(profileRef);
-                const existing = existingSnap.exists() ? existingSnap.data() : {};
-                tx.set(profileRef, Object.assign({}, existing, data, {
-                    username: newUsername,
-                    usernameLower: newLower,
-                    displayName: data.displayName || existing.displayName || newUsername
-                }), { merge: true });
-            });
-        } else {
-            await updateDoc(profileRef, data);
-        }
-
-        const updated = await getDoc(profileRef);
-        const hasEmail = !!(updated.data()?.email);
-	        if (wantsUsernameChange && hasEmail) {
-	            // Rules are create-only for vanity links. Best-effort create the new mapping if missing.
-	            try {
-	                const lower = data.username.toLowerCase();
-	                const vanityRef = doc(firestore, 'vanityLinks', lower);
-	                const existingVanity = await getDoc(vanityRef);
-	                if (!existingVanity.exists()) {
-	                    await setDoc(vanityRef, {
-	                        userId,
-	                        username: data.username,
-	                        path: `/u/${lower}`,
-	                        createdAt: Timestamp.now()
-	                    });
-	                }
-	            } catch (e) {
-	                console.warn('Failed to create vanity link on username change', e);
-	            }
-	        }
-
-        return updated;
-    },
-
-    async updateStats(userId, won) {
-        const profileRef = doc(firestore, 'users', userId);
-        const profile = await getDoc(profileRef);
-        if (!profile.exists()) return;
-
-        const stats = Object.assign({ wins: 0, losses: 0, gamesPlayed: 0, bestTime: null }, profile.data().stats || {});
-        if (won === true) stats.wins++;
-        else if (won === false) stats.losses++;
-        stats.gamesPlayed = (stats.gamesPlayed || 0) + 1;
-
-        await updateDoc(profileRef, { stats });
-        await this.checkBadges(userId, stats);
-    },
-
-    async checkBadges(userId, stats) {
-        const wins = Number(stats.wins) || 0;
-        const losses = Number(stats.losses) || 0;
-        const gamesPlayed = Number(stats.gamesPlayed) || wins + losses || 0;
-        const totalGames = gamesPlayed || wins + losses;
-        const winRate = totalGames > 0 ? (wins / totalGames) * 100 : 0;
-        const bestTime = Number(stats.bestTime);
-
-        // Pull the latest profile so we can consider social/profile signals too.
-        const profileRef = doc(firestore, 'users', userId);
-        let profileData = {};
-        try {
-            const snap = await getDoc(profileRef);
-            if (snap.exists()) profileData = snap.data() || {};
-        } catch (e) {
-            console.warn('Failed to fetch profile for badge check', e);
-        }
-
-        const friendsCount = Array.isArray(profileData.friends) ? profileData.friends.length : 0;
-        const hasBio = typeof profileData.bio === 'string' && profileData.bio.trim().length >= 20;
-        const hasAvatar = !!profileData.profilePicture;
-        const isAdmin = !!profileData.isAdmin;
-
-        const earnedSet = new Set();
-
-        // Progression / play count badges
-        if (gamesPlayed >= 1) earnedSet.add('rookie');
-        if (gamesPlayed >= 5) earnedSet.add('learner');
-        if (gamesPlayed >= 10) earnedSet.add('veteran');
-        if (gamesPlayed >= 50) earnedSet.add('marathoner');
-        if (gamesPlayed >= 100) earnedSet.add('legend');
-
-        // Win-based badges
-        if (wins >= 5) earnedSet.add('winner');
-        if (wins >= 20) earnedSet.add('champion');
-        if (wins >= 50) earnedSet.add('unstoppable');
-        if (wins >= 10 && losses === 0) earnedSet.add('undefeated');
-        if (winRate >= 70 && totalGames >= 20) earnedSet.add('tactician');
-
-        // Speed / skill badges
-        if (Number.isFinite(bestTime) && bestTime > 0 && bestTime <= 180) {
-            earnedSet.add('speedster');
-        }
-
-        // Social / community badges
-        if (friendsCount >= 1) earnedSet.add('socialite');
-        if (friendsCount >= 5) earnedSet.add('connector');
-        if (friendsCount >= 15) earnedSet.add('ambassador');
-        if (hasBio) earnedSet.add('storyteller');
-        if (hasAvatar) earnedSet.add('portrait');
-
-        // Staff badge
-        if (isAdmin) earnedSet.add('warden');
-
-        const existingBadges = Array.isArray(profileData.badges) ? profileData.badges : [];
-        const newBadges = Array.from(earnedSet).filter((b) => !existingBadges.includes(b));
-        if (newBadges.length === 0) return;
-
-        await updateDoc(profileRef, { badges: arrayUnion(...newBadges) });
-
-        // Record awards for analytics/history and reveal to the user.
-        try {
-            for (const badge of newBadges) {
-                try {
-                    await addDoc(collection(firestore, 'badgeAwards'), {
-                        userId,
-                        badge,
-                        createdAt: Timestamp.now()
-                    });
-                } catch (e) {
-                    console.debug('Failed to record badge award', badge, e?.message || e);
-                }
-            }
-        } catch (e) {
-            console.warn('badgeAwards logging failed', e);
-        }
-
-        // Fetch newest profile data so UI updates immediately.
-        let refreshed = null;
-        try {
-            const fresh = await getDoc(profileRef);
-            if (fresh.exists()) refreshed = fresh.data() || {};
-        } catch (e) {
-            console.warn('Failed to refresh profile after awarding badges', e);
-        }
-
-        // Notify the current user with a richer reveal (toast + popup) and refresh badge UI.
-        if (AppState.currentUser && AppState.currentUser.uid === userId) {
-            // Update local AppState/profile and UI immediately
-            if (refreshed) {
-                AppState.profile = refreshed;
-                AppState.friends = refreshed.friends || [];
-                try { UI.updateBadges(refreshed.badges || []); } catch (e) { /* ignore */ }
-            }
-            // Show reveals for each new badge, de-duplicating within this session
-            for (const badge of newBadges) {
-                if (AppState._recentBadgeReveals.has(badge)) continue;
-                AppState._recentBadgeReveals.add(badge);
-                const info = BadgeInfo[badge] || { name: badge, desc: '' };
-                if (AppState.settings.notifications.badges) UI.showToast(`New badge: ${info.name}`, 'success');
-                UI.showBadgeReveal(badge);
-            }
-        }
-    },
-
-    async addBadge(userId, badge) {
-        const profileRef = doc(firestore, 'users', userId);
-        await updateDoc(profileRef, { badges: arrayUnion(badge) });
-        if (AppState.currentUser && AppState.currentUser.uid === userId && typeof UI?.showToast === 'function' && AppState.settings.notifications.badges) {
-            const info = BadgeInfo[badge] || { name: badge, desc: '' };
-            const msg = info.desc ? `New badge: ${info.name}` : `New badge: ${info.name}`;
-            UI.showToast(msg, 'success');
-        }
-    },
-
-    async uploadProfilePicture(userId, file) {
-        if (!file || !userId) return null;
-        if (!file.type.startsWith('image/')) throw new Error('File must be an image');
-        if (file.size > 2 * 1024 * 1024) throw new Error('Image must be under 2MB');
-
-        const safeName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-        const fileRef = storageRef(storage, `avatars/${userId}/${safeName}`);
-        await uploadBytes(fileRef, file);
-        const downloadURL = await getDownloadURL(fileRef);
-        await this.updateProfile(userId, { profilePicture: downloadURL });
-        return downloadURL;
-    },
-
-	    async sendFriendRequest(fromUserId, toUserId) {
-	        if (!fromUserId || !toUserId || fromUserId === toUserId) return;
-	        if (!isRegisteredUser()) {
-	            throw new Error('Friends require a registered email account.');
-	        }
-	        const reqId = friendRequestId(fromUserId, toUserId);
-	        const reqRef = doc(firestore, 'friendRequests', reqId);
-	        const participants = friendParticipants(fromUserId, toUserId);
-
-	        // If a request already exists, handle it according to the state to avoid rule violations.
-	        let existingSnap = null;
-	        try {
-	            existingSnap = await this.getFriendRequestBetween(fromUserId, toUserId);
-	        } catch (e) {
-	            console.warn('Failed to check existing friend request', e);
-	        }
-
-	        if (existingSnap && existingSnap.exists()) {
-	            const existing = existingSnap.data() || {};
-	            const status = existing.status;
-	            const existingTo = existing.toUid;
-
-	            if (status === 'pending') {
-	                if (existingTo === fromUserId) {
-	                    await this.acceptFriendRequest(fromUserId, toUserId);
-	                    return 'accepted_existing';
-	                }
-	                throw new Error('Friend request already pending.');
-	            }
-
-	            if (status === 'accepted') {
-	                throw new Error('You are already friends.');
-	            }
-
-	            try {
-	                await deleteDoc(existingSnap.ref);
-	            } catch (e) {
-	                console.warn('Failed to clear stale friend request', e);
-	            }
-	        }
-
-	        await setDoc(reqRef, {
-	            fromUid: fromUserId,
-	            toUid: toUserId,
-	            participants,
-	            status: 'pending',
-	            createdAt: Timestamp.now()
-	        }, { merge: true });
-	        const result = 'sent';
-	        try {
-	            await set(ref(rtdb, `notifications/${toUserId}/friend_${fromUserId}`), {
-	                type: 'friend_request',
-	                from: fromUserId,
-	                timestamp: serverTimestamp()
-	            });
-	        } catch (e) {
-	            // Notification is best-effort; RTDB rules may block this for some accounts.
-	            console.debug('Friend request notification skipped', e?.message || e);
-	        }
-	        return result;
-	    },
-
-    async acceptFriendRequest(userId, friendId) {
-        if (!userId || !friendId) return;
-        const reqId = friendRequestId(userId, friendId);
-        const reqRef = doc(firestore, 'friendRequests', reqId);
-        const participants = friendParticipants(userId, friendId);
-        try {
-            await setDoc(reqRef, {
-                status: 'accepted',
-                respondedAt: Timestamp.now(),
-                participants
-            }, { merge: true });
-        } catch (e) {
-            try { console.error('acceptFriendRequest: failed to set friendRequests doc', { userId, friendId, err: String(e) }); } catch (_) {}
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'error', msg: 'accept:setDoc', userId, friendId, error: String(e), ts: Date.now() }); } catch (_) {}
-            // Continue — do not throw so callers treat this as success where possible
-        }
-
-        // Optimistic friend list update (Cloud Function also syncs).
-        const userRef = doc(firestore, 'users', userId);
-        const friendRef = doc(firestore, 'users', friendId);
-        // Update only the accepting user's doc client-side. Writing to another user's
-        // document from this client can violate security rules (and is unnecessary
-        // because a Cloud Function will sync the reciprocal relationship).
-        try {
-            await updateDoc(userRef, { friends: arrayUnion(friendId) });
-        } catch (e) {
-            try { console.error('acceptFriendRequest: failed to update user friend list', { userId, friendId, err: String(e) }); } catch (_) {}
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'error', msg: 'accept:updateUser', userId, friendId, error: String(e), ts: Date.now() }); } catch (_) {}
-            // Don't rethrow — acceptance may still be visible via other mechanisms
-        }
-
-        	try {
-            await set(ref(rtdb, `notifications/${friendId}/friend_${userId}`), {
-                type: 'friend_accept',
-                from: userId,
-                timestamp: serverTimestamp()
-            });
-        } catch (e) {
-            try { console.debug('Friend accept notification skipped', e?.message || e); } catch (_) {}
-            try { window._capturedConsole = window._capturedConsole || []; window._capturedConsole.push({ level: 'debug', msg: 'accept:notification-skip', userId, friendId, error: String(e), ts: Date.now() }); } catch (_) {}
-        }
-	    },
-
-    async declineFriendRequest(userId, friendId) {
-        if (!userId || !friendId) return;
-        const reqId = friendRequestId(userId, friendId);
-        const reqRef = doc(firestore, 'friendRequests', reqId);
-        const participants = friendParticipants(userId, friendId);
-        await setDoc(reqRef, {
-            status: 'declined',
-            respondedAt: Timestamp.now(),
-            participants
-        }, { merge: true });
-	        try {
-	            await set(ref(rtdb, `notifications/${friendId}/friend_${userId}`), {
-	                type: 'friend_decline',
-	                from: userId,
-	                timestamp: serverTimestamp()
-	            });
-	        } catch (e) {
-	            console.debug('Friend decline notification skipped', e?.message || e);
-	        }
-	    },
-
-    async removeFriend(userId, friendId) {
-        if (!userId || !friendId) return;
-        const userRef = doc(firestore, 'users', userId);
-        const friendRef = doc(firestore, 'users', friendId);
-        await Promise.all([
-            updateDoc(userRef, { friends: arrayRemove(friendId) }),
-            updateDoc(friendRef, { friends: arrayRemove(userId) }),
-            addDoc(collection(firestore, 'friendRemovals'), {
-                users: [userId, friendId],
-                createdAt: Timestamp.now()
-            })
-        ]);
-    },
-
-    async getFriends(userId) {
-        const profile = await this.getProfile(userId);
-        if (!profile.exists()) return [];
-        const friendIds = profile.data().friends || [];
-        const friends = [];
-        for (const friendId of friendIds) {
-            const friendProfile = await this.getProfile(friendId);
-            if (friendProfile.exists()) friends.push({ id: friendId, ...friendProfile.data() });
-        }
-        return friends;
-    },
-
-    async getFriendRequestBetween(a, b) {
-        const primaryRef = doc(firestore, 'friendRequests', friendRequestId(a, b));
-        const primarySnap = await getDoc(primaryRef);
-        if (primarySnap.exists()) return primarySnap;
-        // Legacy unordered IDs fallback
-        const legacyRefs = [
-            doc(firestore, 'friendRequests', `${a}_${b}`),
-            doc(firestore, 'friendRequests', `${b}_${a}`)
-        ];
-        const [legacyA, legacyB] = await Promise.all(legacyRefs.map((r) => getDoc(r)));
-        if (legacyA.exists()) return legacyA;
-        if (legacyB.exists()) return legacyB;
-        return null;
-    }
-};
+const ProfileManager = createProfileManager({
+    firestore,
+    rtdb,
+    storage,
+    appState: AppState,
+    isRegisteredUser,
+    getUI: () => UI,
+    getBadgeInfo: () => UI?.badgeInfo
+});
 
 // ===========================================
-// Friends Panel (Lobby)
+// Friends Manager (modular)
 // ===========================================
-const FriendsPanel = {
-    async refresh() {
-        if (!AppState.currentUser) return;
-        try {
-            const snap = await ProfileManager.getProfile(AppState.currentUser.uid);
-            if (snap.exists()) {
-                const data = snap.data() || {};
-                AppState.profile = data;
-                AppState.friends = Array.isArray(data.friends) ? data.friends : [];
-            }
-        } catch (e) {
-            console.warn('Failed to refresh profile for friends panel', e);
-        }
-        await this.render();
-    },
-
-    async render() {
-        const card = document.getElementById('friends-card');
-        const requestsList = document.getElementById('friend-requests-list');
-        const friendsList = document.getElementById('friends-list');
-        if (!card || !requestsList || !friendsList) return;
-
-        if (!isRegisteredUser()) {
-            card.style.display = 'none';
-            return;
-        }
-        card.style.display = 'block';
-
-        const friends = Array.isArray(AppState.friends) ? AppState.friends : [];
-        let incomingRequests = [];
-        try {
-            const reqQ = query(
-                collection(firestore, 'friendRequests'),
-                where('toUid', '==', AppState.currentUser.uid),
-                where('status', '==', 'pending'),
-                limit(30)
-            );
-            const snap = await getDocs(reqQ);
-            incomingRequests = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
-        } catch (e) {
-            console.warn('Failed to load incoming friend requests', e);
-        }
-
-        const loadProfiles = async (ids) => {
-            const unique = Array.from(new Set(ids.filter(Boolean)));
-            const results = await Promise.all(unique.map(async (id) => {
-                try {
-                    const snap = await ProfileManager.getProfile(id);
-                    if (!snap.exists()) return { id, data: null };
-                    return { id, data: snap.data() || null };
-                } catch {
-                    return { id, data: null };
-                }
-            }));
-            return results;
-        };
-
-        // Requests
-        const requestIds = incomingRequests.map((r) => r?.fromUid).filter(Boolean);
-        const requestProfiles = await loadProfiles(requestIds);
-        requestsList.innerHTML = '';
-        if (requestProfiles.length === 0) {
-            requestsList.innerHTML = '<div class="friend-empty">No incoming requests.</div>';
-        } else {
-            for (const r of requestProfiles) {
-                const name = r.data?.username || r.data?.displayName || `Player_${String(r.id).substring(0, 6)}`;
-                const row = document.createElement('div');
-                row.className = 'friend-item';
-                row.innerHTML = `
-                    <div class="friend-name">${UI.escapeHtml(name)}</div>
-                    <div class="friend-actions">
-                        <button class="btn btn-icon" type="button" title="Accept"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg></button>
-                        <button class="btn btn-icon" type="button" title="Decline"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
-                    </div>
-                `;
-                const [acceptBtn, declineBtn] = row.querySelectorAll('button');
-                acceptBtn?.addEventListener('click', async () => {
-                    try {
-                        await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, r.id);
-                        await this.refresh();
-                    } catch (e) {
-                        console.error('Failed to accept friend request', e);
-                        alert('Failed to accept request.');
-                    }
-                });
-                declineBtn?.addEventListener('click', async () => {
-                    try {
-                        await ProfileManager.declineFriendRequest(AppState.currentUser.uid, r.id);
-                        await this.refresh();
-                    } catch (e) {
-                        console.error('Failed to decline friend request', e);
-                        alert('Failed to decline request.');
-                    }
-                });
-                requestsList.appendChild(row);
-            }
-        }
-
-        // Friends list
-        const friendProfiles = await loadProfiles(friends);
-        friendsList.innerHTML = '';
-        if (friendProfiles.length === 0) {
-            friendsList.innerHTML = '<div class="friend-empty">No friends yet.</div>';
-        } else {
-            for (const f of friendProfiles) {
-                const name = f.data?.username || f.data?.displayName || `Player_${String(f.id).substring(0, 6)}`;
-                const row = document.createElement('div');
-                row.className = 'friend-item';
-                row.innerHTML = `
-                    <div class="friend-name">${UI.escapeHtml(name)}</div>
-                    <div class="friend-actions">
-                        <button class="btn btn-icon" type="button" title="Profile"><svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg></button>
-                        <button class="btn btn-icon" type="button" title="Message"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg></button>
-                        <button class="btn btn-icon" type="button" title="Remove"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
-                    </div>
-                `;
-                const [profileBtn, messageBtn, removeBtn] = row.querySelectorAll('button');
-                profileBtn?.addEventListener('click', () => UI.showProfilePage(f.id));
-                messageBtn?.addEventListener('click', async () => {
-                    try {
-                        await window.ChatWidget?.openDm?.(f.id);
-                    } catch (e) {
-                        console.warn('Failed to open DM from friends panel', e);
-                    }
-                });
-                removeBtn?.addEventListener('click', async () => {
-                    if (!confirm('Remove this friend?')) return;
-                    try {
-                        await ProfileManager.removeFriend(AppState.currentUser.uid, f.id);
-                        await this.refresh();
-                    } catch (e) {
-                        console.error('Failed to remove friend', e);
-                        alert('Failed to remove friend.');
-                    }
-                });
-                friendsList.appendChild(row);
-            }
-        }
-    }
-};
+const FriendsManager = createFriendsManager({
+    firestore,
+    profileManager: ProfileManager,
+    appState: AppState,
+    isRegisteredUser,
+    getUI: () => UI,
+    getChatWidget: () => window.ChatWidget
+});
 
 // ===========================================
-// Lobby/Room Manager
+// Match Manager (modular)
 // ===========================================
-const LobbyManager = {
-    generateRoomCode() {
-        return Math.floor(1000 + Math.random() * 9000).toString();
-    },
-    
-    async createRoom(userId, displayName) {
-        let code = this.generateRoomCode();
-        let attempts = 0;
-        
-        // Ensure unique code
-        while (attempts < 10) {
-            const roomRef = ref(rtdb, `lobbies/${code}`);
-            const snapshot = await get(roomRef);
-            
-            if (!snapshot.exists()) {
-                await set(roomRef, {
-                    code: code,
-                    host: userId,
-                    hostName: displayName,
-                    players: {
-                        [userId]: {
-                            name: displayName,
-                            ready: false,
-                            joinedAt: serverTimestamp()
-                        }
-                    },
-                    status: 'waiting',
-                    createdAt: serverTimestamp(),
-                    chat: {}
-                });
-                
-                return code;
-            }
-            
-            code = this.generateRoomCode();
-            attempts++;
-        }
-        
-        throw new Error('Could not generate unique room code');
-    },
-    
-    async joinRoom(code, userId, displayName) {
-        console.log('LobbyManager.joinRoom called with:', { code, userId, displayName });
-        const roomRef = ref(rtdb, `lobbies/${code}`);
-        const snapshot = await get(roomRef);
-        
-        console.log('Room snapshot exists:', snapshot.exists());
-        
-        if (!snapshot.exists()) {
-            throw new Error('Room not found');
-        }
-        
-        const room = snapshot.val();
-        console.log('Room data:', room);
-        
-        if (room.status !== 'waiting') {
-            throw new Error('Game already started');
-        }
-        
-        const playerCount = Object.keys(room.players || {}).length;
-        console.log('Player count in room:', playerCount);
-        
-        if (playerCount >= 2) {
-            throw new Error('Room is full');
-        }
-        
-        // Add player to room (not ready yet)
-        await update(ref(rtdb, `lobbies/${code}/players`), {
-            [userId]: {
-                name: displayName,
-                ready: false,
-                joinedAt: serverTimestamp()
-            }
-        });
-        
-        console.log('Player added to room successfully');
-        return room;
-    },
-    
-    // Set player ready status
-    async setReady(code, userId, isReady) {
-        console.log('Setting ready status:', { code, userId, isReady });
-        await update(ref(rtdb, `lobbies/${code}/players/${userId}`), {
-            ready: isReady
-        });
-    },
-    
-    // Send chat message to lobby
-    async sendLobbyChat(code, userId, displayName, text) {
-        const chatRef = ref(rtdb, `lobbies/${code}/chat`);
-        const newMsgRef = push(chatRef);
-        await set(newMsgRef, {
-            userId: userId,
-            displayName: displayName,
-            text: text,
-            timestamp: serverTimestamp()
-        });
-    },
-    
-    // Listen to lobby chat
-    listenToLobbyChat(code, callback) {
-        const chatRef = ref(rtdb, `lobbies/${code}/chat`);
-        const listener = onValue(chatRef, (snapshot) => {
-            const messages = [];
-            snapshot.forEach(child => {
-                messages.push({ id: child.key, ...child.val() });
-            });
-            callback(messages);
-        });
-        AppState.listeners.push({ ref: chatRef, callback: listener });
-        return listener;
-    },
-    
-    async leaveRoom(code, userId) {
-        const roomRef = ref(rtdb, `lobbies/${code}`);
-        const snapshot = await get(roomRef);
-        
-        if (snapshot.exists()) {
-            const room = snapshot.val();
-            
-            // If host leaves, delete room
-            if (room.host === userId) {
-                await remove(roomRef);
-            } else {
-                // Remove player from room
-                await remove(ref(rtdb, `lobbies/${code}/players/${userId}`));
-            }
-        }
-    },
-    
-    listenToRoom(code, callback) {
-        const roomRef = ref(rtdb, `lobbies/${code}`);
-        const listener = onValue(roomRef, (snapshot) => {
-            callback(snapshot.val());
-        });
-        AppState.listeners.push({ ref: roomRef, callback: listener });
-        return listener;
-    }
-};
-
-// ===========================================
-// Match Manager (1v1 Gameplay)
-// ===========================================
-const MatchManager = {
-    async createMatch(roomCode, players, puzzle, solution) {
-        const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const playerIds = Object.keys(players);
-        
-        console.log('Creating match:', { matchId, roomCode, playerIds });
-        
-        // Create board state (flatten for easier updates)
-        const boardState = {};
-        for (let row = 0; row < 9; row++) {
-            for (let col = 0; col < 9; col++) {
-                const cellId = `${row}_${col}`;
-                boardState[cellId] = {
-                    value: puzzle[row][col],
-                    given: puzzle[row][col] !== 0,
-                    filledBy: null
-                };
-            }
-        }
-        
-        // Convert playerIds array to object for proper security rules
-        const playerIdsObject = {};
-        playerIds.forEach(id => playerIdsObject[id] = true);
-        
-        const matchData = {
-            id: matchId,
-            roomCode: roomCode,
-            players: players,
-            playerIds: playerIdsObject,
-            scores: {
-                [playerIds[0]]: 0,
-                [playerIds[1]]: 0
-            },
-            mistakes: {
-                [playerIds[0]]: 0,
-                [playerIds[1]]: 0
-            },
-            maxMistakes: 3,
-            board: boardState,
-            solution: solution.flat(), // Store flat solution for validation
-            status: 'active',
-            startedAt: serverTimestamp(),
-            winner: null,
-            winReason: null
-        };
-        
-        console.log('Match data prepared, writing to RTDB...');
-        
-        try {
-            await set(ref(rtdb, `matches/${matchId}`), matchData);
-            console.log('Match created successfully:', matchId);
-        } catch (error) {
-            console.error('Failed to create match:', error);
-            throw error;
-        }
-        
-        // Update room status
-        await update(ref(rtdb, `lobbies/${roomCode}`), {
-            status: 'playing',
-            matchId: matchId
-        });
-        
-        console.log('Room updated with matchId');
-        
-        return matchId;
-    },
-    
-    async makeMove(matchId, userId, row, col, value) {
-        const cellRef = ref(rtdb, `matches/${matchId}/board/${row}_${col}`);
-        const matchRef = ref(rtdb, `matches/${matchId}`);
-        
-        console.log('makeMove called:', { matchId, userId, row, col, value });
-        
-        try {
-            // Get match data first to check solution
-            const matchSnapshot = await get(matchRef);
-            const match = matchSnapshot.val();
-            
-            // Ensure the acting user is a participant in this match
-            const participants = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds || [];
-            if (!participants.includes(userId)) {
-                console.warn('makeMove rejected: user is not a participant of match', { userId, participants });
-                return { success: false, reason: 'Not a participant' };
-            }
-
-            if (!match || !match.solution) {
-                console.error('Match data invalid:', match);
-                return { success: false, reason: 'Match data invalid' };
-            }
-            
-            // Get current cell data to check if it exists
-            const cellSnapshot = await get(cellRef);
-            const cellData = cellSnapshot.val();
-            
-            console.log('Current cell data:', JSON.stringify(cellData));
-            
-            if (!cellData) {
-                console.error('Cell data not found - match may not exist');
-                return { success: false, reason: 'Match not found' };
-            }
-            
-            // Cell is a given (pre-filled)
-            if (cellData.given === true) {
-                console.log('Cell is a given number');
-                return { success: false, reason: 'Cell is given' };
-            }
-            
-            // Cell already filled by a player - check for truthy filledBy (not null/undefined)
-            if (cellData.filledBy) {
-                console.log('Cell already filled by:', cellData.filledBy);
-                return { success: false, reason: 'Cell already filled' };
-            }
-            
-            // Check if the guess is correct BEFORE writing to database
-            const cellIndex = row * 9 + col;
-            const isCorrect = match.solution[cellIndex] === value;
-            
-            console.log('Move result:', { isCorrect, solutionValue: match.solution[cellIndex], userValue: value });
-            
-            if (isCorrect) {
-                // Correct guess - write to database
-                await update(cellRef, {
-                    value: value,
-                    filledBy: userId
-                });
-                
-                // Update score
-                const newScore = (match.scores?.[userId] || 0) + 1;
-                await update(ref(rtdb, `matches/${matchId}/scores`), {
-                    [userId]: newScore
-                });
-                
-                // Check win condition (board complete)
-                await this.checkWinCondition(matchId);
-            } else {
-                // Wrong guess - increment mistakes (only for acting user)
-                const currentMistakes = (match.mistakes?.[userId] || 0) + 1;
-                console.log('About to record mistake', { matchId, userId, currentMistakes, previousMistakes: match.mistakes });
-                await update(ref(rtdb, `matches/${matchId}/mistakes`), {
-                    [userId]: currentMistakes
-                });
-                console.log('Mistake recorded:', { matchId, userId, currentMistakes, maxMistakes: match.maxMistakes || 3 });
-                
-                // Check if player has lost (3 mistakes)
-                if (currentMistakes >= (match.maxMistakes || 3)) {
-                    await this.endMatchByMistakes(matchId, userId);
-                    return { success: true, correct: false, gameOver: true, reason: 'mistakes' };
-                }
-            }
-            
-            return { success: true, correct: isCorrect, mistakes: match.mistakes?.[userId] || 0 };
-        } catch (error) {
-            console.error('makeMove error:', error);
-            return { success: false, reason: error.message };
-        }
-    },
-    
-    // Clear a cell after a wrong guess
-    async clearCell(matchId, row, col) {
-        const cellRef = ref(rtdb, `matches/${matchId}/board/${row}_${col}`);
-        
-        try {
-            await update(cellRef, {
-                value: 0,
-                filledBy: null
-            });
-            console.log('Cell cleared:', row, col);
-            return { success: true };
-        } catch (error) {
-            console.error('Clear cell error:', error);
-            return { success: false, reason: error.message };
-        }
-    },
-    
-    // End match when a player runs out of lives
-    async endMatchByMistakes(matchId, losingPlayerId) {
-        const matchRef = ref(rtdb, `matches/${matchId}`);
-        const snapshot = await get(matchRef);
-        const match = snapshot.val();
-        
-        if (!match || match.status !== 'active') return;
-        
-        // Find the winning player (the one who didn't lose)
-        const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds;
-        console.log('endMatchByMistakes invoked', { matchId, losingPlayerId, playerIds, matchMistakes: match.mistakes });
-        const winningPlayerId = playerIds.find(id => id !== losingPlayerId);
-        
-        console.log('Match ended by mistakes:', { losingPlayerId, winningPlayerId });
-        
-        await update(matchRef, {
-            status: 'finished',
-            winner: winningPlayerId,
-            winReason: 'opponent_mistakes',
-            finishedAt: serverTimestamp()
-        });
-    },
-    
-    async checkWinCondition(matchId) {
-        const matchRef = ref(rtdb, `matches/${matchId}`);
-        const snapshot = await get(matchRef);
-        const match = snapshot.val();
-        
-        if (!match || match.status !== 'active') return;
-        
-        // Convert playerIds object to array
-        const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds;
-        
-        // Check if board is complete
-        const board = match.board;
-        let filledCells = 0;
-        let correctCells = 0;
-        
-        for (const cellId in board) {
-            if (board[cellId].value !== 0) {
-                filledCells++;
-                // Check if the cell is correct
-                const [row, col] = cellId.split('_').map(Number);
-                const cellIndex = row * 9 + col;
-                if (match.solution[cellIndex] === board[cellId].value) {
-                    correctCells++;
-                }
-            }
-        }
-        
-        // Win condition: board is completely and correctly filled
-        if (correctCells === 81) {
-            const scores = match.scores;
-            let winner;
-            if (scores[playerIds[0]] > scores[playerIds[1]]) {
-                winner = playerIds[0];
-            } else if (scores[playerIds[1]] > scores[playerIds[0]]) {
-                winner = playerIds[1];
-            } else {
-                winner = 'tie';
-            }
-            
-            await update(matchRef, {
-                status: 'finished',
-                winner: winner,
-                winReason: 'board_complete',
-                finishedAt: serverTimestamp()
-            });
-        }
-    },
-    
-    listenToMatch(matchId, callback) {
-        console.log('Setting up match listener for:', matchId);
-        const matchRef = ref(rtdb, `matches/${matchId}`);
-        const listener = onValue(matchRef, (snapshot) => {
-            const data = snapshot.val();
-            console.log('Match update received:', data ? 'data present' : 'null');
-            if (data) {
-                console.log('Match status:', data.status, 'Board cells:', Object.keys(data.board || {}).length);
-            }
-            callback(data);
-        }, (error) => {
-            console.error('Match listener error:', error);
-        });
-        AppState.listeners.push({ ref: matchRef, callback: listener });
-        return listener;
-    },
-    
-    // Monitor opponent presence during a match with proper idle detection
-    startOpponentPresenceMonitor(matchId, opponentId, onDisconnect) {
-        console.log('Starting opponent presence monitor for:', opponentId);
-        
-        const opponentPresenceRef = ref(rtdb, `presence/${opponentId}`);
-        // Store timers so we can cancel if opponent returns
-        AppState.opponentDisconnectTimers = AppState.opponentDisconnectTimers || {};
-
-        const listener = onValue(opponentPresenceRef, (snapshot) => {
-            const presenceData = snapshot.val();
-            console.log('Opponent presence update:', presenceData);
-
-            // If opponent is online, clear any pending disconnect timer
-            if (presenceData && presenceData.status === 'online') {
-                const existing = AppState.opponentDisconnectTimers[opponentId];
-                if (existing) {
-                    clearTimeout(existing);
-                    delete AppState.opponentDisconnectTimers[opponentId];
-                    console.log('Cleared pending disconnect timer for opponent');
-                }
-                return;
-            }
-
-            // Opponent appears offline or presence missing — start a cancellable grace timer
-            console.log('Opponent appears offline, starting grace timeout...');
-            const graceMs = 30000; // 30s grace period
-            const timerId = setTimeout(() => {
-                console.log('Opponent disconnect timeout reached, invoking onDisconnect');
-                delete AppState.opponentDisconnectTimers[opponentId];
-                try {
-                    onDisconnect();
-                } catch (e) {
-                    console.error('onDisconnect handler threw:', e);
-                }
-            }, graceMs);
-
-            // Replace any existing timer
-            if (AppState.opponentDisconnectTimers[opponentId]) {
-                clearTimeout(AppState.opponentDisconnectTimers[opponentId]);
-            }
-            AppState.opponentDisconnectTimers[opponentId] = timerId;
-        });
-        
-        AppState.listeners.push({ 
-            ref: opponentPresenceRef, 
-            callback: listener
-        });
-        
-        return listener;
-    },
-    
-    // Handle when opponent disconnects
-    async handleOpponentDisconnect(matchId, currentUserId) {
-        const matchRef = ref(rtdb, `matches/${matchId}`);
-        
-        try {
-            const snapshot = await get(matchRef);
-            const match = snapshot.val();
-            
-            if (!match || match.status !== 'active') {
-                console.log('Match already ended or invalid');
-                return;
-            }
-            
-            // The remaining player wins by forfeit
-            await update(matchRef, {
-                status: 'finished',
-                winner: currentUserId,
-                finishedAt: serverTimestamp(),
-                endReason: 'opponent_disconnect'
-            });
-            
-            console.log('Match ended due to opponent disconnect');
-        } catch (error) {
-            console.error('Error handling opponent disconnect:', error);
-        }
-    },
-    
-    // Set up activity heartbeat for current player in a match
-    async setupMatchHeartbeat(matchId, userId) {
-        const matchActivityRef = ref(rtdb, `matches/${matchId}/activity/${userId}`);
-        
-        // Set initial activity
-        await set(matchActivityRef, {
-            lastActive: serverTimestamp(),
-            online: true
-        });
-        
-        // Update activity every 15 seconds
-        const heartbeatInterval = setInterval(async () => {
-            if (AppState.currentMatch !== matchId) {
-                clearInterval(heartbeatInterval);
-                return;
-            }
-            
-            try {
-                await update(matchActivityRef, {
-                    lastActive: serverTimestamp()
-                });
-            } catch (error) {
-                console.error('Heartbeat update failed:', error);
-            }
-        }, 15000);
-        
-        // Set up onDisconnect to mark player as offline
-        onDisconnect(matchActivityRef).update({
-            online: false,
-            disconnectedAt: serverTimestamp()
-        });
-        
-        return heartbeatInterval;
-    },
-
-    async endMatch(matchId) {
-        await update(ref(rtdb, `matches/${matchId}`), {
-            status: 'finished',
-            finishedAt: serverTimestamp()
-        });
-    }
-    ,
-
-    async resignMatch(matchId, userId) {
-        if (!matchId || !userId) return;
-        const matchRef = ref(rtdb, `matches/${matchId}`);
-        const snapshot = await get(matchRef);
-        const match = snapshot.val();
-        if (!match || match.status !== 'active') return;
-
-        const playerIds = typeof match.playerIds === 'object' ? Object.keys(match.playerIds) : match.playerIds || [];
-        const opponentId = playerIds.find((id) => id !== userId);
-        if (!opponentId) return;
-
-        await update(matchRef, {
-            status: 'finished',
-            winner: opponentId,
-            finishedAt: serverTimestamp(),
-            winReason: 'resign',
-            resignedBy: userId
-        });
-    }
-};
+const MatchManager = createMatchManager({
+    rtdb,
+    appState: AppState
+});
 
 // Global cleanup after a match (hoisted so other modules can call it)
 async function cleanupAfterMatch() {
@@ -2133,305 +1049,305 @@ async function cleanupAfterMatch() {
             
             // Update error messages
             document.getElementById('email-error').textContent = 
-                email && !emailValid ? 'Please enter a valid email' : '';
-            const pwErrorEl = document.getElementById('password-error');
-            if (pwErrorEl) {
-                pwErrorEl.textContent = password ? (passwordValid ? '' : PasswordPolicy.message(password)) : '';
-            }
-            document.getElementById('confirm-error').textContent = 
-                confirm && !confirmValid ? 'Passwords do not match' : '';
-            
-            // Update password strength
-            this.updatePasswordStrength(password);
-            
-            nextBtn2.disabled = !(emailValid && passwordValid && confirmValid);
-            
-            if (emailValid && passwordValid && confirmValid) {
-                AppState.onboarding.data.email = email;
-                AppState.onboarding.data.password = password;
-            }
-        };
-        
-        emailInput?.addEventListener('input', validateStep2);
-        passwordInput?.addEventListener('input', validateStep2);
-        confirmInput?.addEventListener('input', validateStep2);
-        
-        backBtn2?.addEventListener('click', () => this.goToStep(1));
-        nextBtn2?.addEventListener('click', () => {
-            if (!nextBtn2.disabled) {
-                this.goToStep(3);
-            }
-        });
-        
-        // Step 3: Profile Picture
-        const uploadArea = document.getElementById('profile-upload-area');
-        const uploadPreview = document.getElementById('upload-preview');
-        const avatarInput = document.getElementById('onboard-avatar');
-        const previewImage = document.getElementById('preview-image');
-        const nextBtn3 = document.getElementById('onboard-next-3');
-        const skipBtn3 = document.getElementById('onboard-skip-3');
-        const backBtn3 = document.getElementById('onboard-back-3');
-        
-        uploadPreview?.addEventListener('click', () => avatarInput?.click());
-        
-        // Drag and drop
-        uploadPreview?.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadPreview.style.borderColor = 'var(--color-primary)';
-        });
-        
-        uploadPreview?.addEventListener('dragleave', () => {
-            uploadPreview.style.borderColor = '';
-        });
-        
-        uploadPreview?.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadPreview.style.borderColor = '';
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                this.handleAvatarSelect(file);
-            }
-        });
-        
-        avatarInput?.addEventListener('change', (e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-                this.handleAvatarSelect(file);
-            }
-        });
-        
-        backBtn3?.addEventListener('click', () => this.goToStep(2));
-        skipBtn3?.addEventListener('click', () => this.createAccount());
-        nextBtn3?.addEventListener('click', () => this.createAccount());
-        
-        // Step 4: Tour (force tour when started from onboarding)
-        document.getElementById('start-tour')?.addEventListener('click', () => {
-            TourSystem.start(true);
-        });
-        
-        document.getElementById('skip-tour')?.addEventListener('click', () => {
-            this.complete();
-        });
-    },
-    
-    // Handle avatar file selection
-    handleAvatarSelect(file) {
-        if (file.size > 2 * 1024 * 1024) {
-            alert('Image must be less than 2MB');
-            return;
-        }
-        
-        AppState.onboarding.data.avatarFile = file;
-        
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const previewImage = document.getElementById('preview-image');
-            const placeholder = document.querySelector('.upload-placeholder');
-            const uploadPreview = document.getElementById('upload-preview');
-            
-            if (previewImage) {
-                previewImage.src = e.target.result;
-                previewImage.style.display = 'block';
-            }
-            if (placeholder) placeholder.style.display = 'none';
-            if (uploadPreview) uploadPreview.classList.add('has-image');
-        };
-        reader.readAsDataURL(file);
-    },
-    
-    // Update password strength indicator
-    updatePasswordStrength(password) {
-        const strengthBar = document.querySelector('.strength-bar');
-        const strengthText = document.querySelector('.strength-text');
-        
-        if (!strengthBar || !strengthText) return;
-        
-        let strength = 0;
-        let text = '';
-        let color = '';
-        
-        const minLen = PasswordPolicy.minLength;
-        if (password.length >= minLen) strength += 20;
-        if (/[A-Z]/.test(password)) strength += 20;
-        if (/[a-z]/.test(password)) strength += 20;
-        if (/[^A-Za-z0-9]/.test(password)) strength += 20;
-        if (password.length >= Math.max(minLen + 4, 10)) strength += 10;
-        if (/[0-9]/.test(password)) strength += 10;
-        
-        if (strength < 30) {
-            text = 'Weak';
-            color = 'var(--color-danger)';
-        } else if (strength < 60) {
-            text = 'Fair';
-            color = 'var(--color-warning)';
-        } else if (strength < 80) {
-            text = 'Good';
-            color = 'var(--color-success)';
-        } else {
-            text = 'Strong';
-            color = 'var(--color-cyan)';
-        }
-        
-        strengthBar.style.setProperty('--strength', `${strength}%`);
-        strengthBar.style.setProperty('--strength-color', color);
-        strengthText.textContent = password ? text : '';
-        strengthText.style.color = color;
-    },
-    
-    // Navigate to a specific step
-    goToStep(step) {
-        // Hide current step
-        document.querySelectorAll('.onboarding-step').forEach(el => {
-            el.classList.remove('active');
-        });
-        
-        // Show new step
-        const newStep = document.getElementById(`onboarding-step-${step}`);
-        if (newStep) {
-            newStep.classList.add('active');
-        }
-        
-        AppState.onboarding.step = step;
-        this.updateProgress();
-        
-        // Update display name on step 2
-        if (step === 2) {
-            const displayName = document.getElementById('onboard-display-name');
-            if (displayName) {
-                displayName.textContent = AppState.onboarding.data.username;
-            }
-        }
-    },
-    
-    // Update progress indicators
-    updateProgress() {
-        const currentStep = AppState.onboarding.step;
-        
-        document.querySelectorAll('.progress-step').forEach(el => {
-            const step = parseInt(el.dataset.step);
-            el.classList.remove('active', 'completed');
-            
-            if (step < currentStep) {
-                el.classList.add('completed');
-            } else if (step === currentStep) {
-                el.classList.add('active');
-            }
-        });
-    },
-    
-    // Create the account
-	    async createAccount() {
-        const { username, email, password, avatarFile } = AppState.onboarding.data;
-        
-        try {
-            // Show loading state
-            const buttons = document.querySelectorAll('#onboarding-step-3 .btn');
-            buttons.forEach(btn => btn.disabled = true);
-            
-            // Create the user account
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-            
-            // Upload avatar if provided (do this first so we have the URL)
-            let avatarUrl = null;
-            if (avatarFile) {
-                try {
-                    avatarUrl = await ProfileManager.uploadProfilePicture(user.uid, avatarFile);
-                } catch (uploadError) {
-                    console.error('Avatar upload error:', uploadError);
-                    // Continue without avatar
+                handleGameCellClick(row, col) {
+                    // This function is still used by multiplayer code
+                    console.log('handleGameCellClick called', row, col);
+                    const cell = document.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
+                    if (!cell) return;
+
+                    const isGiven = cell.classList.contains('given');
+                    if (isGiven) return;
+
+                    const num = AppState.puzzle?.[row]?.[col] || 0;
+
+                    GameUI.selectCell(row, col);
+
+                    GameHelpers.highlightSameNumbers(num);
+                    GameUI.showNumberPad(row, col, isGiven, num);
+                },
+
+                handleNumberInput(num) {
+                    console.log('handleNumberInput called with', num);
+
+                    if (!AppState.selectedCell) return;
+                    const { row, col } = AppState.selectedCell;
+
+                    const cell = document.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
+                    if (!cell) return;
+
+                    // Don't allow input if the cell is a given in single player mode
+                    const isGiven = cell.classList.contains('given');
+                    if (isGiven && AppState.gameMode === 'single') return;
+
+                    // In single player mode, cannot overwrite a given
+                    if (AppState.gameMode === 'single' && AppState.originalPuzzle?.[row]?.[col] !== 0) {
+                        return;
+                    }
+
+                    // In versus mode, validate based on board state
+                    if (AppState.gameMode === 'versus') {
+                        const board = AppState.versusBoard;
+                        const cellData = board?.[`${row}_${col}`];
+                        if (!cellData) return;
+                        if (cellData.given) return;
+                        if (cellData.filledBy && cellData.filledBy !== AppState.currentUser?.uid) return;
+                    }
+
+                    if (AppState.notesMode) {
+                        GameUI.addNote(row, col, num);
+                        return;
+                    }
+
+                    const oldValue = AppState.puzzle[row][col];
+                    const valueEl = cell.querySelector('.cell-value');
+
+                    // In 1v1: just place the number, RTDB validator handles correctness
+                    if (AppState.gameMode === 'versus') {
+                        this.placeVersusNumber(row, col, num);
+                        return;
+                    }
+
+                    if (num === 0) {
+                        // Clear the cell
+                        GameHelpers.addToHistory(row, col, oldValue, 0);
+                        AppState.puzzle[row][col] = 0;
+                        if (valueEl) valueEl.textContent = '';
+                        else cell.textContent = '';
+                        cell.classList.remove('error', 'correct');
+                        GameHelpers.updateRemainingCounts();
+                        GameHelpers.updateProgress();
+                        GameHelpers.consumeEraseIfNeeded(oldValue !== 0);
+                        return;
+                    }
+
+                    const isCorrect = AppState.solution[row][col] === num;
+
+                    GameHelpers.addToHistory(row, col, oldValue, num);
+                    AppState.puzzle[row][col] = num;
+
+                    if (valueEl) valueEl.textContent = num;
+                    else cell.textContent = num;
+
+                    if (isCorrect) {
+                        cell.classList.add('correct');
+                        cell.classList.remove('error');
+                    } else {
+                        cell.classList.add('error');
+                        cell.classList.remove('correct');
+                        AppState.mistakes++;
+                        GameHelpers.updateMistakesDisplay();
+                        if (AppState.mistakes >= AppState.maxMistakes) {
+                            GameUI.endGame(false);
+                            return;
+                        }
+                    }
+
+                    GameHelpers.highlightConflicts(row, col, num);
+                    GameHelpers.highlightSameNumbers(num);
+                    GameHelpers.updateRemainingCounts();
+                    GameHelpers.updateProgress();
+                    BoardIntegritySystem.updateFromSingleState();
+                    GameUI.checkWinCondition();
+                },
+
+                placeVersusNumber(row, col, num) {
+                    const user = AppState.currentUser;
+                    if (!user || !AppState.currentLobbyId) return;
+                    const lobbyId = AppState.currentLobbyId;
+                    const gameId = AppState.activeGameId;
+                    if (!gameId) return;
+
+                    const matchStateRef = ref(db, `matches/${gameId}/state`);
+                    update(matchStateRef, {
+                        [`board/${row}_${col}`]: {
+                            value: num,
+                            given: false,
+                            filledBy: user.uid,
+                            filledAt: Date.now()
+                        }
+                    }).catch(error => {
+                        console.error('Error placing number:', error);
+                        showToast('Failed to place number');
+                    });
+                },
+
+                showNumberPad(row, col, isGiven, currentValue) {
+                    const pad = document.getElementById('number-pad');
+                    if (!pad) return;
+
+                    AppState.selectedCell = { row, col };
+
+                    pad.dataset.row = row;
+                    pad.dataset.col = col;
+
+                    // Position the pad near the cell
+                    const cell = document.querySelector(
+                        `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
+                    );
+                    if (!cell) return;
+                    const rect = cell.getBoundingClientRect();
+                    pad.style.top = `${rect.bottom + window.scrollY + 8}px`;
+                    pad.style.left = `${rect.left + window.scrollX}px`;
+
+                    pad.style.display = 'grid';
+                    if (isGiven) {
+                        pad.style.display = 'none';
+                        return;
+                    }
+
+                    // Highlight currently selected number in the pad
+                    pad.querySelectorAll('.num-btn').forEach(btn => {
+                        const num = parseInt(btn.dataset.num || '0', 10);
+                        btn.classList.toggle('selected', num === currentValue);
+                    });
+                },
+
+                addNote(row, col, num) {
+                    const key = `${row}_${col}`;
+                    if (!AppState.notes[key]) {
+                        AppState.notes[key] = new Set();
+                    }
+                    const notesSet = AppState.notes[key];
+
+                    if (notesSet.has(num)) {
+                        notesSet.delete(num);
+                    } else {
+                        notesSet.add(num);
+                    }
+
+                    const cell = document.querySelector(
+                        `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
+                    );
+                    if (!cell) return;
+
+                    const notesEl = cell.querySelector('.cell-notes');
+                    GameHelpers.renderNotesForCell(notesEl, notesSet);
+                },
+
+                updateTimerDisplay() {
+                    const timeElement = document.getElementById('game-timer');
+                    if (timeElement) {
+                        const seconds = Math.floor(AppState.gameTime / 1000);
+                        const minutes = Math.floor(seconds / 60);
+                        const remainingSeconds = seconds % 60;
+                        timeElement.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+                    }
+                },
+
+                updateVersusTimerDisplay() {
+                    const timeElement = document.getElementById('versus-timer');
+                    if (timeElement) {
+                        const totalSeconds = Math.floor(AppState.gameTime / 1000);
+                        const minutes = Math.floor(totalSeconds / 60);
+                        const seconds = totalSeconds % 60;
+                        timeElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                },
+
+                startTimer() {
+                    if (AppState.gameMode === 'versus') {
+                        this.startVersusTimer();
+                        return;
+                    }
+                    GameUI.stopTimer();
+                    AppState.gameTime = 0;
+                    AppState.gameStartTime = Date.now();
+                    GameUI.updateTimerDisplay();
+                    AppState.timer = setInterval(() => {
+                        if (AppState.gameOver) return;
+                        AppState.gameTime = Date.now() - AppState.gameStartTime;
+                        GameUI.updateTimerDisplay();
+                    }, 1000);
+                },
+
+                stopTimer() {
+                    if (AppState.timer) {
+                        clearInterval(AppState.timer);
+                        AppState.timer = null;
+                    }
+                    if (AppState.versusTimer) {
+                        clearInterval(AppState.versusTimer);
+                        AppState.versusTimer = null;
+                    }
+                },
+
+                startVersusTimer() {
+                    GameUI.stopTimer();
+                    AppState.gameTime = 0;
+                    AppState.gameStartTime = Date.now();
+                    GameUI.updateVersusTimerDisplay();
+                    AppState.versusTimer = setInterval(() => {
+                        if (AppState.gameOver) return;
+                        AppState.gameTime = Date.now() - AppState.gameStartTime;
+                        GameUI.updateVersusTimerDisplay();
+                    }, 1000);
+                },
+
+                renderVersusBoard(boardState) {
+                    const grid = document.getElementById('sudoku-grid');
+                    if (!grid) return;
+
+                    // Update status overlay
+                    const statusEl = document.getElementById('versus-status');
+                    if (statusEl) {
+                        statusEl.textContent = AppState.gameOver ? 'Game Over' : '1v1 Match In Progress';
+                    }
+
+                    AppState.versusBoard = boardState;
+                    this.renderPuzzle(boardState?.puzzle || AppState.puzzle, boardState?.board || {});
+                },
+
+                checkWinCondition() {
+                    if (!AppState.puzzle || !AppState.solution) return;
+
+                    for (let row = 0; row < 9; row++) {
+                        for (let col = 0; col < 9; col++) {
+                            if (AppState.puzzle[row][col] !== AppState.solution[row][col]) {
+                                return;
+                            }
+                        }
+                    }
+
+                    GameUI.endGame(true);
+                },
+
+                endGame(won) {
+                    console.log('Game ended, won:', won);
+
+                    AppState.gameOver = true;
+                    GameUI.stopTimer();
+
+                    if (won) {
+                        GameUI.showWinDialog();
+                    } else {
+                        GameUI.showLossDialog();
+                    }
+                },
+
+                showWinDialog() {
+                    const dialog = document.getElementById('win-dialog');
+                    if (dialog) {
+                        dialog.style.display = 'block';
+                        dialog.setAttribute('aria-hidden', 'false');
+                        // Focus the first button for accessibility
+                        const firstBtn = dialog.querySelector('button');
+                        if (firstBtn) firstBtn.focus();
+                    }
+                },
+
+                showLossDialog() {
+                    const dialog = document.getElementById('loss-dialog');
+                    if (dialog) {
+                        dialog.style.display = 'block';
+                        dialog.setAttribute('aria-hidden', 'false');
+                        const firstBtn = dialog.querySelector('button');
+                        if (firstBtn) firstBtn.focus();
+                    }
                 }
-            }
-            
-            // Update Firebase Auth profile with username and photo
-            await updateProfile(user, { 
-                displayName: username,
-                photoURL: avatarUrl 
-            });
-            
-            // Reserve the username in usernames collection
-	            await setDoc(doc(firestore, 'usernames', username.toLowerCase()), {
-	                userId: user.uid,
-	                createdAt: fsServerTimestamp()
-	            });
-            
-            // Create complete user profile in Firestore
-	            await setDoc(doc(firestore, 'users', user.uid), {
-	                userId: user.uid,
-	                displayName: username,
-	                username: username,
-	                usernameLower: username.toLowerCase(),
-	                email: email,
-	                profilePicture: avatarUrl,
-	                memberSince: fsServerTimestamp(),
-	                createdAt: fsServerTimestamp(),
-	                badges: [],
-	                stats: {
-	                    wins: 0,
-	                    losses: 0,
-	                    gamesPlayed: 0,
-	                    bestTime: null
-	                },
-                wins: 0,
-                losses: 0,
-                gamesPlayed: 0,
-                bio: '',
-                friends: [],
-                friendRequests: [],
-	                socialLinks: {},
-	                isPublic: true,
-	                isNewUser: true
-	            });
-
-            // Create vanity link mapping for this username (registered users only)
-	            try {
-	                await setDoc(doc(firestore, 'vanityLinks', username.toLowerCase()), {
-	                    userId: user.uid,
-	                    username: username,
-	                    path: `/u/${username.toLowerCase()}`,
-	                    createdAt: fsServerTimestamp()
-	                });
-	            } catch (e) {
-	                console.warn('Failed to create vanity link during onboarding:', e);
-	            }
-            
-            // Update AppState with user
-            AppState.currentUser = user;
-
-            // Show loading while finalizing account then reload to ensure all listeners pick up profile
-            try {
-                UI.showLoading('Finalizing your account...');
-            } catch (e) {}
-
-            // Show success step locally
-            this.goToStep(4);
-            this.showConfetti();
-
-            // Wait briefly to ensure writes propagated, then reload so the app initializes with fresh profile data (welcome name etc.)
-            try {
-                await new Promise(r => setTimeout(r, 900));
-                // Attempt a soft refresh: re-run auth-ready flow by reloading the page so onAuthStateChanged triggers and profile listener attaches cleanly.
-                location.reload();
-                return;
-            } catch (e) {
-                console.warn('Auto-reload after signup failed', e);
-            } finally {
-                try { UI.hideLoading(); } catch (e) {}
-            }
-            
-        } catch (error) {
-            console.error('Account creation error:', error);
-            
-            // Re-enable buttons
-            const buttons = document.querySelectorAll('#onboarding-step-3 .btn');
-            buttons.forEach(btn => btn.disabled = false);
-            
-            // Show error
-            let message = 'Failed to create account. Please try again.';
-            if (error.code === 'auth/email-already-in-use') {
-                message = 'This email is already registered. Try signing in instead.';
-            } else if (error.code === 'auth/weak-password') {
-                message = PasswordPolicy.message(password) || 'Password does not meet requirements.';
+            };
+            // ===========================================
+            // Event Handlers
+            // ===========================================
             }
             alert(message);
         }
@@ -2517,7 +1433,7 @@ async function cleanupAfterMatch() {
 	            
 	            // Store friends in state
 	            AppState.friends = profileData?.friends || [];
-	            FriendsPanel.render().catch(() => {});
+	            FriendsManager.render().catch(() => {});
 	            
 	            // Update stats
 	            UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
@@ -2527,10 +1443,10 @@ async function cleanupAfterMatch() {
 	            window.ChatWidget?.setDmEnabled?.(allowDirectMessages);
 	            
 	            // Initialize presence
-	            PresenceSystem.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
+	            PresenceManager.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
 	            
 	            // Listen to online players
-	            PresenceSystem.listenToOnlinePlayers((players) => {
+	            PresenceManager.listenToOnlinePlayers((players) => {
 	                AppState.onlinePlayers = players;
 	                UI.updatePlayersList(players);
 	            });
@@ -2560,7 +1476,7 @@ async function cleanupAfterMatch() {
             if (chatFab) chatFab.style.display = 'flex';
             
             ViewManager.show('lobby');
-            PresenceSystem.updateActivity('In Lobby');
+            PresenceManager.updateActivity('In Lobby');
             if (AppState.pendingJoinCode) {
                 setTimeout(() => joinRoomHandler(AppState.pendingJoinCode), 50);
             }
@@ -3557,7 +2473,7 @@ async function handleChallengeNotification(otherUserId, notification) {
             const codeEl = document.getElementById('display-room-code');
             if (codeEl) codeEl.textContent = code;
             ViewManager.show('waiting');
-            PresenceSystem.updateActivity('Joining match');
+            PresenceManager.updateActivity('Joining match');
             LobbyManager.listenToRoom(code, handleRoomUpdate);
 
             // Cleanup notifications
@@ -3586,10 +2502,10 @@ async function handleNotification(otherUserId, notification) {
 
     try {
         if (notification.type === 'friend_request') {
-            FriendsPanel.refresh().catch(() => {});
+            FriendsManager.refresh().catch(() => {});
             UI.showToast('New friend request received.', 'info');
         } else if (notification.type === 'friend_accept') {
-            FriendsPanel.refresh().catch(() => {});
+            FriendsManager.refresh().catch(() => {});
             UI.showToast('Friend request accepted.', 'success');
         } else if (notification.type === 'friend_decline') {
             UI.showToast('Friend request declined.', 'info');
@@ -3609,1251 +2525,24 @@ async function handleNotification(otherUserId, notification) {
 }
 
 // ===========================================
-// UI Helpers
+// UI Helpers (modular)
 // ===========================================
-window.UI = Object.assign(window.UI || {}, {
-    hoverTimeout: null,
-    
-    updatePlayersList(players) {
-        const container = document.getElementById('players-list');
-        if (!container) return;
-        
-        container.innerHTML = '';
-        
-        for (const [id, player] of Object.entries(players)) {
-            if (player.status === 'online') {
-                const item = document.createElement('div');
-                item.className = 'player-item';
-                item.dataset.userId = id;
-                item.innerHTML = `
-                    <div class="player-item-info">
-                        <span class="player-item-status status-dot ${player.status}"></span>
-                        <span class="player-item-name player-name-hoverable" data-user-id="${id}">${this.escapeHtml(player.displayName || 'Anonymous')}</span>
-                    </div>
-                    <span class="player-item-activity">${this.escapeHtml(player.current_activity || '')}</span>
-                `;
-                
-                // Add hover profile listeners
-                const nameEl = item.querySelector('.player-name-hoverable');
-                nameEl.addEventListener('mouseenter', (e) => this.showHoverProfile(e, id, player));
-                nameEl.addEventListener('mouseleave', () => this.hideHoverProfile());
-                
-                item.addEventListener('click', () => this.showPlayerProfile(id));
-                container.appendChild(item);
-            }
-        }
-        
-        // Update online count
-        const onlineCount = Object.values(players).filter(p => p.status === 'online').length;
-        const countEl = document.getElementById('online-count');
-        if (countEl) countEl.textContent = onlineCount;
-    },
-    
-    async showHoverProfile(event, userId, basicData) {
-        // Clear any existing timeout
-        if (this.hoverTimeout) {
-            clearTimeout(this.hoverTimeout);
-        }
-        
-        const tooltip = document.getElementById('hover-profile');
-        if (!tooltip) return;
-        
-        // Position the tooltip
-        const rect = event.target.getBoundingClientRect();
-        tooltip.style.left = `${rect.right + 10}px`;
-        tooltip.style.top = `${rect.top - 10}px`;
-        
-        // Check if tooltip would go off screen
-        const tooltipRect = tooltip.getBoundingClientRect();
-        if (rect.right + 200 > window.innerWidth) {
-            tooltip.style.left = `${rect.left - 200}px`;
-        }
-        
-        // Set basic data first
-        tooltip.querySelector('.hover-profile-name').textContent = basicData?.displayName || 'Anonymous';
-        tooltip.querySelector('#hover-activity').textContent = basicData?.current_activity || 'Online';
-        
-        // Show tooltip
-        tooltip.style.display = 'block';
-        
-        // Fetch more detailed stats
-        try {
-            const profile = await ProfileManager.getProfile(userId);
-            if (profile.exists()) {
-                const data = profile.data();
-                const wins = data.stats?.wins || 0;
-                const losses = data.stats?.losses || 0;
-                const total = wins + losses;
-                const winrate = total > 0 ? Math.round((wins / total) * 100) : 0;
-                
-                tooltip.querySelector('#hover-wins').textContent = wins;
-                tooltip.querySelector('#hover-losses').textContent = losses;
-                tooltip.querySelector('#hover-winrate').textContent = `${winrate}%`;
-            }
-        } catch (e) {
-            console.warn('Could not fetch profile for hover:', e);
-        }
-    },
-    
-    hideHoverProfile() {
-        this.hoverTimeout = setTimeout(() => {
-            const tooltip = document.getElementById('hover-profile');
-            if (tooltip) {
-                tooltip.style.display = 'none';
-            }
-        }, 100);
-    },
-    
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    },
-    
-    async showPlayerProfile(userId) {
-        const profile = await ProfileManager.getProfile(userId);
-        if (!profile.exists()) return;
-        
-        const data = profile.data();
-        const targetIsGuest = !data.email;
-        const viewerCanSocial = isRegisteredUser();
-        
-        document.getElementById('profile-name').textContent = data.displayName || 'Anonymous';
-        document.getElementById('profile-member-since').textContent = 
-            `Member since: ${data.memberSince?.toDate?.()?.toLocaleDateString() || 'Unknown'}`;
-        document.getElementById('profile-wins').textContent = data.stats?.wins || 0;
-        document.getElementById('profile-losses').textContent = data.stats?.losses || 0;
-        
-        // Show badges
-        const badgesContainer = document.getElementById('profile-badges');
-        badgesContainer.innerHTML = '';
-        const badgeHelp = document.getElementById('profile-badge-help');
-        if (badgeHelp) badgeHelp.textContent = 'Tap a badge to learn what it means.';
-        (data.badges || []).forEach(badge => {
-            const badgeEl = document.createElement('span');
-            badgeEl.className = `badge ${badge}`;
-            const info = BadgeInfo[badge] || { name: badge, desc: '' };
-            badgeEl.textContent = info.name || badge;
-            if (info.desc) badgeEl.title = info.desc;
-            badgeEl.addEventListener('click', () => {
-                if (badgeHelp) badgeHelp.textContent = info.desc || info.name || badge;
-            });
-            badgesContainer.appendChild(badgeEl);
-        });
-        if (badgeHelp && (data.badges || []).length === 0) {
-            badgeHelp.textContent = 'Earn badges by playing and completing feats.';
-        }
-        
-        // Set up challenge button
-        document.getElementById('challenge-player').onclick = async () => {
-            await ChallengeSystem.sendChallenge(
-                AppState.currentUser.uid,
-                getCurrentDisplayName(),
-                userId
-            );
-            ViewManager.hideModal('profile-modal');
-            alert('Challenge sent!');
-        };
-
-        const dmBtn = document.getElementById('profile-modal-dm');
-        if (dmBtn) {
-            if (targetIsGuest || !viewerCanSocial || userId === AppState.currentUser?.uid) {
-                dmBtn.disabled = true;
-                dmBtn.title = targetIsGuest ? 'Direct messages unavailable for guests' : 'Sign in to DM';
-            } else {
-                dmBtn.disabled = false;
-                dmBtn.onclick = async () => {
-                    try { await window.ChatWidget?.openDm?.(userId); } catch (e) { console.warn('Modal DM failed', e); }
-                    ViewManager.hideModal('profile-modal');
-                };
-            }
-        }
-        
-        ViewManager.showModal('profile-modal');
-    },
-    
-    // Full profile page view
-    async showProfilePage(userId) {
-        const isOwnProfile = userId === AppState.currentUser?.uid;
-        
-        const profile = await ProfileManager.getProfile(userId);
-        if (!profile.exists()) {
-            alert('Profile not found');
-            return;
-        }
-        
-        const data = profile.data();
-        AppState.viewingProfileId = userId;
-        const profileView = document.getElementById('profile-view');
-        if (profileView) profileView.dataset.userId = userId;
-        
-        // Update profile page elements
-        const username = data.username || data.displayName || 'Anonymous';
-        document.getElementById('profile-page-title').textContent = isOwnProfile ? 'Your Profile' : `${username}'s Profile`;
-        document.getElementById('profile-page-username').textContent = username;
-        document.getElementById('profile-page-bio').textContent = data.bio || 'No bio yet...';
-        
-        // Profile picture
-        const pictureEl = document.getElementById('profile-page-picture');
-        const placeholderEl = document.getElementById('profile-picture-placeholder');
-        if (data.profilePicture) {
-            // Prefer signed URL from backend API (falls back to stored URL)
-            try {
-                const resp = await fetch(`/api/avatar/${userId}`);
-                if (resp.ok) {
-                    const json = await resp.json();
-                    pictureEl.src = json.url;
-                } else {
-                    pictureEl.src = data.profilePicture;
-                }
-            } catch (e) {
-                pictureEl.src = data.profilePicture;
-            }
-            pictureEl.style.display = 'block';
-            placeholderEl.style.display = 'none';
-        } else {
-            pictureEl.style.display = 'none';
-            placeholderEl.style.display = 'flex';
-        }
-        
-        // Show edit button only for own profile
-        document.getElementById('profile-picture-edit').style.display = isOwnProfile ? 'block' : 'none';
-        
-        // Member since
-        let memberDate = null;
-        try {
-            if (data.memberSince?.toDate) memberDate = data.memberSince.toDate();
-            else if (typeof data.memberSince === 'number') memberDate = new Date(data.memberSince);
-            else if (typeof data.memberSince === 'string') memberDate = new Date(data.memberSince);
-        } catch { /* ignore */ }
-        const memberText = memberDate && !Number.isNaN(memberDate.getTime())
-            ? memberDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-            : 'Unknown';
-        document.getElementById('profile-page-member-since').textContent = memberText;
-        
-        // Vanity URL - show only for registered users (not anonymous guest accounts)
-        const vanityEl = document.getElementById('profile-vanity-url');
-        const vanityLinkEl = document.getElementById('profile-vanity-link');
-        const hostBase = window.location.origin || 'https://stone-doku.web.app';
-        const vanityUrl = `${hostBase}/u/${encodeURIComponent(username.toLowerCase())}`;
-        // Consider a user 'registered' if they have an email on their profile
-        const isRegistered = !!data.email;
-        const targetIsGuest = !isRegistered;
-        if (isRegistered && vanityEl && vanityLinkEl) {
-            vanityLinkEl.href = `/u/${encodeURIComponent(username.toLowerCase())}`;
-            vanityLinkEl.textContent = vanityUrl;
-            vanityEl.style.display = 'flex';
-        } else if (vanityEl) {
-            // Hide vanity URL for anonymous/guest profiles
-            vanityEl.style.display = 'none';
-        }
-        
-        // Stats
-        const stats = data.stats || { wins: 0, losses: 0, gamesPlayed: 0 };
-        document.getElementById('profile-page-wins').textContent = stats.wins || 0;
-        document.getElementById('profile-page-losses').textContent = stats.losses || 0;
-        const totalGames = (stats.wins || 0) + (stats.losses || 0);
-        const winRate = totalGames > 0 ? Math.round((stats.wins / totalGames) * 100) : 0;
-        document.getElementById('profile-page-winrate').textContent = `${winRate}%`;
-        document.getElementById('profile-page-games').textContent = totalGames;
-        
-        // Badges
-        const badgesContainer = document.getElementById('profile-page-badges');
-        badgesContainer.innerHTML = '';
-        const badgeHelp = document.getElementById('profile-badge-help');
-        if (badgeHelp) badgeHelp.textContent = 'Tap a badge to learn what it means.';
-        const badges = data.badges || [];
-        if (badges.length === 0) {
-            badgesContainer.innerHTML = '<div class="badge-empty">No badges yet. Keep playing to earn badges!</div>';
-            if (badgeHelp) badgeHelp.textContent = 'Earn badges by playing and completing feats.';
-        } else {
-            badges.forEach(badge => {
-                const info = BadgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: String(badge), desc: '' };
-                const badgeEl = document.createElement('div');
-                badgeEl.className = 'badge-item';
-                badgeEl.title = info.desc || info.name;
-                badgeEl.setAttribute('role', 'button');
-                badgeEl.setAttribute('tabindex', '0');
-
-                const iconEl = document.createElement('span');
-                iconEl.className = 'badge-icon';
-                iconEl.setAttribute('aria-hidden', 'true');
-                iconEl.innerHTML = info.iconHtml;
-
-                const nameEl = document.createElement('span');
-                nameEl.className = 'badge-name';
-                nameEl.textContent = info.name;
-
-                badgeEl.appendChild(iconEl);
-                badgeEl.appendChild(nameEl);
-                
-                badgeEl.addEventListener('click', () => {
-                    if (badgeHelp) badgeHelp.textContent = info.desc || info.name || badge;
-                });
-                
-                badgesContainer.appendChild(badgeEl);
-            });
-        }
-        
-        // Show appropriate action buttons
-        document.getElementById('profile-own-actions').style.display = isOwnProfile ? 'flex' : 'none';
-        document.getElementById('profile-other-actions').style.display = isOwnProfile ? 'none' : 'flex';
-        
-	        // Check friend status if viewing other profile
-	        if (!isOwnProfile) {
-	            const isFriend = AppState.friends.includes(userId);
-	            const friendBtn = document.getElementById('profile-friend-btn');
-	            const labelEl = friendBtn?.querySelector('.btn-label');
-	            const dmBtn = document.getElementById('profile-dm-btn');
-	            const socialEnabled = isRegisteredUser() && !targetIsGuest;
-	            let hasIncomingRequest = false;
-	            let hasOutgoingRequest = false;
-
-	            if (!socialEnabled) {
-	                if (friendBtn) friendBtn.style.display = 'none';
-	                if (dmBtn) dmBtn.style.display = 'none';
-	            } else {
-	                if (friendBtn) friendBtn.style.display = '';
-	                if (dmBtn) dmBtn.style.display = '';
-
-	                try {
-	                    const reqSnap = await ProfileManager.getFriendRequestBetween(AppState.currentUser.uid, userId);
-	                    if (reqSnap && reqSnap.exists()) {
-	                        const reqData = reqSnap.data() || {};
-	                        if (reqData.status === 'pending') {
-	                            hasIncomingRequest = reqData.toUid === AppState.currentUser.uid;
-	                            hasOutgoingRequest = reqData.fromUid === AppState.currentUser.uid;
-	                        }
-	                    }
-	                } catch (e) {
-	                    console.warn('Failed to check friend request state', e);
-	                }
-
-	                if (hasIncomingRequest) {
-	                    if (labelEl) labelEl.textContent = 'Accept Request';
-	                    else if (friendBtn) friendBtn.textContent = 'Accept Request';
-	                    if (friendBtn) {
-	                        friendBtn.disabled = false;
-	                        friendBtn.onclick = async () => {
-	                            try {
-	                                await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, userId);
-	                                UI.showToast('Friend request accepted.', 'success');
-	                                await FriendsPanel.refresh();
-	                            } catch (err) {
-	                                UI.showToast(err?.message || 'Failed to accept request.', 'error');
-	                            }
-	                        };
-	                    }
-	                } else if (hasOutgoingRequest) {
-	                    if (labelEl) labelEl.textContent = 'Request Sent';
-	                    else if (friendBtn) friendBtn.textContent = 'Request Sent';
-	                    if (friendBtn) {
-	                        friendBtn.disabled = true;
-	                        friendBtn.onclick = null;
-	                    }
-	                } else if (isFriend) {
-	                    if (labelEl) labelEl.textContent = 'Remove Friend';
-	                    else if (friendBtn) friendBtn.textContent = 'Remove Friend';
-	                    if (friendBtn) {
-	                        friendBtn.disabled = false;
-	                        friendBtn.onclick = async () => {
-	                            try {
-	                                await ProfileManager.removeFriend(AppState.currentUser.uid, userId);
-	                                UI.showToast('Friend removed.', 'info');
-	                                await FriendsPanel.refresh();
-	                            } catch (err) {
-	                                UI.showToast(err?.message || 'Failed to remove friend.', 'error');
-	                            }
-	                        };
-	                    }
-	                } else {
-	                    if (labelEl) labelEl.textContent = 'Add Friend';
-	                    else if (friendBtn) friendBtn.textContent = 'Add Friend';
-	                    if (friendBtn) {
-	                        friendBtn.disabled = false;
-	                        friendBtn.onclick = async () => {
-	                            try {
-	                                const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, userId);
-	                                UI.showToast(result === 'accepted_existing' ? 'Friend request accepted.' : 'Friend request sent.', 'success');
-	                                await FriendsPanel.refresh();
-	                            } catch (err) {
-	                                UI.showToast(err?.message || 'Failed to send request.', 'error');
-	                            }
-	                        };
-	                    }
-	                }
-	            }
-	        }
-        
-        ViewManager.show('profile');
-    },
-    
-    addChatMessage(containerId, sender, text, timestamp, userId = null) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        
-        const messageEl = document.createElement('div');
-        messageEl.className = 'chat-message';
-        
-        const time = timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-        
-        // Create sender element with hover capability
-        const senderEl = document.createElement('span');
-        senderEl.className = 'chat-sender';
-        if (userId) {
-            senderEl.classList.add('clickable-user');
-            senderEl.dataset.userId = userId;
-        }
-        senderEl.textContent = sender;
-        
-        const textEl = document.createElement('span');
-        textEl.className = 'chat-text';
-        textEl.textContent = text;
-        
-        const timeEl = document.createElement('span');
-        timeEl.className = 'chat-time';
-        timeEl.textContent = time;
-        
-        const headerRow = document.createElement('div');
-        headerRow.className = 'chat-header-row';
-        headerRow.appendChild(senderEl);
-        headerRow.appendChild(timeEl);
-        
-        messageEl.appendChild(headerRow);
-        messageEl.appendChild(textEl);
-        
-        container.appendChild(messageEl);
-        container.scrollTop = container.scrollHeight;
-        
-        // Add hover listener for profile
-        if (userId) {
-            senderEl.addEventListener('mouseenter', (e) => {
-                this.showMiniProfile(userId, sender, e.target);
-            });
-            senderEl.addEventListener('mouseleave', () => {
-                this.hideMiniProfile();
-            });
-        }
-    },
-    
-    miniProfileTimeout: null,
-    miniProfileHideTimer: null,
-    
-    async showMiniProfile(userId, displayName, targetEl) {
-        // Clear any pending hide
-        if (this.miniProfileTimeout) {
-            clearTimeout(this.miniProfileTimeout);
-            this.miniProfileTimeout = null;
-        }
-        if (this.miniProfileHideTimer) {
-            clearTimeout(this.miniProfileHideTimer);
-            this.miniProfileHideTimer = null;
-        }
-        
-        // Get or create mini profile element
-        let miniProfile = document.getElementById('chat-mini-profile');
-        if (!miniProfile) {
-            miniProfile = document.createElement('div');
-            miniProfile.id = 'chat-mini-profile';
-            miniProfile.className = 'chat-mini-profile';
-            document.body.appendChild(miniProfile);
-            miniProfile.addEventListener('mouseenter', () => {
-                if (this.miniProfileHideTimer) {
-                    clearTimeout(this.miniProfileHideTimer);
-                    this.miniProfileHideTimer = null;
-                }
-            });
-            miniProfile.addEventListener('mouseleave', () => {
-                this.hideMiniProfile(400);
-            });
-        }
-        
-        // Position near the target
-        const rect = targetEl.getBoundingClientRect();
-        miniProfile.style.left = `${rect.left}px`;
-        miniProfile.style.top = `${rect.bottom + 8}px`;
-        
-        // Show loading state
-        miniProfile.innerHTML = `
-            <div class="mini-profile-header">
-                <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
-                <div class="mini-profile-name">${this.escapeHtml(displayName)}</div>
-            </div>
-            <div class="mini-profile-loading">Loading...</div>
-        `;
-        miniProfile.classList.add('visible');
-        
-        // Fetch profile data and presence status
-        try {
-            const [profileSnap, presenceSnapshot] = await Promise.all([
-                ProfileManager.getProfile(userId),
-                get(ref(rtdb, `presence/${userId}`))
-            ]);
-            
-            const presenceData = presenceSnapshot.val();
-            const isOnline = presenceData?.status === 'online';
-            const profileData = profileSnap?.data?.() || {};
-            const stats = profileData.stats || { wins: 0, losses: 0 };
-            const total = stats.wins + stats.losses;
-            const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
-            const statusClass = isOnline ? 'online' : 'offline';
-            const statusText = isOnline ? 'Online' : 'Offline';
-            const name = profileData.username || profileData.displayName || displayName;
-            const isRegistered = !!profileData?.email;
-            const targetIsGuest = !profileData?.email;
-            const isSelf = AppState.currentUser && userId === AppState.currentUser.uid;
-            
-            const viewerCanSocial = isRegisteredUser();
-            if (miniProfile.classList.contains('visible')) {
-            const viewerCanSocial = isRegisteredUser();
-            const canSocialWithTarget = viewerCanSocial && isRegistered && !isSelf;
-            miniProfile.innerHTML = `
-                <div class="mini-profile-header">
-                    <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
-                    <div class="mini-profile-info">
-                        <div class="mini-profile-name">${this.escapeHtml(name)}</div>
-                        <div class="mini-profile-status ${statusClass}">
-                                <span class="status-dot"></span>
-                                ${statusText}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mini-profile-stats">
-                        <div class="mini-stat">
-                            <span class="mini-stat-value">${stats.wins || 0}</span>
-                            <span class="mini-stat-label">Wins</span>
-                        </div>
-                        <div class="mini-stat">
-                            <span class="mini-stat-value">${stats.losses || 0}</span>
-                            <span class="mini-stat-label">Losses</span>
-                        </div>
-                        <div class="mini-stat">
-                            <span class="mini-stat-value">${winrate}%</span>
-                            <span class="mini-stat-label">Win Rate</span>
-                        </div>
-                    </div>
-                    ${(canSocialWithTarget) ? `
-                    <div class="mini-profile-actions">
-                        <button type="button" class="btn btn-secondary btn-sm mini-dm-btn">DM</button>
-                        <button type="button" class="btn btn-ghost btn-sm mini-friend-btn">Add Friend</button>
-                        <button type="button" class="btn btn-ghost btn-sm mini-profile-btn">Profile</button>
-                    </div>
-                    ` : (targetIsGuest ? `<div class="mini-profile-actions muted-note">Guest account — social disabled</div>` : '')}
-                `;
-                    if (canSocialWithTarget) {
-                    const dmBtn = miniProfile.querySelector('.mini-dm-btn');
-                    const friendBtn = miniProfile.querySelector('.mini-friend-btn');
-                    const profileBtn = miniProfile.querySelector('.mini-profile-btn');
-                    dmBtn?.addEventListener('click', async () => {
-                        try { await window.ChatWidget?.openDm?.(userId); } catch (e) { console.warn('Mini profile DM failed', e); }
-                    });
-                    friendBtn?.addEventListener('click', async () => {
-                        if (!isRegisteredUser()) {
-                            UI.showToast('Sign in with email to add friends.', 'error');
-                            return;
-                        }
-                        try {
-                            const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, userId);
-                            const accepted = result === 'accepted_existing';
-                            UI.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
-                            friendBtn.disabled = true;
-                            friendBtn.textContent = accepted ? 'Friends' : 'Request Sent';
-                            if (accepted) await FriendsPanel.refresh();
-                        } catch (e) {
-                            console.warn('Mini profile add friend failed', e);
-                            UI.showToast(e?.message || 'Failed to send friend request.', 'error');
-                        }
-                    });
-                    profileBtn?.addEventListener('click', () => {
-                        this.hideMiniProfile(0);
-                        UI.showProfilePage(userId);
-                    });
-                }
-            }
-        } catch (err) {
-            console.error('Error fetching mini profile:', err);
-        }
-    },
-    
-    hideMiniProfile(delay = 900) {
-        if (this.miniProfileTimeout) {
-            clearTimeout(this.miniProfileTimeout);
-            this.miniProfileTimeout = null;
-        }
-        this.miniProfileHideTimer = setTimeout(() => {
-            const miniProfile = document.getElementById('chat-mini-profile');
-            if (miniProfile) {
-                miniProfile.classList.remove('visible');
-            }
-        }, delay);
-    },
-    
-    updateStats(stats) {
-        document.getElementById('stat-wins').textContent = stats.wins || 0;
-        document.getElementById('stat-losses').textContent = stats.losses || 0;
-        
-        const total = (stats.wins || 0) + (stats.losses || 0);
-        const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
-        document.getElementById('stat-winrate').textContent = `${winrate}%`;
-    },
-    
-    updateBadges(badges) {
-        const container = document.getElementById('badges-list');
-        if (!container) return;
-        container.innerHTML = '';
-        (badges || []).forEach(badge => {
-            const info = BadgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: badge, desc: '' };
-            const badgeEl = document.createElement('button');
-            badgeEl.className = `badge badge-pill ${badge}`;
-            badgeEl.setAttribute('type', 'button');
-            badgeEl.setAttribute('aria-label', info.name || badge);
-            badgeEl.title = info.desc || info.name || badge;
-            const iconSpan = document.createElement('span');
-            iconSpan.className = 'badge-icon';
-            iconSpan.innerHTML = info.iconHtml || '';
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'badge-label';
-            nameSpan.textContent = info.name || badge;
-            badgeEl.appendChild(iconSpan);
-            badgeEl.appendChild(nameSpan);
-            badgeEl.addEventListener('click', () => {
-                // Show a small description popover
-                UI.showBadgeReveal(badge);
-            });
-            container.appendChild(badgeEl);
-        });
-    },
-
-    showBadgeReveal(badgeKey) {
-        try {
-            const info = BadgeInfo[badgeKey] || { name: badgeKey, desc: '', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>' };
-            const existing = document.getElementById('badge-reveal');
-            if (existing) existing.remove();
-            const el = document.createElement('div');
-            el.id = 'badge-reveal';
-            el.className = 'badge-reveal';
-            el.innerHTML = `
-                <div class="badge-reveal-card">
-                    <div class="badge-reveal-icon">${info.iconHtml}</div>
-                    <div class="badge-reveal-body">
-                        <div class="badge-reveal-name">${UI.escapeHtml(info.name || badgeKey)}</div>
-                        <div class="badge-reveal-desc">${UI.escapeHtml(info.desc || '')}</div>
-                        <div class="badge-reveal-actions">
-                            <button class="btn btn-primary btn-sm" id="badge-reveal-view">View Badges</button>
-                        </div>
-                    </div>
-                </div>`;
-            document.body.appendChild(el);
-            // Basic inline styles to ensure visibility even without CSS rules.
-            el.style.position = 'fixed';
-            el.style.right = '20px';
-            el.style.bottom = '20px';
-            el.style.zIndex = '9999';
-            el.style.pointerEvents = 'auto';
-            const btn = document.getElementById('badge-reveal-view');
-            if (btn) btn.addEventListener('click', () => {
-                // Open profile page for current user
-                if (AppState.currentUser) UI.showProfilePage(AppState.currentUser.uid);
-            });
-            // Auto-dismiss after a short time
-            setTimeout(() => { el.classList.add('fade-out'); setTimeout(() => el.remove(), 450); }, 4200);
-        } catch (e) {
-            console.warn('showBadgeReveal failed', e);
-        }
-    },
-
-    showToast(message, type = 'info') {
-        const text = String(message || '').trim();
-        if (!text) return;
-
-        let container = document.getElementById('toast-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'toast-container';
-            container.setAttribute('aria-live', 'polite');
-            container.setAttribute('aria-atomic', 'true');
-            document.body.appendChild(container);
-        }
-
-        const el = document.createElement('div');
-        el.className = `toast toast-${type}`;
-        el.textContent = text;
-        container.appendChild(el);
-
-        setTimeout(() => {
-            el.classList.add('toast-hide');
-            setTimeout(() => el.remove(), 350);
-        }, 2400);
-    },
-    showLoading(message = 'Loading...') {
-        let el = document.getElementById('app-loading-overlay');
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'app-loading-overlay';
-            el.className = 'app-loading-overlay';
-            el.innerHTML = `
-                <div class="app-loading-card">
-                    <div class="spinner" aria-hidden="true"></div>
-                    <div class="loading-message" id="app-loading-message">${this.escapeHtml(message)}</div>
-                </div>`;
-            document.body.appendChild(el);
-        }
-        const msg = document.getElementById('app-loading-message');
-        if (msg) msg.textContent = String(message || 'Loading...');
-        el.style.display = 'flex';
-    },
-    hideLoading() {
-        const el = document.getElementById('app-loading-overlay');
-        if (el) el.style.display = 'none';
-    },
-    
-    formatTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
+const UI = createUIHelpers({
+    AppState,
+    ViewManager,
+    ProfileManager,
+    FriendsManager,
+    ChallengeSystem: () => ChallengeSystem,
+    isRegisteredUser,
+    getCurrentDisplayName,
+    rtdb,
+    ref,
+    get
 });
+window.UI = UI;
 
-// ===========================================
-// Board Integrity (fractured -> repaired per 3x3)
-// ===========================================
-const BoardIntegritySystem = {
-    gridEl: null,
-    boxCells: Array.from({ length: 9 }, () => []),
-    boxRepair: Array(9).fill(0),
+// BoardIntegritySystem extracted to src/client/ui/boardIntegrity.js
 
-    clamp01(n) {
-        return Math.max(0, Math.min(1, Number(n) || 0));
-    },
-
-    initGrid(gridEl) {
-        this.gridEl = gridEl || document.getElementById('sudoku-grid');
-        this.boxCells = Array.from({ length: 9 }, () => []);
-        this.boxRepair = Array(9).fill(0);
-
-        if (this.gridEl) {
-            this.gridEl.classList.add('is-fractured');
-        }
-    },
-
-    registerCell(cell, row, col) {
-        const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
-        cell.dataset.box = String(box);
-        this.boxCells[box].push(cell);
-
-        const fx = (Math.random() - 0.5) * 4; // px
-        const fy = (Math.random() - 0.5) * 4; // px
-        const fr = (Math.random() - 0.5) * 0.8; // deg
-
-        cell.style.setProperty('--repair', '0');
-        cell.style.setProperty('--fracture-x0', `${fx.toFixed(2)}px`);
-        cell.style.setProperty('--fracture-y0', `${fy.toFixed(2)}px`);
-        cell.style.setProperty('--fracture-r0', `${fr.toFixed(3)}deg`);
-        cell.style.setProperty('--fracture-x', `${fx.toFixed(2)}px`);
-        cell.style.setProperty('--fracture-y', `${fy.toFixed(2)}px`);
-        cell.style.setProperty('--fracture-r', `${fr.toFixed(3)}deg`);
-    },
-
-    setBoxRepair(box, repair) {
-        const r = this.clamp01(repair);
-        this.boxRepair[box] = r;
-        const list = this.boxCells[box] || [];
-        const scale = 1 - r;
-        for (const cell of list) {
-            cell.style.setProperty('--repair', r.toFixed(3));
-
-            const baseX = parseFloat(cell.style.getPropertyValue('--fracture-x0')) || 0;
-            const baseY = parseFloat(cell.style.getPropertyValue('--fracture-y0')) || 0;
-            const baseR = parseFloat(cell.style.getPropertyValue('--fracture-r0')) || 0;
-
-            cell.style.setProperty('--fracture-x', `${(baseX * scale).toFixed(2)}px`);
-            cell.style.setProperty('--fracture-y', `${(baseY * scale).toFixed(2)}px`);
-            cell.style.setProperty('--fracture-r', `${(baseR * scale).toFixed(3)}deg`);
-        }
-    },
-
-    updateFromSingleState() {
-        if (!AppState.puzzle || !AppState.solution || !AppState.originalPuzzle) return;
-
-        const totals = Array(9).fill(0);
-        const correct = Array(9).fill(0);
-
-        for (let row = 0; row < 9; row++) {
-            for (let col = 0; col < 9; col++) {
-                if (AppState.originalPuzzle[row][col] !== 0) continue;
-                const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
-                totals[box]++;
-                if (AppState.puzzle[row][col] === AppState.solution[row][col]) {
-                    correct[box]++;
-                }
-            }
-        }
-
-        for (let box = 0; box < 9; box++) {
-            const r = totals[box] > 0 ? correct[box] / totals[box] : 1;
-            this.setBoxRepair(box, r);
-        }
-    },
-
-    updateFromVersusBoard(board) {
-        if (!board) return;
-
-        const totals = Array(9).fill(0);
-        const filled = Array(9).fill(0);
-
-        for (let row = 0; row < 9; row++) {
-            for (let col = 0; col < 9; col++) {
-                const cellData = board[`${row}_${col}`];
-                if (!cellData || cellData.given) continue;
-                const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
-                totals[box]++;
-                if (cellData.filledBy && cellData.value) {
-                    filled[box]++;
-                }
-            }
-        }
-
-        for (let box = 0; box < 9; box++) {
-            const r = totals[box] > 0 ? filled[box] / totals[box] : 1;
-            this.setBoxRepair(box, r);
-        }
-    }
-};
-
-// ===========================================
-// Game UI Helper Functions
-// ===========================================
-const GameHelpers = {
-    toolLimitForDifficulty(difficulty) {
-        const d = String(difficulty || '').toLowerCase();
-        if (d === 'easy') return 4;
-        if (d === 'medium') return 3;
-        if (d === 'hard') return 0;
-        // Daily/custom default to medium-like.
-        return 3;
-    },
-
-    resetToolLimits(difficulty) {
-        const max = this.toolLimitForDifficulty(difficulty);
-        AppState.toolLimits.undoMax = max;
-        AppState.toolLimits.eraseMax = max;
-        AppState.toolLimits.undoLeft = max;
-        AppState.toolLimits.eraseLeft = max;
-        this.updateToolUi();
-    },
-
-    updateToolUi() {
-        const el = document.getElementById('tool-uses-value');
-        if (!el) return;
-        const { undoLeft, eraseLeft, undoMax, eraseMax } = AppState.toolLimits;
-        if (undoMax === 0 && eraseMax === 0) {
-            el.textContent = 'Locked';
-        } else {
-            el.textContent = `Undo ${undoLeft}/${undoMax} · Erase ${eraseLeft}/${eraseMax}`;
-        }
-        const undoBtn = document.getElementById('undo-btn');
-        const eraseBtn = document.getElementById('erase-btn');
-        if (undoBtn) undoBtn.disabled = (undoMax === 0) || (AppState.gameMode === 'single' && undoLeft <= 0);
-        if (eraseBtn) eraseBtn.disabled = (eraseMax === 0) || (AppState.gameMode === 'single' && eraseLeft <= 0);
-    },
-
-    tryUndo() {
-        if (AppState.gameMode === 'single') {
-            if (AppState.toolLimits.undoLeft <= 0) return false;
-            const did = this.undo();
-            if (did) {
-                AppState.toolLimits.undoLeft = Math.max(0, AppState.toolLimits.undoLeft - 1);
-                this.updateToolUi();
-            }
-            return did;
-        }
-        return this.undo();
-    },
-
-    consumeEraseIfNeeded(changedSomething) {
-        if (!changedSomething) return;
-        if (AppState.gameMode !== 'single') return;
-        if (AppState.toolLimits.eraseLeft <= 0) return;
-        AppState.toolLimits.eraseLeft = Math.max(0, AppState.toolLimits.eraseLeft - 1);
-        this.updateToolUi();
-    },
-
-    // Count how many of each number are placed
-    countNumbers() {
-        const counts = {};
-        for (let i = 1; i <= 9; i++) counts[i] = 0;
-        
-        if (!AppState.puzzle) return counts;
-        
-        for (let row = 0; row < 9; row++) {
-            for (let col = 0; col < 9; col++) {
-                const num = AppState.puzzle[row][col];
-                if (num > 0) counts[num]++;
-            }
-        }
-        return counts;
-    },
-    
-    // Update the remaining count display for each number
-    updateRemainingCounts() {
-        const counts = this.countNumbers();
-        for (let i = 1; i <= 9; i++) {
-            const remaining = 9 - counts[i];
-            const el = document.getElementById(`remaining-${i}`);
-            const btn = document.querySelector(`.num-btn[data-num="${i}"]`);
-            if (el) {
-                el.textContent = remaining > 0 ? `${remaining} left` : 'done';
-            }
-            if (btn) {
-                btn.classList.toggle('completed', remaining === 0);
-            }
-        }
-    },
-    
-    // Update progress display - only count user-filled cells, not given cells
-    updateProgress() {
-        if (!AppState.puzzle || !AppState.solution || !AppState.originalPuzzle) return;
-        
-        let filled = 0;
-        let total = 0;
-        
-        for (let row = 0; row < 9; row++) {
-            for (let col = 0; col < 9; col++) {
-                // Only count cells that were originally empty (not given)
-                if (AppState.originalPuzzle[row][col] === 0) {
-                    total++;
-                    // Count if correctly filled by user
-                    if (AppState.puzzle[row][col] === AppState.solution[row][col]) {
-                        filled++;
-                    }
-                }
-            }
-        }
-        
-        const percent = total > 0 ? Math.round((filled / total) * 100) : 0;
-        const progressEl = document.getElementById('progress-percent');
-        const fillEl = document.getElementById('progress-fill');
-        
-        if (progressEl) progressEl.textContent = `${percent}%`;
-        if (fillEl) fillEl.style.width = `${percent}%`;
-
-        BoardIntegritySystem.updateFromSingleState();
-    },
-    
-    // Update mistakes display
-    updateMistakesDisplay() {
-        const container = document.getElementById('mistakes-display');
-        if (!container) return;
-        
-        container.innerHTML = '';
-        for (let i = 0; i < AppState.maxMistakes; i++) {
-            const dot = document.createElement('span');
-            dot.className = `mistake-dot${i >= AppState.mistakes ? ' empty' : ''}`;
-            container.appendChild(dot);
-        }
-    },
-    
-    // Highlight cells with the same number
-    highlightSameNumbers(num) {
-        document.querySelectorAll('.sudoku-cell').forEach(cell => {
-            cell.classList.remove('same-number');
-        });
-        
-        if (!AppState.settings.highlightSameNumbers || num === 0) return;
-        
-        document.querySelectorAll('.sudoku-cell').forEach(cell => {
-            const valueEl = cell.querySelector('.cell-value');
-            const valueText = valueEl ? valueEl.textContent : cell.textContent;
-            if (valueText === String(num)) {
-                cell.classList.add('same-number');
-            }
-        });
-    },
-    
-    // Highlight conflicting cells
-    highlightConflicts(row, col, num) {
-        if (!AppState.settings.highlightConflicts || num === 0) return [];
-        
-        const conflicts = [];
-        
-        // Check row
-        for (let c = 0; c < 9; c++) {
-            if (c !== col && AppState.puzzle[row][c] === num) {
-                conflicts.push({ row, col: c });
-            }
-        }
-        
-        // Check column
-        for (let r = 0; r < 9; r++) {
-            if (r !== row && AppState.puzzle[r][col] === num) {
-                conflicts.push({ row: r, col });
-            }
-        }
-        
-        // Check 3x3 box
-        const boxRow = Math.floor(row / 3) * 3;
-        const boxCol = Math.floor(col / 3) * 3;
-        for (let r = boxRow; r < boxRow + 3; r++) {
-            for (let c = boxCol; c < boxCol + 3; c++) {
-                if ((r !== row || c !== col) && AppState.puzzle[r][c] === num) {
-                    conflicts.push({ row: r, col: c });
-                }
-            }
-        }
-        
-        return conflicts;
-    },
-    
-    // Add move to history for undo
-    addToHistory(row, col, oldValue, newValue) {
-        AppState.moveHistory.push({ row, col, oldValue, newValue });
-        // Limit history size
-        if (AppState.moveHistory.length > 100) {
-            AppState.moveHistory.shift();
-        }
-    },
-    
-    // Undo last move
-    undo() {
-        if (AppState.moveHistory.length === 0) return false;
-        
-        const lastMove = AppState.moveHistory.pop();
-        const { row, col, oldValue } = lastMove;
-        
-        AppState.puzzle[row][col] = oldValue;
-        
-        const cell = document.querySelector(
-            `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
-        );
-        if (cell) {
-            const valueEl = cell.querySelector('.cell-value');
-            if (valueEl) valueEl.textContent = oldValue !== 0 ? oldValue : '';
-            else cell.textContent = oldValue !== 0 ? oldValue : '';
-        }
-        
-        this.updateRemainingCounts();
-        this.updateProgress();
-        
-        return true;
-    },
-    
-    // Toggle notes mode
-    toggleNotesMode() {
-        AppState.notesMode = !AppState.notesMode;
-        const btn = document.getElementById('notes-btn');
-        if (btn) {
-            btn.classList.toggle('active', AppState.notesMode);
-        }
-        // If the tutorial is active and the current step expects notes, advance.
-        try {
-            if (AppState.tutorialActive && (AppState.tutorialStep || 0) === 2) {
-                setTimeout(() => {
-                    try { TutorialGame.next(); } catch (e) { console.warn('Tutorial next failed', e); }
-                }, 220);
-            }
-        } catch (e) {}
-    },
-    
-    // Reset game state for new game
-    resetGameState() {
-        AppState.mistakes = 0;
-        AppState.moveHistory = [];
-        AppState.notes = {};
-        AppState.notesMode = false;
-        AppState.playerScore = 0;
-        
-        this.updateMistakesDisplay();
-        this.updateProgress();
-        this.updateRemainingCounts();
-        
-        const notesBtn = document.getElementById('notes-btn');
-        if (notesBtn) notesBtn.classList.remove('active');
-        this.updateToolUi();
-    }
-};
-// ===========================================
-// Game UI
-// ===========================================
-const GameUI = {
-    createGrid() {
-        const grid = document.getElementById('sudoku-grid');
-        if (!grid) return;
-        
-        grid.innerHTML = '';
-        BoardIntegritySystem.initGrid(grid);
-        
-        // Add ARIA attributes for accessibility
-        grid.setAttribute('role', 'grid');
-        grid.setAttribute('aria-label', 'Sudoku puzzle board');
-        
-        for (let row = 0; row < 9; row++) {
-            for (let col = 0; col < 9; col++) {
-                const cell = document.createElement('div');
-                cell.className = 'sudoku-cell';
-                cell.dataset.row = row;
-                cell.dataset.col = col;
-                BoardIntegritySystem.registerCell(cell, row, col);
-
-                const valueEl = document.createElement('span');
-                valueEl.className = 'cell-value';
-                valueEl.setAttribute('aria-hidden', 'true');
-                cell.appendChild(valueEl);
-
-                const notesEl = document.createElement('div');
-                notesEl.className = 'cell-notes';
-                notesEl.setAttribute('aria-hidden', 'true');
-                cell.appendChild(notesEl);
-                
-                // Accessibility attributes
-                cell.setAttribute('role', 'gridcell');
-                cell.setAttribute('tabindex', '0');
-                cell.setAttribute('aria-label', `Row ${row + 1}, Column ${col + 1}, empty`);
-                
-                cell.addEventListener('click', () => this.selectCell(row, col));
-                
-                // Allow keyboard selection
-                cell.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        this.selectCell(row, col);
-                    }
-                });
-                
-                grid.appendChild(cell);
-            }
-        }
-    },
-    
-    renderPuzzle(puzzle, board = null) {
-        console.log('renderPuzzle called, board:', board ? 'present' : 'null');
-        
-        let cellsFound = 0;
-        for (let row = 0; row < 9; row++) {
-            for (let col = 0; col < 9; col++) {
-                const cell = document.querySelector(
-                    `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
-                );
-                
-                if (!cell) {
-                    continue;
-                }
-                cellsFound++;
-                
-                cell.classList.remove('given', 'selected', 'error', 'correct', 
-                                      'player-fill', 'opponent-fill');
-                
-                let value, isGiven, filledBy;
-                
-                if (board) {
-                    // 1v1 mode - use board state from RTDB
-                    const cellData = board[`${row}_${col}`];
-                    value = cellData?.value || 0;
-                    isGiven = cellData?.given || false;
-                    filledBy = cellData?.filledBy;
-                } else {
-                    // Single player mode
-                    value = puzzle[row][col];
-                    // A cell is "given" if it was part of the original puzzle
-                    isGiven = AppState.originalPuzzle?.[row]?.[col] !== 0;
-                }
-                const valueEl = cell.querySelector('.cell-value');
-                const notesEl = cell.querySelector('.cell-notes');
-                if (valueEl) valueEl.textContent = value !== 0 ? String(value) : '';
-                else cell.textContent = value !== 0 ? String(value) : '';
-
-                // Notes only exist in single player mode and only for empty (non-given) cells.
-                if (!board && !isGiven && value === 0 && notesEl) {
-                    const key = `${row}_${col}`;
-                    const set = AppState.notes?.[key];
-                    this.renderNotesForCell(notesEl, set);
-                } else if (notesEl) {
-                    notesEl.innerHTML = '';
-                }
-                
-                // Update ARIA label for accessibility
-                let ariaLabel = `Row ${row + 1}, Column ${col + 1}`;
-                if (value !== 0) {
-                    ariaLabel += `, ${value}`;
-                    if (isGiven) {
-                        ariaLabel += ' (given)';
-                    } else if (filledBy) {
-                        ariaLabel += filledBy === AppState.currentUser?.uid ? ' (your entry)' : ' (opponent entry)';
-                    }
-                } else {
-                    ariaLabel += ', empty';
-                }
-                cell.setAttribute('aria-label', ariaLabel);
-                
-                if (isGiven) {
-                    cell.classList.add('given');
-                } else if (filledBy) {
-                    if (filledBy === AppState.currentUser?.uid) {
-                        cell.classList.add('player-fill');
-                    } else {
-                        cell.classList.add('opponent-fill');
-                    }
-                }
-            }
-        }
-        
-        console.log('renderPuzzle complete, cells found:', cellsFound);
-
-        if (board) {
-            BoardIntegritySystem.updateFromVersusBoard(board);
-        } else {
-            BoardIntegritySystem.updateFromSingleState();
-        }
-        
-        // Store puzzle state for versus mode
-        if (board) {
-            AppState.puzzle = puzzle;
-        }
-    },
-
-    renderNotesForCell(notesEl, set) {
-        if (!notesEl) return;
-        const nums = Array.isArray(set) ? set : (set instanceof Set ? Array.from(set) : []);
-        const sorted = nums.map(n => Number(n)).filter(n => n >= 1 && n <= 9).sort((a, b) => a - b);
-        notesEl.innerHTML = '';
-        for (let i = 1; i <= 9; i++) {
-            const s = document.createElement('span');
-            s.textContent = String(i);
-            s.className = sorted.includes(i) ? 'on' : '';
-            notesEl.appendChild(s);
-        }
-    },
-    
-    selectCell(row, col) {
-        // Remove previous selection
-        document.querySelectorAll('.sudoku-cell.selected').forEach(c => {
-            c.classList.remove('selected');
-        });
-        document.querySelectorAll('.sudoku-cell.same-number').forEach(c => {
-            c.classList.remove('same-number');
-        });
-        
-        const cell = document.querySelector(
-            `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
-        );
-        
-        if (cell) {
-            cell.classList.add('selected');
-            AppState.selectedCell = { row, col };
-            
-            // Highlight same numbers
-            const num = AppState.puzzle?.[row]?.[col];
-            if (num && num !== 0) {
-                GameHelpers.highlightSameNumbers(num);
-            }
-            // Auto-advance tutorial when player selects a cell for the first step.
-            try {
-                if (AppState.tutorialActive && (AppState.tutorialStep || 0) === 0) {
-                    setTimeout(() => { try { TutorialGame.next(); } catch(e) { console.warn('Tutorial next failed', e); } }, 220);
-                }
-            } catch (e) {}
-        }
-    },
-    
     async inputNumber(num) {
         console.log('inputNumber called:', num, 'gameMode:', AppState.gameMode, 'currentMatch:', AppState.currentMatch);
         
@@ -5584,7 +3273,7 @@ function setupEventListeners() {
         try {
             console.log('Starting logout process...');
             const user = auth.currentUser;
-            await PresenceSystem.cleanup();
+            await PresenceManager.cleanup();
             console.log('Presence cleaned up');
 
             if (user?.isAnonymous) {
@@ -5668,7 +3357,7 @@ function setupEventListeners() {
             document.getElementById('display-room-code').textContent = code;
             
             ViewManager.show('waiting');
-            PresenceSystem.updateActivity('Waiting for opponent');
+            PresenceManager.updateActivity('Waiting for opponent');
             
             // Listen for player joins
             LobbyManager.listenToRoom(code, handleRoomUpdate);
@@ -5743,7 +3432,7 @@ function setupEventListeners() {
         const widgetGameTab = document.getElementById('widget-game-tab');
         if (widgetGameTab) widgetGameTab.style.display = 'none';
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
     
     // Copy room code
@@ -5820,7 +3509,7 @@ function setupEventListeners() {
             countdownInterval = null;
         }
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
     
     // Pre-game chat
@@ -5871,14 +3560,14 @@ function setupEventListeners() {
         // Clean up and go to lobby
         cleanupAfterMatch();
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
     
     // Back to lobby from post-match
     document.getElementById('postmatch-back-lobby')?.addEventListener('click', () => {
         cleanupAfterMatch();
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
     
 
@@ -5921,7 +3610,7 @@ function setupEventListeners() {
             }
             
             ViewManager.show('lobby');
-            PresenceSystem.updateActivity('In Lobby');
+            PresenceManager.updateActivity('In Lobby');
         }
     });
     
@@ -5940,7 +3629,7 @@ function setupEventListeners() {
     document.getElementById('back-to-lobby')?.addEventListener('click', () => {
         ViewManager.hideModal('game-over-modal');
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
     
     // Global chat (legacy - keeping for any remaining forms)
@@ -5972,7 +3661,7 @@ function setupEventListeners() {
             if (codeEl) codeEl.textContent = code;
             ViewManager.hideModal('challenge-modal');
             ViewManager.show('waiting');
-            PresenceSystem.updateActivity('Waiting for opponent');
+            PresenceManager.updateActivity('Waiting for opponent');
             LobbyManager.listenToRoom(code, handleRoomUpdate);
             AppState.pendingChallenge = null;
         } catch (e) {
@@ -6142,7 +3831,7 @@ function initProfilePage() {
     // Back button
     document.getElementById('profile-back-btn')?.addEventListener('click', () => {
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
     
     // Edit profile button
@@ -6191,7 +3880,7 @@ function initProfilePage() {
             document.body.appendChild(menu);
 
             document.getElementById('profile-run-tour')?.addEventListener('click', () => {
-                try { ViewManager.show('lobby'); PresenceSystem.updateActivity('In Lobby'); setTimeout(() => TourSystem.start(true), 250); } catch (e) { console.warn('Failed to start tour', e); }
+                try { ViewManager.show('lobby'); PresenceManager.updateActivity('In Lobby'); setTimeout(() => TourSystem.start(true), 250); } catch (e) { console.warn('Failed to start tour', e); }
                 menu.remove();
             });
             document.getElementById('profile-run-tutorial')?.addEventListener('click', () => {
@@ -6372,7 +4061,7 @@ function initProfilePage() {
                 if (labelEl) labelEl.textContent = accepted ? 'Friends' : 'Request Sent';
                 else if (btn) btn.textContent = accepted ? 'Friends' : 'Request Sent';
                 alert(accepted ? 'Friend request accepted.' : 'Friend request sent!');
-                if (accepted) await FriendsPanel.refresh();
+                if (accepted) await FriendsManager.refresh();
             } else if (currentText.includes('Remove Friend')) {
                 await ProfileManager.removeFriend(AppState.currentUser.uid, profileUserId);
                 if (labelEl) labelEl.textContent = 'Add Friend';
@@ -7360,7 +5049,7 @@ function initFloatingChat() {
 	                    try {
 	                        await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, r.id);
 	                        await renderDmFriends(); // Re-render this tab
-	                        await FriendsPanel.refresh(); // Also refresh lobby panel if open
+	                        await FriendsManager.refresh(); // Also refresh lobby panel if open
 	                    } catch (e) {
 	                        console.error('Failed to accept friend request', e);
 	                        UI.showToast('Failed to accept request.', 'error');
@@ -7370,7 +5059,7 @@ function initFloatingChat() {
 	                    try {
 	                        await ProfileManager.declineFriendRequest(AppState.currentUser.uid, r.id);
 	                        await renderDmFriends(); // Re-render this tab
-	                        await FriendsPanel.refresh(); // Also refresh lobby panel if open
+	                        await FriendsManager.refresh(); // Also refresh lobby panel if open
 	                    } catch (e) {
 	                        console.error('Failed to decline friend request', e);
 	                        UI.showToast('Failed to decline request.', 'error');
@@ -7855,7 +5544,7 @@ function initFloatingChat() {
 	            const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
 	            const accepted = result === 'accepted_existing';
 	            setDmQuickStatus(accepted ? `Accepted pending request with @${resolved.username}` : `Friend request sent to @${resolved.username}`, false);
-	            if (accepted) await FriendsPanel.refresh();
+	            if (accepted) await FriendsManager.refresh();
 	        } catch (e) {
 	            console.error('Quick add friend failed', e);
 	            setDmQuickStatus(e?.message || 'Failed to send friend request.', true);
@@ -7882,7 +5571,7 @@ function initFloatingChat() {
 	            const result = await ProfileManager.sendFriendRequest(AppState.currentUser.uid, resolved.userId);
 	            const accepted = result === 'accepted_existing';
 	            UI.showToast(accepted ? `Accepted pending request with @${resolved.username}` : `Friend request sent to @${resolved.username}`, 'success');
-	            if (accepted) await FriendsPanel.refresh();
+	            if (accepted) await FriendsManager.refresh();
 	            if (friendHandleInput) friendHandleInput.value = '';
 	        } catch (e) {
 	            console.error('Friend add failed', e);
@@ -8208,6 +5897,22 @@ const CreativeFeatures = {
     }
 };
 
+// Game UI now lives in src/client/ui/gameUi.js (instantiated once dependencies exist)
+GameUI = createGameUI({
+    AppState,
+    BoardIntegritySystem,
+    GameHelpers,
+    AudioManager,
+    CreativeFeatures,
+    ArchitecturalStateSystem,
+    UI,
+    ProfileManager,
+    ViewManager,
+    MatchManager,
+    showPostMatchScreen
+});
+window.GameUI = GameUI;
+
 // ===========================================
 // Game Functions
 // ===========================================
@@ -8283,7 +5988,7 @@ function startSinglePlayerGame(difficulty, options = null) {
     
     ViewManager.show('game');
     GameUI.startTimer();
-    PresenceSystem.updateActivity(`Playing: ${difficultyLabel} Mode`);
+    PresenceManager.updateActivity(`Playing: ${difficultyLabel} Mode`);
 }
 
 async function startVersusGame(roomData) {
@@ -8386,7 +6091,7 @@ async function startVersusGame(roomData) {
     
     ViewManager.show('game');
     GameUI.startTimer();
-    PresenceSystem.updateActivity('Playing: Bust the Board');
+    PresenceManager.updateActivity('Playing: Bust the Board');
     
     // Listen for match updates
     MatchManager.listenToMatch(matchId, handleMatchUpdate);
@@ -8483,7 +6188,7 @@ function showPregameLobby(room) {
     console.log('Showing pre-game lobby');
     
     ViewManager.show('pregame-lobby');
-    PresenceSystem.updateActivity('In Pre-Game Lobby');
+    PresenceManager.updateActivity('In Pre-Game Lobby');
     
     updatePregameLobbyUI(room);
 
@@ -8695,7 +6400,7 @@ function showPostMatchScreen(match, userId, opponentId, isWinner, isTie, isDisco
     
     // Show postmatch view
     ViewManager.show('postmatch');
-    PresenceSystem.updateActivity('Post-Match');
+    PresenceManager.updateActivity('Post-Match');
 }
 
 async function initRematchVoting(matchId, userId, opponentId) {
@@ -8768,7 +6473,7 @@ function handleRematchVoteUpdate(votes, userId, opponentId) {
         setTimeout(() => {
             cleanupAfterMatch();
             ViewManager.show('lobby');
-            PresenceSystem.updateActivity('In Lobby');
+            PresenceManager.updateActivity('In Lobby');
         }, 2000);
     }
 }
@@ -8821,7 +6526,7 @@ async function startRematch() {
     
     // Go back to pre-game lobby
     ViewManager.show('pregame-lobby');
-    PresenceSystem.updateActivity('In Pre-Game Lobby');
+    PresenceManager.updateActivity('In Pre-Game Lobby');
     
     // Re-fetch room data to update UI
     const freshSnapshot = await get(roomRef);
@@ -8974,7 +6679,7 @@ function registerAuthListener() {
                     const lastSignIn = Date.parse(user.metadata?.lastSignInTime || '') || 0;
                     if (lastSignIn && Date.now() - lastSignIn > ANON_TTL_MS) {
                         try {
-                            await PresenceSystem.cleanup();
+                            await PresenceManager.cleanup();
                         } catch { /* ignore */ }
                         try {
                             await deleteDoc(doc(firestore, 'users', user.uid));
@@ -9042,7 +6747,7 @@ function registerAuthListener() {
                 UI.updateStats(profileData?.stats || { wins: 0, losses: 0 });
                 UI.updateBadges(profileData?.badges || []);
                 AppState.friends = profileData?.friends || [];
-                FriendsPanel.render().catch(() => {});
+                FriendsManager.render().catch(() => {});
                 if (user.isAnonymous) {
                     UI.showToast('You are playing as a guest. Create an account to save progress.', 'info');
                 }
@@ -9057,7 +6762,7 @@ function registerAuthListener() {
                         applyProfileModeration(data);
                         UI.updateStats(data.stats || { wins: 0, losses: 0 });
                         UI.updateBadges(data.badges || []);
-                        FriendsPanel.render().catch(() => {});
+                        FriendsManager.render().catch(() => {});
                         const name = data.username || data.displayName || `Player_${user.uid.substring(0, 6)}`;
                         const truncated = name.length > 15 ? name.substring(0, 15) + '...' : name;
                         const headerName = document.getElementById('user-name');
@@ -9082,7 +6787,7 @@ function registerAuthListener() {
                         friendRequestsUnsub = onSnapshot(frQuery, (qsnap) => {
                             // Rerender the friends panel so the incoming requests list updates immediately.
                             // Keep this lightweight: render handles fetching profiles and UI updates.
-                            try { FriendsPanel.render().catch(() => {}); } catch (e) { console.warn('FriendRequests onSnapshot handler failed', e); }
+                            try { FriendsManager.render().catch(() => {}); } catch (e) { console.warn('FriendRequests onSnapshot handler failed', e); }
                         }, (err) => {
                             console.warn('FriendRequests listener error', err);
                         });
@@ -9091,8 +6796,8 @@ function registerAuthListener() {
                     }
 
                 // Initialize realtime systems (best-effort; do not block view transitions).
-                PresenceSystem.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
-                PresenceSystem.listenToOnlinePlayers((players) => {
+                PresenceManager.init(user.uid, displayName).catch((e) => console.warn('Presence init failed', e));
+                PresenceManager.listenToOnlinePlayers((players) => {
                     AppState.onlinePlayers = players;
                     UI.updatePlayersList(players);
                 });
@@ -9288,12 +6993,14 @@ window.AppState = AppState;
 window.Stonedoku = window.Stonedoku || {};
 window.Stonedoku.Managers = Object.assign(window.Stonedoku.Managers || {}, {
     ViewManager,
-    PresenceSystem,
+    PresenceManager,
     ProfileManager,
-    FriendsPanel,
+    FriendsManager,
     UpdatesCenter,
     AdminConsole,
     AudioManager,
+    GameHelpers,
+    GameUI,
     SudokuGenerator,
     ArchitecturalStateSystem,
     MotionSystem,

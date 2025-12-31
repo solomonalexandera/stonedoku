@@ -2519,7 +2519,8 @@
                     }
                 });
             </script>
-            <!-- Firebase SDK -->
+            <!-- Firebase SDK bootstrapping (entry must run before app.js) -->
+            <script type="module" src="/src/client/entry.js"></script>
             <script type="module" src="/app.js?v=20251221D"></script>
             <script src="/effects.js"></script>
         </div>

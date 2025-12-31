@@ -1,66 +1,39 @@
 // src/client/lib/sudokuGenerator.js
 
-function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
-
-function solveSudoku(board) {
-    // ... implementation from app.js
-    return false; // Or solved board
-}
-
+// Ported from the legacy app.js implementation for parity during the refactor.
 export const SudokuGenerator = {
-    _grid: [],
-    _counter: 0,
-
-    createFullBoard() {
-        this._grid = Array.from({ length: 9 }, () => Array(9).fill(0));
-        this._counter = 0;
-        this._fill(0, 0);
-        return this._grid;
-    },
-
-    _fill(row, col) {
-        if (this._counter > 2000000) return;
-        this._counter++;
-
-        if (row === 9) {
-            return true;
+    // Check if placing num at (row, col) is valid
+    isValid(grid, row, col, num) {
+        for (let x = 0; x < 9; x++) {
+            if (grid[row][x] === num) return false;
+        }
+        for (let x = 0; x < 9; x++) {
+            if (grid[x][col] === num) return false;
         }
 
-        const nextRow = col === 8 ? row + 1 : row;
-        const nextCol = col === 8 ? 0 : col + 1;
-
-        const nums = shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-
-        for (const num of nums) {
-            if (this._isValid(row, col, num)) {
-                this._grid[row][col] = num;
-                if (this._fill(nextRow, nextCol)) {
-                    return true;
-                }
-                this._grid[row][col] = 0;
-            }
-        }
-        return false;
-    },
-
-    _isValid(row, col, num) {
-        for (let i = 0; i < 9; i++) {
-            if (this._grid[row][i] === num || this._grid[i][col] === num) {
-                return false;
-            }
-        }
-
-        const startRow = Math.floor(row / 3) * 3;
-        const startCol = Math.floor(col / 3) * 3;
+        const startRow = row - (row % 3);
+        const startCol = col - (col % 3);
         for (let i = 0; i < 3; i++) {
             for (let j = 0; j < 3; j++) {
-                if (this._grid[startRow + i][startCol + j] === num) {
+                if (grid[startRow + i][startCol + j] === num) return false;
+            }
+        }
+        return true;
+    },
+
+    // Solve the grid using backtracking
+    solve(grid) {
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                if (grid[row][col] === 0) {
+                    const nums = this.shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+                    for (const num of nums) {
+                        if (this.isValid(grid, row, col, num)) {
+                            grid[row][col] = num;
+                            if (this.solve(grid)) return true;
+                            grid[row][col] = 0;
+                        }
+                    }
                     return false;
                 }
             }
@@ -68,8 +41,25 @@ export const SudokuGenerator = {
         return true;
     },
 
+    shuffleArray(array) {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    },
+
+    // Generate a complete valid Sudoku grid
+    generateComplete() {
+        const grid = Array(9).fill(null).map(() => Array(9).fill(0));
+        this.solve(grid);
+        return grid;
+    },
+
+    // Create puzzle by removing cells based on difficulty
     createPuzzle(difficulty = 'medium') {
-        const solution = this.createFullBoard();
+        const solution = this.generateComplete();
         const puzzle = solution.map(row => [...row]);
 
         const cellsToRemove = {
@@ -86,7 +76,7 @@ export const SudokuGenerator = {
             positions.push(i);
         }
 
-        const shuffledPositions = shuffleArray(positions);
+        const shuffledPositions = this.shuffleArray(positions);
 
         for (const pos of shuffledPositions) {
             if (removed >= removeCount) break;

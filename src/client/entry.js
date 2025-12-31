@@ -7,7 +7,7 @@ import { getFunctions } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase
 import { getStorage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
 import { AppState } from './appState.js';
-import { createLogManager } from './lib/logManager.js';
+import { createLogManager } from './managers/logManager.js';
 import { SudokuGenerator } from './lib/sudokuGenerator.js';
 import { ProfanityFilter } from './lib/profanityFilter.js';
 
@@ -36,12 +36,8 @@ const storage = getStorage(firebaseApp);
 // Initialize LogManager
 const LogManager = createLogManager(firestore, () => AppState);
 
-// For compatibility with existing app.js and tests
-window.AppState = AppState;
-window.LogManager = LogManager;
-window.SudokuGenerator = SudokuGenerator;
-window.ProfanityFilter = ProfanityFilter;
-window.firebase = {
+// Publish a single global namespace used by app.js and tests
+const firebaseServices = {
     app: firebaseApp,
     auth,
     rtdb,
@@ -49,5 +45,22 @@ window.firebase = {
     functions,
     storage
 };
+
+const existing = window.Stonedoku || {};
+window.Stonedoku = {
+    ...existing,
+    AppState,
+    LogManager,
+    SudokuGenerator,
+    ProfanityFilter,
+    firebase: firebaseServices
+};
+
+// Legacy globals maintained for backward compatibility
+window.AppState = AppState;
+window.LogManager = LogManager;
+window.SudokuGenerator = SudokuGenerator;
+window.ProfanityFilter = ProfanityFilter;
+window.firebase = firebaseServices;
 
 console.log("Stonedoku application entry point loaded.");

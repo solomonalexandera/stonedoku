@@ -16,8 +16,8 @@ This file is intended as a compact default context for AI agents working on the 
 - `AppState`: Global state container for the client app.
 - `LogManager`: Console override and optional Firestore persistence for client logs.
 - `ProfileManager`: CRUD and helper functions for profiles in Firestore.
-- `FriendsPanel`: UI manager for friends list and incoming requests.
-- `PresenceSystem`: RTDB presence tracking.
+- `FriendsManager`: UI manager for friends list and incoming requests.
+- `PresenceManager`: RTDB presence tracking.
 - `LobbyManager`: RTDB lobby management.
 - `MatchManager`: RTDB match lifecycle and game rules.
 - `ChatManager`: Global/in-match chat via RTDB.

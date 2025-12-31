@@ -23,23 +23,18 @@
     <div id="output"></div>
 
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import '/src/client/entry.js';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getDatabase, ref, set, get, update, onValue, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        import { ref, set, get, update, onValue, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyCp7BkBGFmgjSL_28iexOAO7X4RoY_7tQ4",
-            authDomain: "stonedoku-c0898.firebaseapp.com",
-            projectId: "stonedoku-c0898",
-            storageBucket: "stonedoku-c0898.firebasestorage.app",
-            messagingSenderId: "755062989426",
-            appId: "1:755062989426:web:446a5be32bf4d6b66198eb",
-            databaseURL: "https://stonedoku-c0898-default-rtdb.europe-west1.firebasedatabase.app"
-        };
+        const firebaseServices = window.Stonedoku?.firebase || window.firebase;
+        if (!firebaseServices) {
+            throw new Error('Stonedoku entry bootstrap missing in test-1v1');
+        }
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const rtdb = getDatabase(app);
+        const app = firebaseServices.app;
+        const auth = firebaseServices.auth || getAuth(app);
+        const rtdb = firebaseServices.rtdb;
         
         let currentUser = null;
         let testMatchId = null;
