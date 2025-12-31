@@ -1,7 +1,7 @@
 import { AppState } from '../appState.js';
 import { BoardIntegritySystem } from './boardIntegrity.js';
 
-export function createGameUI({
+export function createGameUi({
     AppState: appState = AppState,
     BoardIntegritySystem: boardIntegrity = BoardIntegritySystem,
     GameHelpers: gameHelpers,

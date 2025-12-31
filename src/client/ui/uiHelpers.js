@@ -20,7 +20,7 @@ const defaultBadgeInfo = {
     warden: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-lock"></use></svg>', name: 'Warden' }
 };
 
-export function createUIHelpers({
+export function createUiHelpers({
     AppState = defaultAppState,
     ViewManager = globalThis.ViewManager,
     ProfileManager = globalThis.ProfileManager,

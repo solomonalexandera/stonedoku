@@ -12,7 +12,7 @@
  * @param {Function} deps.dbGet - Firebase get function
  * @returns {Object} UI Core manager instance
  */
-export function createUICore({ getProfile, rtdb, dbRef, dbGet }) {
+export function createUiCore({ getProfile, rtdb, dbRef, dbGet }) {
     let hoverTimeout = null;
     let miniProfileTimeout = null;
     let miniProfileHideTimer = null;

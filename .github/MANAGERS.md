@@ -152,6 +152,26 @@ This document indexes the primary "manager" objects and domain modules implement
 ## Notes and contributor guidance
 - This file should reflect the managers and modules in the `src/client/` directory. If you add or rename a module, update this document.
 - Prefer adding new domain logic as a manager object to keep code organized. Keep each manager focused and well-documented.
-- Naming: use descriptive, human-readable names. Exported managers are PascalCase (e.g., `ProfileManager`), factories use `createX`, and file names mirror the export in lowerCamelCase (e.g., `profileManager.js`).
 - Managers are also exposed at `window.Stonedoku.Managers` to support incremental refactoring and modular imports.
 - AI agents and contributors: before modifying managers, read this MANAGERS.md and the `.github/prompts/AI_PROMPTS.prompt.md` guidance (if present) so changes align with project conventions.
+
+## Naming Conventions
+
+### Factory Functions
+- Use `createXxx` pattern (camelCase): `createPresenceManager`, `createUiCore`, `createGameUi`
+- Avoid uppercase acronyms: prefer `createUiHelpers` over `createUIHelpers`
+
+### Module Files
+- File names in camelCase: `presenceManager.js`, `uiCore.js`, `gameUi.js`
+
+### Singleton Exports
+- PascalCase for singleton objects: `AudioManager`, `MotionSystem`, `SudokuGenerator`
+- These are pre-instantiated objects, not factories
+
+### Barrel Exports
+- Each directory has an `index.js` that re-exports all public APIs
+- Keep barrel exports in sync with individual module exports
+
+### Global Exports
+- Legacy globals attached to `window` for debugging: `window.AppState`, `window.ViewManager`
+- Organized exports at `window.Stonedoku.Managers` and `window.Stonedoku.Utils`

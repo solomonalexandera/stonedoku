@@ -2519,30 +2519,37 @@
                     }
                 });
             </script>
-            <!-- Firebase SDK bootstrapping (entry must run before app.js) -->
+            <!-- Firebase SDK bootstrapping -->
             <script type="module">
                 const VERSION_TAG = '20251231A';
-                const useBundle = !window.location.search.includes('nobundle=1');
                 const entryUrl = `/src/client/entry.js?v=${VERSION_TAG}`;
+                // Legacy app.js fallback for transition period
                 const appUrl = `/app.js?v=${VERSION_TAG}`;
-                const bundleUrl = `/dist/app.bundle.js?v=${VERSION_TAG}`;
+                const useModular = !window.location.search.includes('legacy=1');
 
                 (async () => {
                     try {
-                        await import(entryUrl);
-                        if (useBundle) {
-                            try {
-                                await import(bundleUrl);
-                            } catch (err) {
-                                console.warn('Bundle load failed, falling back to app.js', err);
-                                await import(appUrl);
-                            }
+                        if (useModular) {
+                            // Use new modular entry point
+                            await import(entryUrl);
                         } else {
+                            // Use legacy app.js
                             await import(appUrl);
                         }
                     } catch (err) {
                         console.error('Failed to bootstrap Stonedoku', err);
-                        throw err;
+                        // Fallback to legacy if modular fails
+                        if (useModular) {
+                            console.warn('Falling back to legacy app.js');
+                            try {
+                                await import(appUrl);
+                            } catch (fallbackErr) {
+                                console.error('Fallback also failed', fallbackErr);
+                                throw fallbackErr;
+                            }
+                        } else {
+                            throw err;
+                        }
                     }
                 })();
             </script>

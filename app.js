@@ -84,7 +84,7 @@ import { SudokuGenerator } from './src/client/lib/sudokuGenerator.js';
 import { ProfanityFilter } from './src/client/lib/profanityFilter.js';
 import { BoardIntegritySystem } from './src/client/ui/boardIntegrity.js';
 import { createGameHelpers } from './src/client/ui/gameHelpers.js';
-import { createGameUI } from './src/client/ui/gameUi.js';
+import { createGameUi } from './src/client/ui/gameUi.js';
 
 // ===========================================
 // Firebase Configuration
@@ -729,7 +729,7 @@ const MatchManager = createMatchManager({ rtdb, appState: AppState });
 // Game UI Helpers and Game UI
 // ===========================================
 const GameHelpers = createGameHelpers({ AppState, BoardIntegritySystem });
-const GameUI = createGameUI({
+const GameUI = createGameUi({
     AppState,
     BoardIntegritySystem,
     GameHelpers,
