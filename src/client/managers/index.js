@@ -12,3 +12,5 @@ export { createChallengeManager } from './challengeManager.js';
 export { MotionSystem } from './motionSystem.js';
 export { createArchitecturalStateSystem } from './architecturalStateSystem.js';
 export { createChallengeSystem } from './challengeSystem.js';
+export { createCreativeFeatures, CreativeFeatures } from './creativeFeatures.js';
+export { createAccessibilityManager, AccessibilityManager } from './accessibilityManager.js';
