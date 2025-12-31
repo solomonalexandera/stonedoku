@@ -1,6 +1,9 @@
 {
   "hosting": {
     "site": "stone-doku",
+    "predeploy": [
+      "npm run build"
+    ],
     "public": ".",
     "ignore": [
       "firebase.json",

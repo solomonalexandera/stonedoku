@@ -58,11 +58,27 @@ If you’re seeing an “old” version, double-check you’re visiting the URL 
 
 ## Deployment
 
-To deploy the app to Firebase Hosting:
+Local deploy (builds the bundle automatically via `firebase.json` predeploy):
 
 ```bash
-firebase deploy
+npm run deploy
 ```
+
+Deploy only specific parts:
+
+```bash
+npm run deploy:hosting
+npm run deploy:functions
+npm run deploy:rules
+```
+
+### GitHub Actions (auto-deploy)
+
+This repo includes a workflow at `.github/workflows/firebase-deploy.yml` that deploys on push to `main`.
+
+You must add this GitHub Actions secret:
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON`: the full JSON for a Google service account with permission to deploy (Firebase Admin / appropriate IAM roles for Hosting + Functions + Rules).
 
 ## Technologies
 
