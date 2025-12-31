@@ -16,19 +16,17 @@ stonedoku/
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (for Firebase CLI)
-- [Firebase CLI](https://firebase.google.com/docs/cli)
+- Firebase CLI (provided via dev dependency `firebase-tools`)
 
 ## Setup
 
-1. Install Firebase CLI globally (if not already installed):
+1. Install dependencies:
    ```bash
-   npm install -g firebase-tools
+   npm install
    ```
 
-2. Login to Firebase:
-   ```bash
-   firebase login
-   ```
+2. (Optional) Authenticate the Firebase CLI:
+   - In restricted/CI environments, prefer a service account instead of interactive login.
 
 3. Initialize Firebase in this project (if needed):
    ```bash
@@ -62,6 +60,12 @@ Local deploy (builds the bundle automatically via `firebase.json` predeploy):
 
 ```bash
 npm run deploy
+```
+
+If you need to login interactively, use:
+
+```bash
+npx firebase-tools login --no-localhost
 ```
 
 Deploy only specific parts:
