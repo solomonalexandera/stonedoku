@@ -10,3 +10,9 @@ export { createCookieConsent, CookieConsent } from './cookieConsent.js';
 export { createLegalModals, LegalModals } from './legalModals.js';
 export { createUpdatesCenter, UpdatesCenter } from './updatesCenter.js';
 export { createAdminConsole, AdminConsole } from './adminConsole.js';
+export {
+    createFloatingChat,
+    createNotificationCenter,
+    normalizeTimestamp,
+    normalizeChatMessage
+} from './floatingChat.js';
