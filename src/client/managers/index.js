@@ -9,3 +9,6 @@ export { createLobbyManager } from './lobbyManager.js';
 export { createMatchManager } from './matchManager.js';
 export { createPresenceManager } from './presenceManager.js';
 export { createChallengeManager } from './challengeManager.js';
+export { MotionSystem } from './motionSystem.js';
+export { createArchitecturalStateSystem } from './architecturalStateSystem.js';
+export { createChallengeSystem } from './challengeSystem.js';
