@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 const pagesToCheck = [
   '/',
   '/index.html',
-  '/test-1v1.html',
+  '/tests/debug-1v1.html',
   '/tests/playwright/e2e-runner.html'
 ];
 

@@ -2,7 +2,11 @@ import { test, expect } from '@playwright/test';
 
 test('1v1 flow smoke', async ({ page }) => {
   // Open the test page served by local server
-  await page.goto('http://127.0.0.1:8000/test-1v1.html');
+  await page.goto('http://127.0.0.1:8000/tests/debug-1v1.html');
+  
+  // Wait for page to load and initialize
+  await page.waitForFunction(() => typeof window.testAuth === 'function', { timeout: 10000 });
+  
   // Click auth
   await page.click('text=1. Test Auth');
   await page.waitForTimeout(2000);

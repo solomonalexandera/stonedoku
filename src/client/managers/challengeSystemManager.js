@@ -1,7 +1,7 @@
 /**
  * Challenge System Manager - handles player challenges
  */
-export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTimestamp, AppState, LobbyManager, PresenceManager, ViewManager, UI, handleRoomUpdate }) {
+export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTimestamp, onChildAdded, update, AppState, LobbyManager, PresenceManager, ViewManager, UI, handleRoomUpdate }) {
     return {
         async sendChallenge(fromUserId, fromName, toUserId) {
             const notificationRef = ref(rtdb, `notifications/${toUserId}/${fromUserId}`);
@@ -16,11 +16,12 @@ export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTim
         },
         
         listenToNotifications(userId, callback) {
-            const { onChildAdded } = arguments[0]?.onChildAdded ? arguments[0] : globalThis;
             const notificationsRef = ref(rtdb, `notifications/${userId}`);
             const listener = onChildAdded(notificationsRef, async (snapshot) => {
                 try {
-                    await callback(snapshot.key, snapshot.val());
+                    if (callback) {
+                        await callback(snapshot.key, snapshot.val());
+                    }
                 } catch (e) {
                     console.warn('Notification callback failed', e);
                 } finally {
@@ -47,7 +48,6 @@ export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTim
             // Notify challenger of acceptance + room code
             await set(ref(rtdb, `notifications/${challengerId}/${acceptingUserId}`), acceptedPayload);
             // Keep a copy for the acceptor too (useful for debugging / multi-device)
-            const { update } = arguments[0]?.update ? arguments[0] : globalThis;
             await update(ref(rtdb, `notifications/${acceptingUserId}/${challengerId}`), {
                 status: 'accepted',
                 roomCode: code

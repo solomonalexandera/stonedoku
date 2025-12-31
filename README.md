@@ -1,17 +1,46 @@
 # Stonedoku
 
-A web-based application built with HTML5 and hosted on Firebase.
+A web-based multiplayer Sudoku game built with HTML5, CSS3, and JavaScript, hosted on Firebase.
 
 ## Project Structure
 
 ```
 stonedoku/
-├── index.html      # Main HTML5 application file
-├── styles.css      # Application styles
-├── app.js          # Application JavaScript logic
-├── firebase.json   # Firebase hosting configuration
-└── .firebaserc     # Firebase project configuration
+├── index.html              # Main HTML5 application entry point
+├── styles.css              # Application styles
+├── src/                    # Source code directory
+│   ├── client/             # Frontend (browser) code
+│   │   ├── core/           # Firebase initialization, config, state
+│   │   │   ├── appState.js     # Central application state
+│   │   │   ├── authFlow.js     # Authentication state management
+│   │   │   ├── eventSetup.js   # DOM event listeners
+│   │   │   ├── firebase.js     # Firebase SDK setup
+│   │   │   └── gameFlow.js     # Game initialization and match flow
+│   │   ├── lib/            # Pure utility libraries
+│   │   │   ├── passwordPolicy.js
+│   │   │   ├── profanityFilter.js
+│   │   │   ├── sudokuGenerator.js
+│   │   │   └── versionManager.js
+│   │   ├── managers/       # Stateful services (factory pattern)
+│   │   │   ├── viewManager.js      # View transitions
+│   │   │   ├── presenceManager.js  # Online presence
+│   │   │   ├── profileManager.js   # User profiles
+│   │   │   ├── lobbyManager.js     # Game rooms
+│   │   │   ├── matchManager.js     # 1v1 match state
+│   │   │   ├── chatManager.js      # Chat functionality
+│   │   │   └── ...                 # Other managers
+│   │   ├── ui/             # UI components and view controllers
+│   │   │   ├── gameUi.js       # Main game UI
+│   │   │   ├── uiCore.js       # Player list, profiles, toasts
+│   │   │   └── ...             # Other UI modules
+│   │   └── entry.js        # Main application entry point
+│   └── server/             # Backend (Firebase Functions)
+├── firebase.json           # Firebase hosting configuration
+├── functions/              # Firebase Functions source
+└── .firebaserc             # Firebase project configuration
 ```
+
+See `src/README.md` for detailed module documentation and `.github/MANAGERS.md` for the complete manager reference.
 
 ## Prerequisites
 

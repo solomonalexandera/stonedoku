@@ -1,3 +1,9 @@
+/**
+ * @deprecated This file is kept only for fallback during the transition period.
+ * The main application entry point is now src/client/entry.js.
+ * To use this legacy version, add ?legacy=1 to the URL.
+ * This file will be removed in a future release.
+ */
 // ===========================================
 // Firebase Imports
 // ===========================================

@@ -79,7 +79,13 @@ server/ -> ../functions/src/
    - `ui/` = DOM manipulation and view logic
    - `core/` = Firebase initialization and config
 
-## Migration Status
+## Entry Point
 
-The codebase is being migrated from a monolithic `app.js` to this modular structure.
+The main application entry point is `src/client/entry.js`. This file:
+- Initializes Firebase services
+- Creates all manager instances
+- Sets up auth state listener
+- Bootstraps the application
+
+The legacy `app.js` in the root directory is deprecated and kept only for fallback during transition.
 See `.github/MANAGERS.md` for the complete manager reference.

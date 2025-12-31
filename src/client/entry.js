@@ -197,7 +197,8 @@ const UI = createUiCore({
 const GameHelpers = createGameHelpers({ AppState, BoardIntegrityHelper });
 const GameUi = createGameUi({
     AppState, ViewManager, AudioManager, SudokuGenerator, BoardIntegrityHelper, GameHelpers,
-    PresenceManager, MatchManager, ProfileManager, UI, ArchitecturalStateManager, rtdb, ref, update
+    PresenceManager, MatchManager, ProfileManager, UI, ArchitecturalStateManager, 
+    CreativeFeatures, rtdb, ref, update
 });
 
 // Wire up FriendsManager.UI
@@ -216,7 +217,7 @@ const TourManager = createTourManager({
 // ===========================================
 let handleRoomUpdate; // Forward declaration
 const ChallengeSystemManager = createChallengeSystemManager({
-    rtdb, ref, set, remove, serverTimestamp,
+    rtdb, ref, set, remove, serverTimestamp, onChildAdded, update,
     AppState, LobbyManager, PresenceManager, ViewManager, UI,
     handleRoomUpdate: (...args) => handleRoomUpdate?.(...args)
 });
@@ -225,9 +226,9 @@ const ChallengeSystemManager = createChallengeSystemManager({
 // Game Flow
 // ===========================================
 const gameFlow = createGameFlow({
-    AppState, ViewManager, GameUi, GameHelpers, SudokuGenerator, AudioManager,
+    AppState, ViewManager, GameUI: GameUi, GameHelpers, SudokuGenerator, AudioManager,
     PresenceManager, LobbyManager, MatchManager, ChatManager, ProfileManager, UI,
-    rtdb, ref, get, update, onValue, onChildAdded, off,
+    rtdb, rtdbFns: { ref, get, update, onValue, onChildAdded, off },
     MotionManager, ArchitecturalStateManager, BoardIntegrityHelper, CreativeFeatures
 });
 
@@ -252,6 +253,85 @@ function isRegisteredUser(user = AppState.currentUser, profile = AppState.profil
 }
 
 // ===========================================
+// Notification Handler
+// ===========================================
+async function handleChallengeNotification(otherUserId, notification) {
+    if (!notification || notification.type !== 'challenge') return;
+    const status = notification.status;
+
+    if (status === 'pending') {
+        AppState.pendingChallenge = { fromUserId: otherUserId, fromName: notification.fromName || 'Player' };
+        const nameEl = document.getElementById('challenger-name');
+        if (nameEl) nameEl.textContent = notification.fromName || 'Player';
+        ViewManager.showModal('challenge-modal');
+        try { if (AppState.currentUser) await remove(ref(rtdb, `notifications/${AppState.currentUser.uid}/${otherUserId}`)); } catch { /* ignore */ }
+        return;
+    }
+
+    if (status === 'accepted' && notification.roomCode) {
+        // Only auto-join if we are not already engaged in a room/match.
+        if (AppState.currentRoom || AppState.currentMatch) return;
+        if (AppState.currentView !== 'lobby' && AppState.currentView !== 'auth') return;
+
+        const code = String(notification.roomCode).trim();
+        if (!/^\d{4}$/.test(code)) return;
+
+        if (!AppState.currentUser) return;
+        const displayName = getCurrentDisplayName();
+        await LobbyManager.joinRoom(code, AppState.currentUser.uid, displayName);
+        AppState.currentRoom = code;
+        const codeEl = document.getElementById('display-room-code');
+        if (codeEl) codeEl.textContent = code;
+        ViewManager.show('waiting');
+        PresenceManager.updateActivity('Joining match');
+        LobbyManager.listenToRoom(code, gameFlow.handleRoomUpdate);
+
+        // Cleanup notifications
+        try { await remove(ref(rtdb, `notifications/${AppState.currentUser.uid}/${otherUserId}`)); } catch { /* ignore */ }
+        return;
+    }
+
+    if (status === 'declined') {
+        // Challenger sees decline. Keep it subtle; no modal.
+        if (AppState.currentView === 'lobby') {
+            UI.showToast?.(`${notification.fromName || 'Player'} declined your challenge`, 'info');
+        }
+        try { if (AppState.currentUser) await remove(ref(rtdb, `notifications/${AppState.currentUser.uid}/${otherUserId}`)); } catch { /* ignore */ }
+    }
+}
+
+async function handleNotification(otherUserId, notification) {
+    if (!notification) return;
+    if (notification.type === 'challenge') {
+        await handleChallengeNotification(otherUserId, notification);
+        return;
+    }
+
+    try {
+        if (notification.type === 'friend_request') {
+            FriendsManager.refresh?.();
+            UI.showToast?.('New friend request received.', 'info');
+        } else if (notification.type === 'friend_accept') {
+            FriendsManager.refresh?.();
+            UI.showToast?.('Friend request accepted.', 'success');
+        } else if (notification.type === 'friend_decline') {
+            UI.showToast?.('Friend request declined.', 'info');
+        }
+    } catch (e) {
+        console.warn('handleNotification failed', e);
+    } finally {
+        const currentUid = AppState.currentUser?.uid;
+        if (!currentUid) return;
+        const key = notification.type && notification.type.startsWith('friend_')
+            ? (String(otherUserId).startsWith('friend_') ? otherUserId : `friend_${otherUserId}`)
+            : otherUserId;
+        try {
+            await remove(ref(rtdb, `notifications/${currentUid}/${key}`));
+        } catch { /* ignore */ }
+    }
+}
+
+// ===========================================
 // Floating Chat
 // ===========================================
 function initFloatingChat() {
@@ -268,7 +348,7 @@ function initFloatingChat() {
 // ===========================================
 const ProfilePage = createProfilePage({
     AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager,
-    TourManager, UI, UpdatesCenter, AdminConsole, isRegisteredUser
+    TourManager, UI: UiHelpers, UpdatesCenter, AdminConsole, isRegisteredUser
 });
 
 function initProfilePage() {
@@ -284,7 +364,7 @@ const eventSetup = createEventSetup({
     updateProfile, signOut, deleteUser, deleteDoc, doc, firestore, rtdb, ref, get, update,
     // State & Managers
     AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager, MatchManager, ChatManager,
-    GameUi, GameHelpers, AudioManager, UI, ChallengeSystemManager,
+    GameUI: GameUi, GameHelpers, AudioManager, UI, ChallengeSystemManager,
     // Utilities
     PasswordPolicy, PasswordReset, CookieConsent, OnboardingManager: null, TourManager,
     getCurrentDisplayName, isRegisteredUser,
@@ -314,6 +394,7 @@ async function handleAuthStateChange(user) {
     
     if (user) {
         AppState.currentUser = user;
+        AppState.passwordReset.active = false;
         
         // Configure persistence based on cookie consent
         await authFlow.configureAuthPersistence();
@@ -324,33 +405,67 @@ async function handleAuthStateChange(user) {
             return;
         }
         
-        // Load profile
+        // Show authenticated UI shell immediately
+        const initialName = authFlow.getFallbackDisplayName(user);
+        authFlow.showAuthenticatedShell(initialName);
+        window.ChatWidget?.setDmEnabled?.(isRegisteredUser(user));
+        
+        // Show lobby unless deep-linking elsewhere
+        if (!authFlow.shouldDeferLobbyRedirect()) {
+            ViewManager.show('lobby');
+        }
+        
+        // Load/create profile
+        let profileData = null;
         try {
-            const profileSnap = await ProfileManager.getProfile(user.uid);
-            if (profileSnap.exists()) {
-                AppState.profile = profileSnap.data();
-                applyProfileModeration(AppState, AppState.profile);
-            } else if (!user.isAnonymous) {
-                // Create profile for new registered users
-                const displayName = AppState.pendingUsername || user.displayName || authFlow.getFallbackDisplayName(user);
-                await ProfileManager.createOrUpdateProfile(user.uid, {
-                    displayName,
-                    username: AppState.pendingUsername || displayName,
-                    email: user.email
-                });
-                AppState.pendingUsername = null;
-            }
+            const pendingUsername = AppState.pendingUsername;
+            AppState.pendingUsername = null;
+            
+            const profile = await ProfileManager.createOrUpdateProfile(user.uid, {
+                username: pendingUsername || null,
+                displayName: user.displayName || pendingUsername || `Player_${user.uid.substring(0, 6)}`,
+                email: user.email
+            });
+            profileData = profile?.data?.() || null;
+            AppState.profile = profileData || null;
+            applyProfileModeration(AppState, profileData);
         } catch (e) {
-            console.error('Failed to load profile:', e);
+            console.warn('Profile create/update failed; continuing with limited session.', e);
+            AppState.profile = null;
+        }
+        
+        // Update UI with profile data
+        const displayName = authFlow.getFallbackDisplayName(user, profileData);
+        authFlow.showAuthenticatedShell(displayName);
+        UI.updateStats?.(profileData?.stats || { wins: 0, losses: 0 });
+        UI.updateBadges?.(profileData?.badges || []);
+        AppState.friends = profileData?.friends || [];
+        
+        // Show guest toast
+        if (user.isAnonymous) {
+            UI.showToast?.('You are playing as a guest. Create an account to save progress.', 'info');
         }
         
         // Initialize presence
-        PresenceManager.init(user.uid, getCurrentDisplayName());
+        PresenceManager.init(user.uid, displayName);
+        PresenceManager.listenToOnlinePlayers?.((players) => {
+            AppState.onlinePlayers = players;
+            UI.updatePlayersList?.(players);
+        });
+        PresenceManager.updateActivity('In Lobby');
         
         // Enable DM for registered users
-        window.ChatWidget?.setDmEnabled?.(isRegisteredUser());
+        const allowDirectMessages = isRegisteredUser(user, profileData);
+        window.ChatWidget?.setDmEnabled?.(allowDirectMessages);
+        if (allowDirectMessages && ChatManager.listenToDmThreads) {
+            ChatManager.listenToDmThreads(user.uid, (threads) => {
+                window.ChatWidget?.setDmThreads?.(threads);
+            });
+        } else {
+            window.ChatWidget?.setDmThreads?.([]);
+        }
         
-        // Load friends
+        // Load friends for registered users
         if (isRegisteredUser()) {
             try {
                 AppState.friends = await ProfileManager.loadFriends(user.uid);
@@ -360,21 +475,37 @@ async function handleAuthStateChange(user) {
             }
         }
         
-        // Show lobby
-        ViewManager.show('lobby');
-        PresenceManager.updateActivity('In Lobby');
+        // Listen to global chat
+        ChatManager.listenToGlobalChat?.((message) => {
+            window.ChatWidget?.ingestMessage?.('global', message);
+        });
+        
+        // Listen for challenge notifications
+        ChallengeSystemManager.listenToNotifications?.(user.uid, handleNotification);
         
     } else {
         // Signed out
         AppState.currentUser = null;
         AppState.profile = null;
         AppState.friends = [];
-                if (AppState.onboarding) {
-                    AppState.onboarding.active = false;
-                    AppState.onboarding.step = 1;
-                }
+        if (AppState.onboarding) {
+            AppState.onboarding.active = false;
+            AppState.onboarding.step = 1;
+        }
+        
+        // Hide authenticated UI elements
+        const userInfo = document.getElementById('user-info');
+        const chatWidget = document.getElementById('chat-widget');
+        const chatFab = document.getElementById('chat-fab');
+        const friendsCard = document.getElementById('friends-card');
+        if (userInfo) userInfo.style.display = 'none';
+        if (chatWidget) chatWidget.style.display = 'none';
+        if (chatFab) chatFab.style.display = 'none';
+        if (friendsCard) friendsCard.style.display = 'none';
+        
         PresenceManager.cleanup();
         window.ChatWidget?.reset?.();
+        window.ChatWidget?.setDmEnabled?.(false);
         ViewManager.show('auth');
     }
     
