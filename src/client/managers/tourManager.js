@@ -168,9 +168,14 @@ export function createTourManager({ AppState, ViewManager, UI, firestore, doc, u
                         updateDoc(doc(firestore, 'users', uid), { tourCompletedAt: serverTimestamp() }).catch(() => {});
                     }
                 } catch { /* ignore */ }
-                if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
-                    try { localStorage.setItem('stonedoku_tour_done', '1'); } catch { /* ignore */ }
-                }
+                // Persist completion flag (localStorage if available)
+                try { localStorage.setItem('stonedoku_tour_done', '1'); } catch { /* ignore */ }
+
+                // Enable tutorial button in the onboarding UI (so user can start tutorial after completing orientation)
+                try {
+                    const btn = document.getElementById('start-tutorial');
+                    if (btn) btn.disabled = false;
+                } catch (e) { /* ignore DOM errors */ }
             }
         },
     };

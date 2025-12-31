@@ -393,6 +393,14 @@ export function createOnboardingManager({
         if (action === 'tour') {
             setTimeout(() => TourManager?.start?.(), 300);
         } else if (action === 'tutorial' && typeof startSinglePlayerGame === 'function') {
+            // Only allow starting the tutorial after the orientation (tour) has been completed.
+            const tourDone = (function() {
+                try { return localStorage.getItem('stonedoku_tour_done') === '1'; } catch (e) { return false; }
+            })();
+            if (!tourDone) {
+                notify('Please complete the orientation first to unlock the tutorial.', 'info');
+                return;
+            }
             setTimeout(() => startSinglePlayerGame('easy'), 400);
         }
     };
@@ -525,6 +533,17 @@ export function createOnboardingManager({
             goToStep(1);
             updateProgress();
             ensureListeners();
+
+            // Disable the tutorial button until orientation (tour) is completed.
+            // If the tour was previously completed (e.g., stored in localStorage), enable it.
+            try {
+                const startTutorialBtn = getEl('start-tutorial');
+                const tourDone = (function() {
+                    try { return localStorage.getItem('stonedoku_tour_done') === '1'; } catch (e) { return false; }
+                })();
+                if (startTutorialBtn) startTutorialBtn.disabled = !tourDone;
+            } catch (e) { /* ignore */ }
+
             ViewManager.show('onboarding');
             setTimeout(() => getEl('onboard-username')?.focus({ preventScroll: true }), 150);
         },
