@@ -7,4 +7,5 @@ Progress (2025-12-31):
 - AudioManager extracted to src/client/managers/audioManager.js and imported by app.js; managers barrel updated.
 - BoardIntegritySystem extracted to src/client/ui/boardIntegrity.js and imported by app.js.
 - UI barrel now exports board integrity, GameHelpers, and GameUI factories; GameHelpers instantiated via src/client/ui/gameHelpers.js and GameUI via src/client/ui/gameUi.js with window compatibility shims.
-- Remaining: extract the general UI helper object and domain managers into src/client/ui and src/client/managers, introduce bundler (Rollup/Vite), and update CI/HTML runners to use bundled entry once modules are split.
+- LobbyManager extracted to src/client/managers/lobbyManager.js and wired through app.js.
+- Remaining: finish modularizing remaining domain managers (Chat/ChallengeSystem), introduce bundler (Rollup/Vite), and update CI/HTML runners to use bundled entry once modules are split.

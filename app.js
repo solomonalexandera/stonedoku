@@ -75,6 +75,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import {
     createFriendsManager,
+    createLobbyManager,
     createMatchManager,
     createPresenceManager,
     createProfileManager
@@ -898,6 +899,14 @@ const FriendsManager = createFriendsManager({
     isRegisteredUser,
     getUI: () => UI,
     getChatWidget: () => window.ChatWidget
+});
+
+// ===========================================
+// Lobby Manager (modular)
+// ===========================================
+const LobbyManager = createLobbyManager({
+    rtdb,
+    appState: AppState
 });
 
 // ===========================================
@@ -6996,6 +7005,8 @@ window.Stonedoku.Managers = Object.assign(window.Stonedoku.Managers || {}, {
     PresenceManager,
     ProfileManager,
     FriendsManager,
+    LobbyManager,
+    MatchManager,
     UpdatesCenter,
     AdminConsole,
     AudioManager,

@@ -16,4 +16,5 @@ This directory contains high-level "manager" modules that encapsulate major doma
 - `logManager.js` – console override and Firestore logging helper (factory: `createLogManager`).
 - `profileManager.js` – user profiles, vanity usernames, badges, avatars, and friend relationships (factory: `createProfileManager`).
 - `friendsManager.js` – lobby friends UI rendering backed by ProfileManager (factory: `createFriendsManager`).
+- `lobbyManager.js` – lobby creation/join/leave, readiness, and chat helpers (factory: `createLobbyManager`).
 - `matchManager.js` – 1v1 match lifecycle and RTDB board state (factory: `createMatchManager`).

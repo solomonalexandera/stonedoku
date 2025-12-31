@@ -34,6 +34,7 @@ This document indexes the primary "manager" objects and domain modules implement
 ### `LobbyManager`
 - **Purpose:** Manage lobby creation and state in the RTDB (`lobbies/`).
 - **Key responsibilities:** Create/join lobbies, maintain player lists and ready status, and coordinate match start.
+- **Location:** `src/client/managers/lobbyManager.js` (factory `createLobbyManager`, instance created in `app.js`).
 
 ### `MatchManager`
 - **Purpose:** Manage active match lifecycle and game rules for 1v1 matches.
