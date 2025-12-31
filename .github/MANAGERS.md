@@ -177,7 +177,7 @@ This document indexes the primary "manager" objects and domain modules implement
 - File names in camelCase: `presenceManager.js`, `uiCore.js`, `gameUi.js`
 
 ### Singleton Exports
-- PascalCase for singleton objects: `AudioManager`, `MotionSystem`, `SudokuGenerator`
+- PascalCase for singleton objects: `AudioManager`, `MotionManager`, `SudokuGenerator`
 - These are pre-instantiated objects, not factories
 
 ### Barrel Exports

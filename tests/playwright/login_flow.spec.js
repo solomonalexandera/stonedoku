@@ -1,4 +1,5 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
+import fs from 'fs';
 
 // This test ensures a basic sign-in and onboarding flow works and surfaces
 // catastrophic client-side errors that prevent progress past the front page.
@@ -35,7 +36,6 @@ test('basic signin and reach user-info', async ({ browser }) => {
   // Fail early if any page-level errors were emitted
     if (errors.length > 0) {
       // Save diagnostics
-      const fs = require('fs');
       try { fs.writeFileSync('test-results/login_flow_console_early.txt', consoleMessages.join('\n')); } catch (e) {}
       try { const html = await page.content(); fs.writeFileSync('test-results/login_flow_page_early.html', html); } catch (e) {}
       try { await page.screenshot({ path: 'test-results/login_flow_screenshot_early.png', fullPage: true }); } catch (e) {}
@@ -54,7 +54,6 @@ test('basic signin and reach user-info', async ({ browser }) => {
     ]);
   } catch (err) {
     // Capture diagnostics for debugging
-    const fs = require('fs');
     const html = await page.content();
     try { fs.writeFileSync('test-results/login_flow_page.html', html); } catch (e) {}
     try {

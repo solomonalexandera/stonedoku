@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test('both players agree rematch -> new match created', async ({ browser }) => {
   const context1 = await browser.newContext();

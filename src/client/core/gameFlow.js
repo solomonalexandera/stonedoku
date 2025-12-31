@@ -9,8 +9,8 @@
  * @param {Object} deps.GameUI - Game UI manager
  * @param {Object} deps.GameHelpers - Game helpers
  * @param {Object} deps.ViewManager - View manager
- * @param {Object} deps.PresenceSystem - Presence system
- * @param {Object} deps.ArchitecturalStateSystem - Architectural state system
+ * @param {Object} deps.PresenceManager - Presence manager
+ * @param {Object} deps.ArchitecturalStateManager - Architectural state manager
  * @param {Object} deps.SudokuGenerator - Sudoku puzzle generator
  * @param {Object} deps.MatchManager - Match manager
  * @param {Object} deps.LobbyManager - Lobby manager
@@ -26,8 +26,8 @@ export function createGameFlow({
     GameUI,
     GameHelpers,
     ViewManager,
-    PresenceSystem,
-    ArchitecturalStateSystem,
+    PresenceManager,
+    ArchitecturalStateManager,
     SudokuGenerator,
     MatchManager,
     LobbyManager,
@@ -87,8 +87,8 @@ export function createGameFlow({
         
         GameHelpers?.resetGameState();
         GameHelpers?.resetToolLimits(difficulty);
-        ArchitecturalStateSystem?.reset();
-        ArchitecturalStateSystem?.startIdleWatch();
+        ArchitecturalStateManager?.reset();
+        ArchitecturalStateManager?.startIdleWatch();
         
         const { puzzle, solution } = SudokuGenerator.createPuzzle(difficulty);
         AppState.puzzle = puzzle.map(row => [...row]);
@@ -116,7 +116,7 @@ export function createGameFlow({
         
         ViewManager?.show('game');
         GameUI?.startTimer();
-        PresenceSystem?.updateActivity(`Playing: ${difficultyLabel} Mode`);
+        PresenceManager?.updateActivity(`Playing: ${difficultyLabel} Mode`);
     };
 
     const startVersusGame = async (roomData) => {
@@ -127,8 +127,8 @@ export function createGameFlow({
         
         GameHelpers?.resetGameState();
         GameHelpers?.resetToolLimits('hard');
-        ArchitecturalStateSystem?.reset();
-        ArchitecturalStateSystem?.startIdleWatch();
+        ArchitecturalStateManager?.reset();
+        ArchitecturalStateManager?.startIdleWatch();
         AppState.isGameOver = false;
         GameUI?.resetLivesDisplay();
         
@@ -206,7 +206,7 @@ export function createGameFlow({
         
         ViewManager?.show('game');
         GameUI?.startTimer();
-        PresenceSystem?.updateActivity('Playing: Bust the Board');
+        PresenceManager?.updateActivity('Playing: Bust the Board');
         
         MatchManager.listenToMatch(matchId, handleMatchUpdate);
         
@@ -275,7 +275,7 @@ export function createGameFlow({
 
     const showPregameLobby = (room) => {
         ViewManager?.show('pregame-lobby');
-        PresenceSystem?.updateActivity('In Pre-Game Lobby');
+        PresenceManager?.updateActivity('In Pre-Game Lobby');
         updatePregameLobbyUI(room);
 
         const widgetGameTab = document.getElementById('widget-game-tab');
@@ -420,7 +420,7 @@ export function createGameFlow({
 
     const quitGame = () => {
         GameUI?.stopTimer();
-        ArchitecturalStateSystem?.reset();
+        ArchitecturalStateManager?.reset();
     };
 
     const cleanupAfterMatch = () => {

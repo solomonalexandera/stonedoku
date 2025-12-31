@@ -7,7 +7,7 @@ export function createGameUi({
     GameHelpers: gameHelpers,
     AudioManager: audioManager,
     CreativeFeatures: creativeFeatures = globalThis.CreativeFeatures,
-    ArchitecturalStateSystem: architecturalStateSystem = globalThis.ArchitecturalStateSystem,
+    ArchitecturalStateManager: architecturalStateManager = globalThis.ArchitecturalStateManager,
     UI: ui = globalThis.UI,
     ProfileManager: profileManager = globalThis.ProfileManager,
     ViewManager: viewManager = globalThis.ViewManager,
@@ -338,13 +338,13 @@ export function createGameUi({
                             creativeFeatures.incrementStreak();
                             creativeFeatures.animateCellComplete(row, col);
                             creativeFeatures.checkGroupCompletion(appState.puzzle, row, col);
-                            architecturalStateSystem.noteCorrect();
+                            architecturalStateManager.noteCorrect();
                         } else {
                             audioManager.playError();
                             cell.classList.add('error');
 
                             creativeFeatures.resetStreak();
-                            architecturalStateSystem.noteMistake();
+                            architecturalStateManager.noteMistake();
 
                             appState.mistakes++;
                             gameHelpers.updateMistakesDisplay();
@@ -370,7 +370,7 @@ export function createGameUi({
                         cell.classList.add('player-fill');
 
                         if (!isCorrect) {
-                            architecturalStateSystem.noteMistake();
+                            architecturalStateManager.noteMistake();
                             appState.mistakes++;
                             gameHelpers.updateMistakesDisplay();
 
@@ -463,10 +463,10 @@ export function createGameUi({
             if (won) {
                 audioManager.playVictory();
                 creativeFeatures.showConfetti();
-                architecturalStateSystem.onVictory({ perfect: appState.mistakes === 0 });
+                architecturalStateManager.onVictory({ perfect: appState.mistakes === 0 });
             } else {
                 audioManager.playDefeat();
-                architecturalStateSystem.pulseStrain(1400);
+                architecturalStateManager.pulseStrain(1400);
             }
 
             viewManager.showModal('game-over-modal');
@@ -511,11 +511,11 @@ export function createGameUi({
             } else if (isWinner) {
                 audioManager.playVictory();
                 creativeFeatures.showConfetti();
-                architecturalStateSystem.onVictory({ perfect: false });
+                architecturalStateManager.onVictory({ perfect: false });
                 profileManager.updateStats(userId, true);
             } else if (isWinner === false) {
                 audioManager.playDefeat();
-                architecturalStateSystem.pulseStrain(1400);
+                architecturalStateManager.pulseStrain(1400);
                 profileManager.updateStats(userId, false);
             }
 

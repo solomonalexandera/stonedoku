@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 // UI-driven friends accept flow to reproduce toast/console errors
 test('ui friend request accept shows no error toast', async ({ browser }) => {
@@ -43,7 +43,6 @@ test('ui friend request accept shows no error toast', async ({ browser }) => {
   try {
     await pageA.waitForSelector('#profile-friend-btn', { timeout: 15000 });
   } catch (e) {
-    const fs = require('fs');
     try { fs.writeFileSync('tests/playwright/test-results/ui_pageA_profile.html', await pageA.content()); } catch (e) {}
     try { await pageA.screenshot({ path: 'tests/playwright/test-results/ui_pageA_profile.png', fullPage: true }); } catch (e) {}
     throw e;
@@ -66,8 +65,6 @@ test('ui friend request accept shows no error toast', async ({ browser }) => {
   const consoleA = await pageA.evaluate(() => window._capturedConsole || []);
   const toastsB = await pageB.evaluate(() => window._capturedToasts || []);
   const consoleB = await pageB.evaluate(() => window._capturedConsole || []);
-
-  const fs = require('fs');
   try { fs.writeFileSync('tests/playwright/test-results/ui_pageA_toasts.json', JSON.stringify(toastsA, null, 2)); } catch (e) {}
   try { fs.writeFileSync('tests/playwright/test-results/ui_pageA_console.json', JSON.stringify(consoleA, null, 2)); } catch (e) {}
   try { fs.writeFileSync('tests/playwright/test-results/ui_pageB_toasts.json', JSON.stringify(toastsB, null, 2)); } catch (e) {}

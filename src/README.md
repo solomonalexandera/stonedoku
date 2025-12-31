@@ -20,33 +20,33 @@ client/
 │   └── index.js
 ├── managers/       # Stateful services (factory pattern)
 │   ├── accessibilityManager.js  # ARIA, keyboard nav, announcements
-│   ├── architecturalStateSystem.js  # Visual state effects
+│   ├── architecturalStateManager.js  # Visual state effects
 │   ├── audioManager.js          # Sound effects
 │   ├── challengeManager.js      # Player challenges (RTDB)
-│   ├── challengeSystem.js       # Challenge notifications
+│   ├── challengeSystemManager.js # Challenge notifications
 │   ├── chatManager.js           # Chat (Firestore + RTDB)
 │   ├── creativeFeatures.js      # Streaks, confetti, animations
 │   ├── friendsManager.js        # Friends list
 │   ├── lobbyManager.js          # Game rooms
 │   ├── logManager.js            # Client logging to Firestore
 │   ├── matchManager.js          # 1v1 match state
-│   ├── motionSystem.js          # Animation helpers
+│   ├── motionManager.js         # Animation helpers
 │   ├── presenceManager.js       # Online presence
 │   ├── profileManager.js        # User profiles
+│   ├── tourManager.js           # Onboarding tour
+│   ├── viewManager.js           # View/modal transitions
 │   └── index.js
 ├── ui/             # UI components and view controllers
 │   ├── adminConsole.js       # Admin panel for updates/moderation
-│   ├── boardIntegrity.js     # Sudoku board visual effects
+│   ├── boardIntegrityHelper.js # Sudoku board visual effects
 │   ├── cookieConsent.js      # GDPR/PECR cookie consent
 │   ├── gameHelpers.js        # Game utility functions
 │   ├── gameUi.js             # Main game UI
 │   ├── legalModals.js        # Privacy, terms, accessibility modals
 │   ├── passwordReset.js      # Password reset flow
-│   ├── tourSystem.js         # Onboarding tour
 │   ├── uiCore.js             # Player list, profiles, toasts
 │   ├── uiHelpers.js          # Generic UI utilities
 │   ├── updatesCenter.js      # Community updates feed/banner
-│   ├── viewManager.js        # View/modal transitions
 │   └── index.js
 ├── appState.js     # (Legacy) Central application state
 └── entry.js        # (Future) Main entry point

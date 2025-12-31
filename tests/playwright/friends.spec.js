@@ -1,4 +1,5 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
+import fs from 'fs';
 
 // Profile-level friends test (backend-only via e2e runner). This avoids flaky
 // UI interactions by manipulating/verifying Firestore profiles directly.
@@ -29,7 +30,6 @@ test('create two users and make them friends (backend)', async ({ browser }) => 
   const usernameA = `e2e_a_${t}`;
   const usernameB = `e2e_b_${t}`;
 
-  const fs = require('fs');
   // Create first user on pageA
   const uidA = await pageA.evaluate(async (opts) => {
     try {
@@ -132,12 +132,10 @@ test('create two users and make them friends (backend)', async ({ browser }) => 
   console.log('FRIENDS_TEST_RESULT:', JSON.stringify(result));
 
   if (errors.length > 0) {
-    const fs = require('fs');
     try { fs.writeFileSync('test-results/friends_console_early.txt', errors.join('\n')); } catch (e) {}
   }
 
   if (!result || result.error) {
-    const fs = require('fs');
     try { fs.writeFileSync('test-results/friends_error.json', JSON.stringify(result || { error: 'no-result' }, null, 2)); } catch (e) {}
     throw new Error('E2E runner failed: ' + (result && result.error ? result.error : 'unknown'));
   }
@@ -175,7 +173,6 @@ async function dumpCapturedLogs(page, label) {
   try {
     const toasts = await page.evaluate(() => window._capturedToasts || []);
     const consoleBuf = await page.evaluate(() => window._capturedConsole || []);
-    const fs = require('fs');
     try { fs.writeFileSync(`test-results/${label}_toasts.json`, JSON.stringify(toasts, null, 2)); } catch (e) {}
     try { fs.writeFileSync(`test-results/${label}_console.json`, JSON.stringify(consoleBuf, null, 2)); } catch (e) {}
   } catch (e) { /* ignore */ }

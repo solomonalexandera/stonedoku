@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test('1v1 flow smoke', async ({ page }) => {
   // Open the test page served by local server

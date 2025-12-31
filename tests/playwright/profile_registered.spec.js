@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 // Increase timeout for this end-to-end playthrough to reduce flakiness
 test.setTimeout(120000);

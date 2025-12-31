@@ -165,14 +165,14 @@ export function waitForAuthReady(AppState, maxMs = 8000) {
  */
 export function initProfilePage(deps) {
     const {
-        AppState, ViewManager, PresenceSystem, ProfileManager, LobbyManager,
-        TourSystem, UI, isRegisteredUser
+        AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager,
+        TourManager, UI, isRegisteredUser
     } = deps;
 
     // Back button
     document.getElementById('profile-back-btn')?.addEventListener('click', () => {
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
 
     // Edit profile button
@@ -199,8 +199,8 @@ export function initProfilePage(deps) {
     // Run orientation tour again (from profile)
     document.getElementById('run-tour-btn')?.addEventListener('click', () => {
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
-        setTimeout(() => TourSystem.start(true), 250);
+        PresenceManager.updateActivity('In Lobby');
+        setTimeout(() => TourManager.start(true), 250);
     });
 
     // Save profile changes

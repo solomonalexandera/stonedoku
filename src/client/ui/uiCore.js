@@ -53,7 +53,7 @@ export function createUiCore({ getProfile, rtdb, dbRef, dbGet }) {
         }, 2400);
     };
 
-    const updatePlayersList = (players, { showProfilePage, ChallengeSystem, ViewManager } = {}) => {
+    const updatePlayersList = (players, { showProfilePage, ChallengeSystemManager, ViewManager } = {}) => {
         const container = document.getElementById('players-list');
         if (!container) return;
         
@@ -78,7 +78,7 @@ export function createUiCore({ getProfile, rtdb, dbRef, dbGet }) {
                 nameEl.addEventListener('mouseleave', () => hideHoverProfile());
                 
                 if (showProfilePage) {
-                    item.addEventListener('click', () => showPlayerProfile(id, { ChallengeSystem, ViewManager }));
+                    item.addEventListener('click', () => showPlayerProfile(id, { ChallengeSystemManager, ViewManager }));
                 }
                 container.appendChild(item);
             }
@@ -143,7 +143,7 @@ export function createUiCore({ getProfile, rtdb, dbRef, dbGet }) {
         }, 100);
     };
 
-    const showPlayerProfile = async (userId, { ChallengeSystem, ViewManager, currentUserId } = {}) => {
+    const showPlayerProfile = async (userId, { ChallengeSystemManager, ViewManager, currentUserId } = {}) => {
         const profile = await getProfile(userId);
         if (!profile.exists()) return;
         
@@ -166,9 +166,9 @@ export function createUiCore({ getProfile, rtdb, dbRef, dbGet }) {
         });
         
         // Set up challenge button
-        if (ChallengeSystem && currentUserId) {
+        if (ChallengeSystemManager && currentUserId) {
             document.getElementById('challenge-player').onclick = async () => {
-                await ChallengeSystem.sendChallenge(currentUserId, 'Player', userId);
+                await ChallengeSystemManager.sendChallenge(currentUserId, 'Player', userId);
                 ViewManager?.hideModal('profile-modal');
                 alert('Challenge sent!');
             };

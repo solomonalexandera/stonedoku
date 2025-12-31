@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test.describe('Permission edge cases', () => {
   test('anonymous cannot write presence for other user', async ({ page }) => {

@@ -1,6 +1,0 @@
-log: E2E runner loaded
-log: Stonedoku initialized - v2.1 (Europe DB, WCAG 2.1 AA)
-error: EARLY_UNHANDLEDREJECTION {type: unhandledrejection, reason: ReferenceError: firebaseConfig is not defined
-    …http://127.0.0.1:8000/app.js?v=20251221D:10702:5)}
-error: Unhandled rejection captured: firebaseConfig is not defined
-error: Startup error (stub): firebaseConfig is not defined

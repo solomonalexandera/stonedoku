@@ -102,8 +102,8 @@ export function setupHeaderMenu() {
 export function setupAuthListeners(deps) {
     const { auth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword,
             updateProfile, signOut, deleteUser, deleteDoc, doc, firestore,
-            AppState, ViewManager, PresenceSystem, ProfileManager, PasswordPolicy, PasswordReset,
-            OnboardingSystem } = deps;
+            AppState, ViewManager, PresenceManager, ProfileManager, PasswordPolicy, PasswordReset,
+            OnboardingManager } = deps;
 
     // Anonymous login
     document.getElementById('anonymous-login')?.addEventListener('click', async () => {
@@ -141,7 +141,7 @@ export function setupAuthListeners(deps) {
 
     // Start Onboarding
     document.getElementById('start-onboarding')?.addEventListener('click', () => {
-        OnboardingSystem?.start();
+        OnboardingManager?.start();
     });
 
     // Sign In form
@@ -286,7 +286,7 @@ export function setupAuthListeners(deps) {
         try {
             console.log('Starting logout process...');
             const user = auth.currentUser;
-            await PresenceSystem.cleanup();
+            await PresenceManager.cleanup();
             console.log('Presence cleaned up');
 
             if (user?.isAnonymous) {
@@ -322,8 +322,8 @@ export function setupAuthListeners(deps) {
  * Setup game-related event listeners
  */
 export function setupGameListeners(deps) {
-    const { AppState, ViewManager, PresenceSystem, MatchManager, LobbyManager, GameUI,
-            GameHelpers, AudioManager, UI, ChallengeSystem, getCurrentDisplayName,
+    const { AppState, ViewManager, PresenceManager, MatchManager, LobbyManager, GameUI,
+            GameHelpers, AudioManager, UI, ChallengeSystemManager, getCurrentDisplayName,
             startSinglePlayerGame, handleRoomUpdate, quitGame, navigateCell,
             ref, rtdb, get, update } = deps;
 
@@ -394,7 +394,7 @@ export function setupGameListeners(deps) {
             document.getElementById('display-room-code').textContent = code;
 
             ViewManager.show('waiting');
-            PresenceSystem.updateActivity('Waiting for opponent');
+            PresenceManager.updateActivity('Waiting for opponent');
             LobbyManager.listenToRoom(code, handleRoomUpdate);
         } catch (error) {
             console.error('Failed to create room:', error);
@@ -456,7 +456,7 @@ export function setupGameListeners(deps) {
         const widgetGameTab = document.getElementById('widget-game-tab');
         if (widgetGameTab) widgetGameTab.style.display = 'none';
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
 
     // Copy room code
@@ -497,7 +497,7 @@ export function setupGameListeners(deps) {
             countdownInterval = null;
         }
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
 
     // Pre-game chat
@@ -531,14 +531,14 @@ export function setupGameListeners(deps) {
         await update(ref(rtdb, `matches/${matchId}/rematch`), { [userId]: false });
         deps.cleanupAfterMatch();
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
 
     // Back to lobby from post-match
     document.getElementById('postmatch-back-lobby')?.addEventListener('click', () => {
         deps.cleanupAfterMatch();
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
 
     // Number pad
@@ -573,7 +573,7 @@ export function setupGameListeners(deps) {
                 AppState.currentRoom = null;
             }
             ViewManager.show('lobby');
-            PresenceSystem.updateActivity('In Lobby');
+            PresenceManager.updateActivity('In Lobby');
         }
     });
 
@@ -591,7 +591,7 @@ export function setupGameListeners(deps) {
     document.getElementById('back-to-lobby')?.addEventListener('click', () => {
         ViewManager.hideModal('game-over-modal');
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
     });
 
     // Global chat (legacy)
@@ -616,13 +616,13 @@ export function setupGameListeners(deps) {
                 return;
             }
             const displayName = getCurrentDisplayName();
-            const code = await ChallengeSystem.acceptChallenge(AppState.currentUser.uid, displayName, current.fromUserId);
+            const code = await ChallengeSystemManager.acceptChallenge(AppState.currentUser.uid, displayName, current.fromUserId);
             AppState.currentRoom = code;
             const codeEl = document.getElementById('display-room-code');
             if (codeEl) codeEl.textContent = code;
             ViewManager.hideModal('challenge-modal');
             ViewManager.show('waiting');
-            PresenceSystem.updateActivity('Waiting for opponent');
+            PresenceManager.updateActivity('Waiting for opponent');
             LobbyManager.listenToRoom(code, handleRoomUpdate);
             AppState.pendingChallenge = null;
         } catch (e) {
@@ -637,7 +637,7 @@ export function setupGameListeners(deps) {
                 const current = AppState.pendingChallenge;
                 if (current && AppState.currentUser) {
                     const displayName = getCurrentDisplayName();
-                    await ChallengeSystem.declineChallenge(AppState.currentUser.uid, displayName, current.fromUserId);
+                    await ChallengeSystemManager.declineChallenge(AppState.currentUser.uid, displayName, current.fromUserId);
                 }
             } catch (e) {
                 console.warn('Decline challenge failed', e);

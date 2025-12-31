@@ -167,7 +167,7 @@ const ProfileManager = createProfileManager({
     uploadBytes, getDownloadURL, rtdb, ref, update, serverTimestamp, AppState
 });
 const FriendsManager = createFriendsManager({
-    AppState, ProfileManager, UI: null // Will be set after UI is created
+    firestore, AppState, profileManager: ProfileManager, UI: null // Will be set after UI is created
 });
 const LobbyManager = createLobbyManager({ rtdb, appState: AppState });
 const MatchManager = createMatchManager({ rtdb, appState: AppState });
@@ -196,7 +196,7 @@ const UI = createUiCore({
 const GameHelpers = createGameHelpers({ AppState, BoardIntegrityHelper });
 const GameUi = createGameUi({
     AppState, ViewManager, AudioManager, SudokuGenerator, BoardIntegrityHelper, GameHelpers,
-    PresenceManager, MatchManager, ProfileManager, UI, rtdb, ref, update
+    PresenceManager, MatchManager, ProfileManager, UI, ArchitecturalStateManager, rtdb, ref, update
 });
 
 // Wire up FriendsManager.UI
@@ -396,6 +396,14 @@ function bootstrap() {
 // ===========================================
 window.Stonedoku = {
     AppState,
+    firebase: {
+        app: firebaseApp,
+        auth,
+        rtdb,
+        firestore,
+        functions,
+        storage
+    },
     Managers: {
         PresenceManager,
         ProfileManager,
@@ -434,6 +442,13 @@ window.ViewManager = ViewManager;
 window.UI = UI;
 window.ProfileManager = ProfileManager;
 window.PresenceManager = PresenceManager;
+
+// Game functions for E2E tests and legacy support
+window.startSinglePlayerGame = gameFlow.startSinglePlayerGame;
+window.handleRoomUpdate = gameFlow.handleRoomUpdate;
+window.quitGame = gameFlow.quitGame;
+window.navigateCell = gameFlow.navigateCell;
+window.cleanupAfterMatch = gameFlow.cleanupAfterMatch;
 
 // ===========================================
 // Start Application

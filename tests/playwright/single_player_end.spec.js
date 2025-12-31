@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test('single-player loss triggers game-over modal', async ({ page }) => {
   const base = process.env.E2E_BASE || 'http://127.0.0.1:8000/';

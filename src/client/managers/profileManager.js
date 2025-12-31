@@ -17,7 +17,7 @@ import {
     where
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { ref, serverTimestamp, set as rtdbSet } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
-import { storageRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
 export const friendRequestId = (a, b) => {
     const ids = [String(a), String(b)].sort();

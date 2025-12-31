@@ -82,7 +82,7 @@ import { createChatManager } from './src/client/managers/chatManager.js';
 import { AudioManager } from './src/client/managers/audioManager.js';
 import { SudokuGenerator } from './src/client/lib/sudokuGenerator.js';
 import { ProfanityFilter } from './src/client/lib/profanityFilter.js';
-import { BoardIntegritySystem } from './src/client/ui/boardIntegrity.js';
+import { BoardIntegrityHelper } from './src/client/ui/boardIntegrityHelper.js';
 import { createGameHelpers } from './src/client/ui/gameHelpers.js';
 import { createGameUi } from './src/client/ui/gameUi.js';
 
@@ -728,10 +728,10 @@ const MatchManager = createMatchManager({ rtdb, appState: AppState });
 // ===========================================
 // Game UI Helpers and Game UI
 // ===========================================
-const GameHelpers = createGameHelpers({ AppState, BoardIntegritySystem });
+const GameHelpers = createGameHelpers({ AppState, BoardIntegrityHelper });
 const GameUI = createGameUi({
     AppState,
-    BoardIntegritySystem,
+    BoardIntegrityHelper,
     GameHelpers,
     AudioManager,
     CreativeFeatures: globalThis.CreativeFeatures,

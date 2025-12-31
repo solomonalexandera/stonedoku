@@ -2,7 +2,7 @@
   "hosting": {
     "site": "stone-doku",
     "predeploy": [
-      "npm run build"
+      "npx rollup -c"
     ],
     "public": ".",
     "ignore": [

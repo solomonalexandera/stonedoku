@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test('single player playthrough', async ({ browser }) => {
   const context = await browser.newContext();
