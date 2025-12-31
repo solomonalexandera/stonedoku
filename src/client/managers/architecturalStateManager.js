@@ -1,10 +1,10 @@
-import { MotionSystem } from './motionSystem.js';
+import { MotionManager } from './motionManager.js';
 
 /**
- * Architectural State System (Clash of Worlds)
+ * Architectural State Manager (Clash of Worlds)
  * Manages visual states: calm, strain, collapse, restore
  */
-export function createArchitecturalStateSystem({ AppState, MotionSystem: motion = MotionSystem } = {}) {
+export function createArchitecturalStateManager({ AppState, MotionManager: motion = MotionManager } = {}) {
     return {
         _state: 'calm',
         _mistakeChain: 0,

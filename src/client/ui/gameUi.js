@@ -1,9 +1,9 @@
 import { AppState } from '../core/appState.js';
-import { BoardIntegritySystem } from './boardIntegrity.js';
+import { BoardIntegrityHelper } from './boardIntegrityHelper.js';
 
 export function createGameUi({
     AppState: appState = AppState,
-    BoardIntegritySystem: boardIntegrity = BoardIntegritySystem,
+    BoardIntegrityHelper: boardIntegrity = BoardIntegrityHelper,
     GameHelpers: gameHelpers,
     AudioManager: audioManager,
     CreativeFeatures: creativeFeatures = globalThis.CreativeFeatures,

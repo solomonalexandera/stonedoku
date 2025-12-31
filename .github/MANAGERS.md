@@ -87,9 +87,21 @@ This document indexes the primary "manager" objects and domain modules implement
 - **Purpose:** Keyboard navigation, ARIA labels, screen reader announcements.
 - **Location:** `src/client/managers/accessibilityManager.js`
 
-### `TourSystem`
+### `TourManager`
 - **Purpose:** Onboarding tour for new users.
-- **Location:** `src/client/managers/tourSystem.js`
+- **Location:** `src/client/managers/tourManager.js`
+
+### `MotionManager`
+- **Purpose:** Handles animations with reduced motion support.
+- **Location:** `src/client/managers/motionManager.js`
+
+### `ArchitecturalStateManager`
+- **Purpose:** Manages visual states (calm, strain, collapse, restore) for gameplay effects.
+- **Location:** `src/client/managers/architecturalStateManager.js`
+
+### `ChallengeSystemManager`
+- **Purpose:** Handles player challenge flow (sending, accepting, declining challenges).
+- **Location:** `src/client/managers/challengeSystemManager.js`
 
 ## UI Modules (`src/client/ui/`)
 

@@ -1,7 +1,7 @@
 /**
- * Motion System - handles animations with reduced motion support
+ * Motion Manager - handles animations with reduced motion support
  */
-export const MotionSystem = {
+export const MotionManager = {
     prefersReducedMotion() {
         try { 
             return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; 

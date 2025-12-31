@@ -1,4 +1,4 @@
-export { BoardIntegritySystem } from './boardIntegrity.js';
+export { BoardIntegrityHelper } from './boardIntegrityHelper.js';
 export { createGameHelpers } from './gameHelpers.js';
 export { createGameUi } from './gameUi.js';
 export { createUiHelpers } from './uiHelpers.js';

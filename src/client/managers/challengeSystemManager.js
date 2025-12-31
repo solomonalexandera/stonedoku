@@ -1,7 +1,7 @@
 /**
- * Challenge System - handles player challenges
+ * Challenge System Manager - handles player challenges
  */
-export function createChallengeSystem({ rtdb, ref, set, remove, serverTimestamp, AppState, LobbyManager, PresenceSystem, ViewManager, UI, handleRoomUpdate }) {
+export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTimestamp, AppState, LobbyManager, PresenceManager, ViewManager, UI, handleRoomUpdate }) {
     return {
         async sendChallenge(fromUserId, fromName, toUserId) {
             const notificationRef = ref(rtdb, `notifications/${toUserId}/${fromUserId}`);

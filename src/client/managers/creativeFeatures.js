@@ -1,15 +1,15 @@
 /**
- * Creative Features
+ * Creative Features Manager
  * Visual effects for gameplay: streaks, confetti, cell animations, group completion
  */
 
 /**
  * Create Creative Features manager
  * @param {Object} deps - Dependencies
- * @param {Object} deps.MotionSystem - Motion system for reduced-motion checks
+ * @param {Object} deps.MotionManager - Motion manager for reduced-motion checks
  * @returns {Object} Creative Features manager instance
  */
-export function createCreativeFeatures({ MotionSystem } = {}) {
+export function createCreativeFeatures({ MotionManager } = {}) {
     let streak = 0;
 
     const createStreakIndicator = () => {
@@ -41,7 +41,7 @@ export function createCreativeFeatures({ MotionSystem } = {}) {
     };
 
     const showConfetti = () => {
-        if (typeof MotionSystem?.prefersReducedMotion === 'function' && MotionSystem.prefersReducedMotion()) return;
+        if (typeof MotionManager?.prefersReducedMotion === 'function' && MotionManager.prefersReducedMotion()) return;
 
         const colors = ['#d8d1c5', '#c6c1b6', '#9c7b45', '#3f5543', '#0e0f12'];
 

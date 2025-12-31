@@ -1,7 +1,7 @@
 import { AppState } from '../core/appState.js';
 
 // Manages visual fracture/repair effects on the Sudoku board.
-export const BoardIntegritySystem = {
+export const BoardIntegrityHelper = {
     gridEl: null,
     boxCells: Array.from({ length: 9 }, () => []),
     boxRepair: Array(9).fill(0),

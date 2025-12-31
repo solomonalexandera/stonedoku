@@ -1,9 +1,9 @@
-import { MotionSystem } from '../managers/motionSystem.js';
+import { MotionManager } from './motionManager.js';
 
 /**
  * View Manager - handles view transitions and modals
  */
-export function createViewManager({ AppState, MotionSystem: motion = MotionSystem, ArchitecturalStateSystem } = {}) {
+export function createViewManager({ AppState, MotionManager: motion = MotionManager, ArchitecturalStateManager } = {}) {
     return {
         views: ['auth', 'onboarding', 'reset', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch', 'profile', 'updates', 'admin'],
         
@@ -12,8 +12,8 @@ export function createViewManager({ AppState, MotionSystem: motion = MotionSyste
             if (prev === viewName) return;
 
             // Keep architectural effects scoped to gameplay.
-            if (viewName !== 'game' && ArchitecturalStateSystem) {
-                ArchitecturalStateSystem.reset();
+            if (viewName !== 'game' && ArchitecturalStateManager) {
+                ArchitecturalStateManager.reset();
             }
 
             const nextEl = document.getElementById(`${viewName}-view`);

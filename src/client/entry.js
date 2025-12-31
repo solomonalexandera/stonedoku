@@ -104,11 +104,11 @@ import { createLobbyManager } from './managers/lobbyManager.js';
 import { createMatchManager } from './managers/matchManager.js';
 import { createChatManager } from './managers/chatManager.js';
 import { createChallengeManager } from './managers/challengeManager.js';
-import { createChallengeSystem } from './managers/challengeSystem.js';
+import { createChallengeSystemManager } from './managers/challengeSystemManager.js';
 import { createLogManager } from './managers/logManager.js';
 import { AudioManager } from './managers/audioManager.js';
-import { MotionSystem } from './managers/motionSystem.js';
-import { createArchitecturalStateSystem } from './managers/architecturalStateSystem.js';
+import { MotionManager } from './managers/motionManager.js';
+import { createArchitecturalStateManager } from './managers/architecturalStateManager.js';
 import { createCreativeFeatures, CreativeFeatures } from './managers/creativeFeatures.js';
 import { createAccessibilityManager, AccessibilityManager } from './managers/accessibilityManager.js';
 
@@ -118,9 +118,9 @@ import { createUiHelpers } from './ui/uiHelpers.js';
 import { createUiCore } from './ui/uiCore.js';
 import { createGameHelpers } from './ui/gameHelpers.js';
 import { createGameUi } from './ui/gameUi.js';
-import { BoardIntegritySystem } from './ui/boardIntegrity.js';
+import { BoardIntegrityHelper } from './ui/boardIntegrityHelper.js';
 import { createPasswordReset } from './ui/passwordReset.js';
-import { createTourSystem } from './managers/tourSystem.js';
+import { createTourManager } from './managers/tourManager.js';
 import { createCookieConsent, CookieConsent } from './ui/cookieConsent.js';
 import { createLegalModals, LegalModals } from './ui/legalModals.js';
 import { createUpdatesCenter, UpdatesCenter } from './ui/updatesCenter.js';
@@ -160,7 +160,7 @@ ensureAppVersionFresh();
 // ===========================================
 // Initialize Managers
 // ===========================================
-const PresenceSystem = createPresenceManager({ rtdb, appState: AppState });
+const PresenceManager = createPresenceManager({ rtdb, appState: AppState });
 const ProfileManager = createProfileManager({
     firestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs,
     onSnapshot, arrayUnion, arrayRemove, runFsTransaction, fsServerTimestamp, storage, storageRef,
@@ -174,29 +174,29 @@ const MatchManager = createMatchManager({ rtdb, appState: AppState });
 const ChatManager = createChatManager({ rtdb, firestore, appState: AppState, profanityFilter: ProfanityFilter });
 const ChallengeManager = createChallengeManager({ rtdb, lobbyManager: LobbyManager, appState: AppState });
 const LogManager = createLogManager(firestore, () => AppState);
-const ArchitecturalStateSystem = createArchitecturalStateSystem({ AppState, MotionSystem });
+const ArchitecturalStateManager = createArchitecturalStateManager({ AppState, MotionManager });
 
 // ===========================================
 // Initialize UI Components
 // ===========================================
-const ViewManager = createViewManager({ AppState, MotionSystem, ArchitecturalStateSystem });
+const ViewManager = createViewManager({ AppState, MotionManager, ArchitecturalStateManager });
 const UiHelpers = createUiHelpers({
     firestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs,
     onSnapshot, limit, fsServerTimestamp, orderBy, arrayUnion, arrayRemove,
     rtdb, ref, get, onValue, onChildAdded, update, serverTimestamp, remove,
     storage, storageRef, uploadBytes, getDownloadURL,
-    AppState, ViewManager, ProfileManager, PresenceSystem, LobbyManager, MatchManager, ChatManager, AudioManager,
-    MotionSystem, ArchitecturalStateSystem, BoardIntegritySystem,
+    AppState, ViewManager, ProfileManager, PresenceManager, LobbyManager, MatchManager, ChatManager, AudioManager,
+    MotionManager, ArchitecturalStateManager, BoardIntegrityHelper,
     SudokuGenerator, ProfanityFilter, httpsCallable, functions
 });
 const UI = createUiCore({
     getProfile: (uid) => ProfileManager.getProfile(uid),
     rtdb, dbRef: ref, dbGet: get
 });
-const GameHelpers = createGameHelpers({ AppState, BoardIntegritySystem });
+const GameHelpers = createGameHelpers({ AppState, BoardIntegrityHelper });
 const GameUi = createGameUi({
-    AppState, ViewManager, AudioManager, SudokuGenerator, BoardIntegritySystem, GameHelpers,
-    PresenceSystem, MatchManager, ProfileManager, UI, rtdb, ref, update
+    AppState, ViewManager, AudioManager, SudokuGenerator, BoardIntegrityHelper, GameHelpers,
+    PresenceManager, MatchManager, ProfileManager, UI, rtdb, ref, update
 });
 
 // Wire up FriendsManager.UI
@@ -206,17 +206,17 @@ const PasswordReset = createPasswordReset({
     auth, verifyPasswordResetCode, confirmPasswordReset, sendPasswordResetEmail,
     AppState, ViewManager
 });
-const TourSystem = createTourSystem({
+const TourManager = createTourManager({
     AppState, ViewManager, UI, firestore, doc, updateDoc, serverTimestamp: fsServerTimestamp, CookieConsent
 });
 
 // ===========================================
-// Challenge System
+// Challenge System Manager
 // ===========================================
 let handleRoomUpdate; // Forward declaration
-const ChallengeSystem = createChallengeSystem({
+const ChallengeSystemManager = createChallengeSystemManager({
     rtdb, ref, set, remove, serverTimestamp,
-    AppState, LobbyManager, PresenceSystem, ViewManager, UI,
+    AppState, LobbyManager, PresenceManager, ViewManager, UI,
     handleRoomUpdate: (...args) => handleRoomUpdate?.(...args)
 });
 
@@ -225,12 +225,12 @@ const ChallengeSystem = createChallengeSystem({
 // ===========================================
 const gameFlow = createGameFlow({
     AppState, ViewManager, GameUi, GameHelpers, SudokuGenerator, AudioManager,
-    PresenceSystem, LobbyManager, MatchManager, ChatManager, ProfileManager, UI,
+    PresenceManager, LobbyManager, MatchManager, ChatManager, ProfileManager, UI,
     rtdb, ref, get, update, onValue, onChildAdded, off,
-    MotionSystem, ArchitecturalStateSystem, BoardIntegritySystem, CreativeFeatures
+    MotionManager, ArchitecturalStateManager, BoardIntegrityHelper, CreativeFeatures
 });
 
-// Export handleRoomUpdate for ChallengeSystem
+// Export handleRoomUpdate for ChallengeSystemManager
 handleRoomUpdate = gameFlow.handleRoomUpdate;
 
 // ===========================================
@@ -266,8 +266,8 @@ function initFloatingChat() {
 // Profile Page
 // ===========================================
 const ProfilePage = createProfilePage({
-    AppState, ViewManager, PresenceSystem, ProfileManager, LobbyManager,
-    TourSystem, UI, UpdatesCenter, AdminConsole, isRegisteredUser
+    AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager,
+    TourManager, UI, UpdatesCenter, AdminConsole, isRegisteredUser
 });
 
 function initProfilePage() {
@@ -312,7 +312,7 @@ async function handleAuthStateChange(user) {
         }
         
         // Initialize presence
-        PresenceSystem.init(user.uid, getCurrentDisplayName());
+        PresenceManager.init(user.uid, getCurrentDisplayName());
         
         // Enable DM for registered users
         window.ChatWidget?.setDmEnabled?.(isRegisteredUser());
@@ -329,14 +329,14 @@ async function handleAuthStateChange(user) {
         
         // Show lobby
         ViewManager.show('lobby');
-        PresenceSystem.updateActivity('In Lobby');
+        PresenceManager.updateActivity('In Lobby');
         
     } else {
         // Signed out
         AppState.currentUser = null;
         AppState.profile = null;
         AppState.friends = [];
-        PresenceSystem.cleanup();
+        PresenceManager.cleanup();
         window.ChatWidget?.reset?.();
         ViewManager.show('auth');
     }
@@ -352,10 +352,10 @@ const eventSetup = createEventSetup({
     auth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword,
     updateProfile, signOut, deleteUser, deleteDoc, doc, firestore, rtdb, ref, get, update,
     // State & Managers
-    AppState, ViewManager, PresenceSystem, ProfileManager, LobbyManager, MatchManager, ChatManager,
-    GameUi, GameHelpers, AudioManager, UI, ChallengeSystem,
+    AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager, MatchManager, ChatManager,
+    GameUi, GameHelpers, AudioManager, UI, ChallengeSystemManager,
     // Utilities
-    PasswordPolicy, PasswordReset, CookieConsent, OnboardingSystem: null, TourSystem,
+    PasswordPolicy, PasswordReset, CookieConsent, OnboardingManager: null, TourManager,
     getCurrentDisplayName, isRegisteredUser,
     startSinglePlayerGame: gameFlow.startSinglePlayerGame,
     handleRoomUpdate: gameFlow.handleRoomUpdate,
@@ -397,25 +397,27 @@ function bootstrap() {
 window.Stonedoku = {
     AppState,
     Managers: {
-        PresenceSystem,
+        PresenceManager,
         ProfileManager,
         FriendsManager,
         LobbyManager,
         MatchManager,
         ChatManager,
         ChallengeManager,
-        ChallengeSystem,
+        ChallengeSystemManager,
         AudioManager,
         ViewManager,
         GameUi,
         GameHelpers,
         UI,
-        TourSystem,
+        TourManager,
         PasswordReset,
         UpdatesCenter,
         AdminConsole,
         CreativeFeatures,
-        AccessibilityManager
+        AccessibilityManager,
+        MotionManager,
+        ArchitecturalStateManager
     },
     Utils: {
         getCurrentDisplayName,
@@ -431,7 +433,7 @@ window.AppState = AppState;
 window.ViewManager = ViewManager;
 window.UI = UI;
 window.ProfileManager = ProfileManager;
-window.PresenceSystem = PresenceSystem;
+window.PresenceManager = PresenceManager;
 
 // ===========================================
 // Start Application

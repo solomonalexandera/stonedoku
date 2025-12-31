@@ -1,7 +1,7 @@
 /**
- * Tour System - interactive onboarding tour
+ * Tour Manager - interactive onboarding tour
  */
-export function createTourSystem({ AppState, ViewManager, UI, firestore, doc, updateDoc, serverTimestamp, CookieConsent }) {
+export function createTourManager({ AppState, ViewManager, UI, firestore, doc, updateDoc, serverTimestamp, CookieConsent }) {
     return {
         steps: [
             {

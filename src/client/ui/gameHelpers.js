@@ -1,7 +1,7 @@
 import { AppState } from '../core/appState.js';
-import { BoardIntegritySystem } from './boardIntegrity.js';
+import { BoardIntegrityHelper } from './boardIntegrityHelper.js';
 
-export function createGameHelpers({ AppState: appState = AppState, BoardIntegritySystem: boardIntegrity = BoardIntegritySystem } = {}) {
+export function createGameHelpers({ AppState: appState = AppState, BoardIntegrityHelper: boardIntegrity = BoardIntegrityHelper } = {}) {
     const helpers = {
         toolLimitForDifficulty(difficulty) {
             const d = String(difficulty || '').toLowerCase();
