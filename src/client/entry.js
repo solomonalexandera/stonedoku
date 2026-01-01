@@ -108,7 +108,7 @@ import { createLogManager } from './managers/logManager.js';
 import { AudioManager } from './managers/audioManager.js';
 import { MotionUtils } from './lib/motionUtils.js';
 import { createArchitecturalStateManager } from './managers/architecturalStateManager.js';
-import { createCreativeFeatures, CreativeFeatures } from './managers/creativeFeatures.js';
+import { createCreativeFeatures, CreativeFeatures } from './managers/creativeFeaturesManager.js';
 import { createAccessibilityManager, AccessibilityManager } from './managers/accessibilityManager.js';
 import { createOnboardingManager } from './managers/onboardingManager.js';
 

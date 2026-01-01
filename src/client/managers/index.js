@@ -10,7 +10,7 @@ export { createMatchManager } from './matchManager.js';
 export { createPresenceManager } from './presenceManager.js';
 export { createChallengeSystemManager } from './challengeSystemManager.js';
 export { createArchitecturalStateManager } from './architecturalStateManager.js';
-export { createCreativeFeatures, CreativeFeatures } from './creativeFeatures.js';
+export { createCreativeFeatures, CreativeFeatures } from './creativeFeaturesManager.js';
 export { createAccessibilityManager, AccessibilityManager } from './accessibilityManager.js';
 export { createViewManager } from './viewManager.js';
 export { createTourManager } from './tourManager.js';
