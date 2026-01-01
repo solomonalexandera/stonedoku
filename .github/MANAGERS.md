@@ -70,10 +70,10 @@ This document indexes the primary "manager" objects and domain modules implement
 - **Key responsibilities:** Post/read chat messages, moderate message display, and plug into UI chat widgets.
 - **Location:** `src/client/managers/chatManager.js`
 
-### `ChallengeManager`
+### `ChallengeSystemManager`
 - **Purpose:** Send and process challenge invites using RTDB `notifications/`.
-- **Key responsibilities:** Post challenges, listen for them via `onChildAdded`, and handle accept/decline flows.
-- **Location:** `src/client/managers/challengeManager.js`
+- **Key responsibilities:** Post challenges, listen for notifications via `onChildAdded` with stale-notification filtering, and handle accept/decline flows.
+- **Location:** `src/client/managers/challengeSystemManager.js`
 
 ### `AudioManager`
 - **Purpose:** Play audio cues for game events.
@@ -91,10 +91,6 @@ This document indexes the primary "manager" objects and domain modules implement
 - **Purpose:** Onboarding tour for new users.
 - **Location:** `src/client/managers/tourManager.js`
 
-### `MotionManager`
-- **Purpose:** Handles animations with reduced motion support.
-- **Location:** `src/client/managers/motionManager.js`
-
 ### `OnboardingManager`
 - **Purpose:** Multi-step registration flow (username, credentials, avatar) and account creation pipeline.
 - **Key responsibilities:** Validate usernames/passwords, create Firebase Auth users, upload optional avatars, trigger final lobby bootstrap, and offer tour/tutorial links.
@@ -110,43 +106,43 @@ This document indexes the primary "manager" objects and domain modules implement
 
 ## UI Modules (`src/client/ui/`)
 
-### `GameHelpers` & `GameUi`
+### `GameHelpersUi` & `GameUi`
 - **Purpose:** Helpers and UI rendering for the Sudoku board.
 - **Key responsibilities:** Render grid, handle cell selection/input, maintain move history, update remaining counts, and highlight conflicts.
-- **Location:** `src/client/ui/gameHelpers.js`, `src/client/ui/gameUi.js`
+- **Location:** `src/client/ui/gameHelpersUi.js`, `src/client/ui/gameUi.js`
 
-### `UICore`
+### `UiHelpers`
 - **Purpose:** Core UI utilities.
 - **Key responsibilities:** Player lists, profiles, chat messages, stats, badges, toasts.
 - **Location:** `src/client/ui/uiCore.js`
 
-### `CookieConsent`
+### `CookieConsentUi`
 - **Purpose:** GDPR/PECR compliant cookie consent management.
-- **Location:** `src/client/ui/cookieConsent.js`
+- **Location:** `src/client/ui/cookieConsentUi.js`
 
-### `LegalModals`
+### `LegalModalsUi`
 - **Purpose:** Privacy policy, terms of service, cookies, and accessibility modals.
-- **Location:** `src/client/ui/legalModals.js`
+- **Location:** `src/client/ui/legalModalsUi.js`
 
-### `UpdatesCenter`
+### `UpdatesCenterUi`
 - **Purpose:** Community updates feed and banner system (Firestore-driven).
-- **Location:** `src/client/ui/updatesCenter.js`
+- **Location:** `src/client/ui/updatesCenterUi.js`
 
-### `AdminConsole`
+### `AdminConsoleUi`
 - **Purpose:** Admin panel for managing updates, moderation, allowlists.
-- **Location:** `src/client/ui/adminConsole.js`
+- **Location:** `src/client/ui/adminConsoleUi.js`
 
-### `FloatingChat`
+### `FloatingChatUi`
 - **Purpose:** Chat widget UI, direct messages, notifications, and channel management.
-- **Location:** `src/client/ui/floatingChat.js`
+- **Location:** `src/client/ui/floatingChatUi.js`
 
-### `ProfilePage`
+### `ProfilePageUi`
 - **Purpose:** Profile page initialization, editing, social sharing, and URL routing.
-- **Location:** `src/client/ui/profilePage.js`
+- **Location:** `src/client/ui/profilePageUi.js`
 
-### `PasswordReset`
+### `PasswordResetUi`
 - **Purpose:** Password reset flow UI.
-- **Location:** `src/client/ui/passwordReset.js`
+- **Location:** `src/client/ui/passwordResetUi.js`
 
 ## Libraries (`src/client/lib/`)
 
@@ -162,9 +158,13 @@ This document indexes the primary "manager" objects and domain modules implement
 - **Purpose:** Password validation matching Firebase enforcement.
 - **Location:** `src/client/lib/passwordPolicy.js`
 
-### `VersionManager`
+### `MotionUtils`
+- **Purpose:** Handles animations with reduced motion support.
+- **Location:** `src/client/lib/motionUtils.js`
+
+### `VersionUtils`
 - **Purpose:** App version and cache management.
-- **Location:** `src/client/lib/versionManager.js`
+- **Location:** `src/client/lib/versionUtils.js`
 
 ## Notes and contributor guidance
 - This file should reflect the managers and modules in the `src/client/` directory. If you add or rename a module, update this document.

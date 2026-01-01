@@ -1,5 +1,5 @@
 import { AppState } from '../core/appState.js';
-import { BoardIntegrityHelper } from './boardIntegrityHelper.js';
+import { BoardIntegrityHelper } from './boardIntegrityUi.js';
 
 export function createGameUi({
     AppState: appState = AppState,

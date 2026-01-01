@@ -17,15 +17,39 @@ export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTim
         
         listenToNotifications(userId, callback) {
             const notificationsRef = ref(rtdb, `notifications/${userId}`);
+            const attachedAt = Date.now();
+            const STALE_THRESHOLD_MS = 30000; // 30 seconds - ignore notifications older than this on page load
+            
             const listener = onChildAdded(notificationsRef, async (snapshot) => {
+                const data = snapshot.val();
+                
+                // Check if notification is stale (from before we attached the listener)
+                // This prevents re-processing old notifications on page refresh
+                let notificationTime = 0;
+                if (data?.timestamp) {
+                    notificationTime = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
+                }
+                const isStale = notificationTime > 0 && (attachedAt - notificationTime) > STALE_THRESHOLD_MS;
+                
+                // Always remove the notification from database
+                try { 
+                    await remove(snapshot.ref); 
+                } catch (err) { 
+                    console.warn('Failed to clear notification', err); 
+                }
+                
+                // Only process if not stale
+                if (isStale) {
+                    console.log('Skipping stale notification:', snapshot.key);
+                    return;
+                }
+                
                 try {
                     if (callback) {
-                        await callback(snapshot.key, snapshot.val());
+                        await callback(snapshot.key, data);
                     }
                 } catch (e) {
                     console.warn('Notification callback failed', e);
-                } finally {
-                    try { await remove(snapshot.ref); } catch (err) { console.warn('Failed to clear notification', err); }
                 }
             });
             AppState.listeners.push({ ref: notificationsRef, callback: listener });

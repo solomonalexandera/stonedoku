@@ -94,7 +94,7 @@ import { createEventSetup } from './core/eventSetup.js';
 import { PasswordPolicy } from './lib/passwordPolicy.js';
 import { SudokuGenerator } from './lib/sudokuGenerator.js';
 import { ProfanityFilter } from './lib/profanityFilter.js';
-import { ensureAppVersionFresh } from './lib/versionManager.js';
+import { ensureAppVersionFresh } from './lib/versionUtils.js';
 
 // Managers
 import { createPresenceManager } from './managers/presenceManager.js';
@@ -103,11 +103,10 @@ import { createFriendsManager } from './managers/friendsManager.js';
 import { createLobbyManager } from './managers/lobbyManager.js';
 import { createMatchManager } from './managers/matchManager.js';
 import { createChatManager } from './managers/chatManager.js';
-import { createChallengeManager } from './managers/challengeManager.js';
 import { createChallengeSystemManager } from './managers/challengeSystemManager.js';
 import { createLogManager } from './managers/logManager.js';
 import { AudioManager } from './managers/audioManager.js';
-import { MotionManager } from './managers/motionManager.js';
+import { MotionUtils } from './lib/motionUtils.js';
 import { createArchitecturalStateManager } from './managers/architecturalStateManager.js';
 import { createCreativeFeatures, CreativeFeatures } from './managers/creativeFeatures.js';
 import { createAccessibilityManager, AccessibilityManager } from './managers/accessibilityManager.js';
@@ -116,18 +115,17 @@ import { createOnboardingManager } from './managers/onboardingManager.js';
 // UI
 import { createViewManager } from './managers/viewManager.js';
 import { createUiHelpers } from './ui/uiHelpers.js';
-import { createUiCore } from './ui/uiCore.js';
-import { createGameHelpers } from './ui/gameHelpers.js';
+import { createGameHelpers } from './ui/gameHelpersUi.js';
 import { createGameUi } from './ui/gameUi.js';
-import { BoardIntegrityHelper } from './ui/boardIntegrityHelper.js';
-import { createPasswordReset } from './ui/passwordReset.js';
+import { BoardIntegrityHelper } from './ui/boardIntegrityUi.js';
+import { createPasswordReset } from './ui/passwordResetUi.js';
 import { createTourManager } from './managers/tourManager.js';
-import { createCookieConsent, CookieConsent } from './ui/cookieConsent.js';
-import { createLegalModals, LegalModals } from './ui/legalModals.js';
-import { createUpdatesCenter, UpdatesCenter } from './ui/updatesCenter.js';
-import { createAdminConsole, AdminConsole } from './ui/adminConsole.js';
-import { createFloatingChat } from './ui/floatingChat.js';
-import { createProfilePage, handleVanityUrl, handleUpdatesUrl, handleAdminUrl } from './ui/profilePage.js';
+import { createCookieConsent, CookieConsent } from './ui/cookieConsentUi.js';
+import { createLegalModals, LegalModals } from './ui/legalModalsUi.js';
+import { createUpdatesCenter, UpdatesCenter } from './ui/updatesCenterUi.js';
+import { createAdminConsole, AdminConsole } from './ui/adminConsoleUi.js';
+import { createFloatingChat } from './ui/floatingChatUi.js';
+import { createProfilePage, handleVanityUrl, handleUpdatesUrl, handleAdminUrl } from './ui/profilePageUi.js';
 
 // ===========================================
 // Firebase Configuration
@@ -173,27 +171,24 @@ const FriendsManager = createFriendsManager({
 const LobbyManager = createLobbyManager({ rtdb, appState: AppState });
 const MatchManager = createMatchManager({ rtdb, appState: AppState });
 const ChatManager = createChatManager({ rtdb, firestore, appState: AppState, profanityFilter: ProfanityFilter });
-const ChallengeManager = createChallengeManager({ rtdb, lobbyManager: LobbyManager, appState: AppState });
 const LogManager = createLogManager(firestore, () => AppState);
-const ArchitecturalStateManager = createArchitecturalStateManager({ AppState, MotionManager });
+const ArchitecturalStateManager = createArchitecturalStateManager({ AppState, MotionUtils });
 
 // ===========================================
 // Initialize UI Components
 // ===========================================
-const ViewManager = createViewManager({ AppState, MotionManager, ArchitecturalStateManager });
+const ViewManager = createViewManager({ AppState, MotionUtils, ArchitecturalStateManager });
 const UiHelpers = createUiHelpers({
     firestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs,
     onSnapshot, limit, fsServerTimestamp, orderBy, arrayUnion, arrayRemove,
     rtdb, ref, get, onValue, onChildAdded, update, serverTimestamp, remove,
     storage, storageRef, uploadBytes, getDownloadURL,
     AppState, ViewManager, ProfileManager, PresenceManager, LobbyManager, MatchManager, ChatManager, AudioManager,
-    MotionManager, ArchitecturalStateManager, BoardIntegrityHelper,
+    MotionUtils, ArchitecturalStateManager, BoardIntegrityHelper,
     SudokuGenerator, ProfanityFilter, httpsCallable, functions
 });
-const UI = createUiCore({
-    getProfile: (uid) => ProfileManager.getProfile(uid),
-    rtdb, dbRef: ref, dbGet: get
-});
+// Use UiHelpers as the primary UI object - it has the most complete functionality
+const UI = UiHelpers;
 const GameHelpers = createGameHelpers({ AppState, BoardIntegrityHelper });
 const GameUi = createGameUi({
     AppState, ViewManager, AudioManager, SudokuGenerator, BoardIntegrityHelper, GameHelpers,
@@ -229,7 +224,7 @@ const gameFlow = createGameFlow({
     AppState, ViewManager, GameUI: GameUi, GameHelpers, SudokuGenerator, AudioManager,
     PresenceManager, LobbyManager, MatchManager, ChatManager, ProfileManager, UI,
     rtdb, rtdbFns: { ref, get, update, onValue, onChildAdded, off },
-    MotionManager, ArchitecturalStateManager, BoardIntegrityHelper, CreativeFeatures
+    MotionUtils, ArchitecturalStateManager, BoardIntegrityHelper, CreativeFeatures
 });
 
 // Export handleRoomUpdate for ChallengeSystemManager
@@ -521,7 +516,7 @@ async function handleAuthStateChange(user) {
             createUserWithEmailAndPassword,
             updateProfile,
             TourManager,
-            MotionManager,
+            MotionUtils,
             UI,
             startSinglePlayerGame: gameFlow.startSinglePlayerGame,
             onCompleteBootstrap: async () => {
@@ -549,6 +544,9 @@ function bootstrap() {
     
     // Initialize cookie consent first
     CookieConsent.init?.();
+    
+    // Initialize accessibility features (ARIA labels, screen reader)
+    AccessibilityManager.init?.();
     
     // Set up event listeners
     eventSetup.setup();
@@ -582,7 +580,7 @@ window.Stonedoku = {
         LobbyManager,
         MatchManager,
         ChatManager,
-        ChallengeManager,
+        ChallengeManager: ChallengeSystemManager,
         ChallengeSystemManager,
         AudioManager,
         ViewManager,
@@ -596,7 +594,7 @@ window.Stonedoku = {
         AdminConsole,
         CreativeFeatures,
         AccessibilityManager,
-        MotionManager,
+        MotionUtils,
         ArchitecturalStateManager
     },
     Utils: {

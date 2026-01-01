@@ -1,7 +1,7 @@
 /**
- * Motion Manager - handles animations with reduced motion support
+ * Motion Utils - handles animations with reduced motion support
  */
-export const MotionManager = {
+export const MotionUtils = {
     prefersReducedMotion() {
         try { 
             return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; 

@@ -1,16 +1,25 @@
 # /src/client/ui
 
-UI-focused helpers and renderers that sit above pure logic but below view-level wiring.
+UI components and DOM manipulation modules. These handle rendering, user interaction, and visual presentation.
 
-## Naming conventions
-- File names are lowerCamelCase mirroring their primary export (e.g., `gameHelpers.js` exports `createGameHelpers`).
-- Factories use a `createX` prefix; stateful singletons use PascalCase (e.g., `BoardIntegrityHelper`).
-- Prefer human-readable words; avoid opaque abbreviations.
-- Keep UI helpers presentation-focused; heavy domain logic belongs in managers or libs.
+## Conventions
+- File names are lowerCamelCase with `Ui` suffix (e.g., `adminConsoleUi.js`)
+- Factory pattern: `createXxx(deps)` for components with complex dependencies
+- Singleton pattern: `Xxx` for simple helpers
+- Focus on presentation; business logic belongs in managers
 
 ## Inventory
-- `boardIntegrityHelper.js` – grid integrity helpers for single/versus boards.
-- `gameHelpers.js` – game-state helpers (tool limits, progress, highlights).
-- `gameUi.js` – Sudoku board rendering and interaction wiring.
-- `uiHelpers.js` – general UI utilities (toasts, profile overlays, badge rendering).
-- `index.js` – barrel exports.
+| File | Export | Description |
+|------|--------|-------------|
+| `gameUi.js` | `createGameUi` | Sudoku board rendering and cell interactions |
+| `gameHelpersUi.js` | `createGameHelpers` | Tool limits, progress, highlights |
+| `boardIntegrityUi.js` | `BoardIntegrityHelper` | Grid fracture/repair visual effects |
+| `uiHelpers.js` | `createUiHelpers` | Toasts, profiles, mini-profiles, badges |
+| `floatingChatUi.js` | `createFloatingChat` | Chat widget UI |
+| `profilePageUi.js` | `createProfilePage` | Profile view and editing |
+| `passwordResetUi.js` | `createPasswordReset` | Password reset UI flow |
+| `cookieConsentUi.js` | `createCookieConsent` | Cookie consent banner |
+| `legalModalsUi.js` | `createLegalModals` | Terms/privacy modals |
+| `updatesCenterUi.js` | `createUpdatesCenter` | News/updates feed |
+| `adminConsoleUi.js` | `createAdminConsole` | Admin moderation panel |
+| `index.js` | - | Barrel exports |

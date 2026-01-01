@@ -3,4 +3,5 @@
 export { SudokuGenerator } from './sudokuGenerator.js';
 export { ProfanityFilter } from './profanityFilter.js';
 export { PasswordPolicy } from './passwordPolicy.js';
-export { ensureAppVersionFresh, clearAllCachesAndServiceWorkers, clearAllCookies } from './versionManager.js';
+export { MotionUtils } from './motionUtils.js';
+export { ensureAppVersionFresh, clearAllCachesAndServiceWorkers, clearAllCookies } from './versionUtils.js';

@@ -1,91 +1,86 @@
 # Stonedoku Source Directory Structure
 
-This directory contains all application source code, split into client and server:
+This directory contains all application source code, organized by responsibility.
 
-## `/src/client/` - Frontend (Browser)
+## Directory Structure
 
 ```
-client/
-├── core/           # Firebase initialization, config, state
-│   ├── appState.js         # Central application state object
-│   ├── authFlow.js         # Authentication state management
-│   ├── firebase.js         # Firebase SDK setup and exports
-│   ├── gameFlow.js         # Game initialization and match flow
-│   └── index.js            # Barrel exports
-├── lib/            # Pure utility libraries
+src/client/
+├── core/           # Application bootstrap and configuration
+│   ├── appState.js         # Central state container
+│   ├── authFlow.js         # Auth persistence helpers
+│   ├── eventSetup.js       # DOM event listeners
+│   ├── firebase.js         # Firebase SDK initialization
+│   ├── gameFlow.js         # Game initialization & coordination
+│   └── index.js
+│
+├── lib/            # Pure utility libraries (no state, no side effects)
+│   ├── motionUtils.js      # Animation with reduced-motion support
 │   ├── passwordPolicy.js   # Password validation
 │   ├── profanityFilter.js  # Chat content filtering
 │   ├── sudokuGenerator.js  # Puzzle generation
-│   ├── versionManager.js   # App version/cache management
+│   ├── versionUtils.js     # Version/cache management
 │   └── index.js
-├── managers/       # Stateful services (factory pattern)
-│   ├── accessibilityManager.js  # ARIA, keyboard nav, announcements
-│   ├── architecturalStateManager.js  # Visual state effects
-│   ├── audioManager.js          # Sound effects
-│   ├── challengeManager.js      # Player challenges (RTDB)
-│   ├── challengeSystemManager.js # Challenge notifications
-│   ├── chatManager.js           # Chat (Firestore + RTDB)
-│   ├── creativeFeatures.js      # Streaks, confetti, animations
-│   ├── friendsManager.js        # Friends list
-│   ├── lobbyManager.js          # Game rooms
-│   ├── logManager.js            # Client logging to Firestore
-│   ├── matchManager.js          # 1v1 match state
-│   ├── motionManager.js         # Animation helpers
-│   ├── presenceManager.js       # Online presence
-│   ├── profileManager.js        # User profiles
-│   ├── tourManager.js           # Onboarding tour
-│   ├── viewManager.js           # View/modal transitions
+│
+├── managers/       # Stateful services (factory pattern: createXxxManager)
+│   ├── accessibilityManager.js   # ARIA, keyboard nav
+│   ├── architecturalStateManager.js # Board fracture effects
+│   ├── audioManager.js           # Sound effects
+│   ├── challengeSystemManager.js # Player challenges
+│   ├── chatManager.js            # Global/DM/game chat
+│   ├── creativeFeatures.js       # Streaks, confetti
+│   ├── friendsManager.js         # Friends list UI
+│   ├── lobbyManager.js           # Game rooms
+│   ├── logManager.js             # Client logging
+│   ├── matchManager.js           # 1v1 match state
+│   ├── onboardingManager.js      # Registration wizard
+│   ├── presenceManager.js        # Online presence
+│   ├── profileManager.js         # User profiles
+│   ├── tourManager.js            # Onboarding tour
+│   ├── viewManager.js            # View navigation
 │   └── index.js
-├── ui/             # UI components and view controllers
-│   ├── adminConsole.js       # Admin panel for updates/moderation
-│   ├── boardIntegrityHelper.js # Sudoku board visual effects
-│   ├── cookieConsent.js      # GDPR/PECR cookie consent
-│   ├── gameHelpers.js        # Game utility functions
-│   ├── gameUi.js             # Main game UI
-│   ├── legalModals.js        # Privacy, terms, accessibility modals
-│   ├── passwordReset.js      # Password reset flow
-│   ├── uiCore.js             # Player list, profiles, toasts
-│   ├── uiHelpers.js          # Generic UI utilities
-│   ├── updatesCenter.js      # Community updates feed/banner
+│
+├── ui/             # UI components and DOM manipulation (suffix: Ui)
+│   ├── adminConsoleUi.js     # Admin panel
+│   ├── boardIntegrityUi.js   # Board visual effects
+│   ├── cookieConsentUi.js    # GDPR consent
+│   ├── floatingChatUi.js     # Chat widget
+│   ├── gameHelpersUi.js      # Game UI utilities
+│   ├── gameUi.js             # Sudoku board UI
+│   ├── legalModalsUi.js      # Terms/privacy modals
+│   ├── passwordResetUi.js    # Password reset UI
+│   ├── profilePageUi.js      # Profile view
+│   ├── uiHelpers.js          # Toasts, profiles, badges
+│   ├── updatesCenterUi.js    # News feed
 │   └── index.js
-├── appState.js     # (Legacy) Central application state
-└── entry.js        # (Future) Main entry point
-```
-
-## `/src/server/` - Backend (Firebase Functions)
-
-Symlink to `../functions/src/` for unified structure.
-
-```
-server/ -> ../functions/src/
-├── api.ts          # HTTP API endpoints
-├── firebaseAdmin.ts # Admin SDK setup
-├── friends.ts      # Friend request triggers
-├── index.ts        # Function exports
-├── mail.ts         # Email notifications
-├── mailer.ts       # Mailer triggers
-├── moderation.ts   # Content moderation
-└── vanity.ts       # Vanity URL lookup
+│
+└── entry.js        # Main application entry point
 ```
 
 ## Design Principles
 
-1. **Factory Pattern**: Most managers use `createXxxManager({ deps })` for testability
-2. **Dependency Injection**: Managers receive Firebase refs, AppState, etc. as parameters
-3. **Barrel Exports**: Each subdirectory has `index.js` for clean imports
-4. **Separation of Concerns**:
-   - `lib/` = Pure functions, no side effects
-   - `managers/` = Stateful services with Firebase integration
-   - `ui/` = DOM manipulation and view logic
-   - `core/` = Firebase initialization and config
+| Principle | Description |
+|-----------|-------------|
+| **Factory Pattern** | `createXxxManager({ deps })` for testability |
+| **Dependency Injection** | Firebase, AppState passed as parameters |
+| **Barrel Exports** | Each directory has `index.js` |
+| **Separation of Concerns** | lib=pure, managers=state, ui=DOM, core=bootstrap |
+
+## Module Categories
+
+- **lib/** - Pure functions, no side effects, no state (suffix: `Utils`)
+- **managers/** - Stateful services with Firebase integration (suffix: `Manager`)
+- **ui/** - DOM manipulation and view logic (suffix: `Ui`)
+- **core/** - Firebase init and app configuration
 
 ## Entry Point
 
-The main application entry point is `src/client/entry.js`. This file:
-- Initializes Firebase services
-- Creates all manager instances
-- Sets up auth state listener
-- Bootstraps the application
+`src/client/entry.js` is the main entry point:
+1. Initializes Firebase services
+2. Creates all manager instances  
+3. Sets up auth state listener
+4. Bootstraps the application
 
-The legacy `app.js` in the root directory is deprecated and kept only for fallback during transition.
-See `.github/MANAGERS.md` for the complete manager reference.
+The legacy `app.js` in root is deprecated.
+
+See `.github/MANAGERS.md` for complete manager documentation.

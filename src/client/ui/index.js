@@ -1,19 +1,20 @@
-export { BoardIntegrityHelper } from './boardIntegrityHelper.js';
-export { createGameHelpers } from './gameHelpers.js';
+// src/client/ui/index.js
+// Barrel file for UI modules.
+export { BoardIntegrityHelper } from './boardIntegrityUi.js';
+export { createGameHelpers } from './gameHelpersUi.js';
 export { createGameUi } from './gameUi.js';
 export { createUiHelpers } from './uiHelpers.js';
-export { createPasswordReset } from './passwordReset.js';
-export { createUiCore } from './uiCore.js';
-export { createCookieConsent, CookieConsent } from './cookieConsent.js';
-export { createLegalModals, LegalModals } from './legalModals.js';
-export { createUpdatesCenter, UpdatesCenter } from './updatesCenter.js';
-export { createAdminConsole, AdminConsole } from './adminConsole.js';
+export { createPasswordReset } from './passwordResetUi.js';
+export { createCookieConsent, CookieConsent } from './cookieConsentUi.js';
+export { createLegalModals, LegalModals } from './legalModalsUi.js';
+export { createUpdatesCenter, UpdatesCenter } from './updatesCenterUi.js';
+export { createAdminConsole, AdminConsole } from './adminConsoleUi.js';
 export {
     createFloatingChat,
     createNotificationCenter,
     normalizeTimestamp,
     normalizeChatMessage
-} from './floatingChat.js';
+} from './floatingChatUi.js';
 export {
     createProfilePage,
     initProfilePage,
@@ -23,4 +24,4 @@ export {
     handleUpdatesUrl,
     handleAdminUrl,
     waitForAuthReady
-} from './profilePage.js';
+} from './profilePageUi.js';

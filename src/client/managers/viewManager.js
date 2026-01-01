@@ -1,9 +1,9 @@
-import { MotionManager } from './motionManager.js';
+import { MotionUtils } from '../lib/motionUtils.js';
 
 /**
  * View Manager - handles view transitions and modals
  */
-export function createViewManager({ AppState, MotionManager: motion = MotionManager, ArchitecturalStateManager } = {}) {
+export function createViewManager({ AppState, MotionUtils: motion = MotionUtils, ArchitecturalStateManager } = {}) {
     return {
         views: ['auth', 'onboarding', 'reset', 'lobby', 'waiting', 'pregame-lobby', 'game', 'postmatch', 'profile', 'updates', 'admin'],
         

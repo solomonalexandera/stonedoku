@@ -1,13 +1,18 @@
 # Client Libraries
 
-Shared client-side libraries extracted from the monolithic `app.js` during refactor.
+Pure utility modules with no side effects or internal state. These can be imported and used anywhere without causing application state changes.
 
 ## Naming conventions
-- File names are lowerCamelCase and map directly to their exported symbols (e.g., `profanityFilter.js` exports `ProfanityFilter`).
-- Use PascalCase for class-like exports and `createX` for factories. Keep names descriptive and human readable.
-- Modules here should remain side-effect free (except when a factory is explicitly created).
+- File names are lowerCamelCase with `Utils` suffix (e.g., `motionUtils.js`)
+- Exports are PascalCase (e.g., `MotionUtils`)
+- All modules are side-effect free
 
 ## Inventory
-- `sudokuGenerator.js` – puzzle generator and solver used by game and tests.
-- `profanityFilter.js` – lightweight client-side profanity masking.
-- `index.js` – barrel exports.
+| File | Export | Description |
+|------|--------|-------------|
+| `sudokuGenerator.js` | `SudokuGenerator` | Puzzle generator and solver |
+| `profanityFilter.js` | `ProfanityFilter` | Lightweight profanity masking |
+| `passwordPolicy.js` | `PasswordPolicy` | Password strength validation |
+| `motionUtils.js` | `MotionUtils` | Animation utilities with reduced-motion support |
+| `versionUtils.js` | `ensureAppVersionFresh` | Version checking and cache management |
+| `index.js` | - | Barrel exports |

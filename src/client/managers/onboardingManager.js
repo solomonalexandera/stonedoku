@@ -11,7 +11,7 @@ export function createOnboardingManager({
     createUserWithEmailAndPassword,
     updateProfile,
     TourManager,
-    MotionManager,
+    MotionUtils,
     UI,
     startSinglePlayerGame,
     onCompleteBootstrap,
@@ -335,7 +335,7 @@ export function createOnboardingManager({
     };
 
     const showConfetti = () => {
-        if (MotionManager?.prefersReducedMotion?.()) return;
+        if (MotionUtils?.prefersReducedMotion?.()) return;
         const container = getEl('onboarding-confetti');
         if (!container) return;
         const colors = ['#d8d1c5', '#c6c1b6', '#9c7b45', '#3f5543', '#0e0f12'];
