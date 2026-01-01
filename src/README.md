@@ -23,12 +23,12 @@ src/client/
 │   └── index.js
 │
 ├── managers/       # Stateful services (factory pattern: createXxxManager)
-│   ├── accessibilityManager.js   # ARIA, keyboard nav
+│   ├── accessibilityManager.js   # ARIA labels, screen reader
 │   ├── architecturalStateManager.js # Board fracture effects
 │   ├── audioManager.js           # Sound effects
 │   ├── challengeSystemManager.js # Player challenges
 │   ├── chatManager.js            # Global/DM/game chat
-│   ├── creativeFeatures.js       # Streaks, confetti
+│   ├── creativeFeaturesManager.js # Streaks, confetti
 │   ├── friendsManager.js         # Friends list UI
 │   ├── lobbyManager.js           # Game rooms
 │   ├── logManager.js             # Client logging

@@ -478,6 +478,11 @@ async function handleAuthStateChange(user) {
         // Listen for challenge notifications
         ChallengeSystemManager.listenToNotifications?.(user.uid, handleNotification);
         
+        // Initialize admin state if profile has isAdmin flag
+        if (profileData?.isAdmin || isRegisteredUser(user, profileData)) {
+            AdminConsole.refreshAdminState?.();
+        }
+        
     } else {
         // Signed out
         AppState.currentUser = null;

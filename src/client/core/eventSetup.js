@@ -463,8 +463,59 @@ export function setupGameListeners(deps) {
     document.getElementById('copy-code')?.addEventListener('click', () => {
         const code = document.getElementById('display-room-code').textContent;
         navigator.clipboard.writeText(code).then(() => {
-            alert('Code copied to clipboard!');
+            UI?.showToast?.('Code copied to clipboard!', 'success') || alert('Code copied to clipboard!');
+        }).catch(() => {
+            alert(`Room code: ${code}`);
         });
+    });
+
+    // Share room code
+    document.getElementById('share-code')?.addEventListener('click', async () => {
+        const code = document.getElementById('display-room-code')?.textContent || '';
+        const shareUrl = `${window.location.origin}?join=${code}`;
+        const shareData = {
+            title: 'Join my Stonedoku game!',
+            text: `Join my Stonedoku 1v1 match! Room code: ${code}`,
+            url: shareUrl
+        };
+        
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (e) {
+                // User cancelled or share failed, fall back to clipboard
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    UI?.showToast?.('Link copied to clipboard!', 'success');
+                }).catch(() => {
+                    alert(`Share link: ${shareUrl}`);
+                });
+            }
+        } else {
+            // No native share, copy to clipboard
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                UI?.showToast?.('Link copied to clipboard!', 'success');
+            }).catch(() => {
+                alert(`Share link: ${shareUrl}`);
+            });
+        }
+    });
+
+    // QR code for room
+    document.getElementById('qr-code')?.addEventListener('click', () => {
+        const code = document.getElementById('display-room-code')?.textContent || '';
+        const qrContainer = document.getElementById('room-qr');
+        const qrImg = document.getElementById('room-qr-img');
+        
+        if (!qrContainer || !qrImg) return;
+        
+        if (qrContainer.style.display === 'none' || !qrContainer.style.display) {
+            // Generate QR code using a free API
+            const shareUrl = `${window.location.origin}?join=${code}`;
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
+            qrContainer.style.display = 'block';
+        } else {
+            qrContainer.style.display = 'none';
+        }
     });
 
     // Ready up button

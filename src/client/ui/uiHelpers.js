@@ -88,7 +88,6 @@ export function createUiHelpers({
             tooltip.style.left = `${rect.right + 10}px`;
             tooltip.style.top = `${rect.top - 10}px`;
 
-            const tooltipRect = tooltip.getBoundingClientRect();
             if (rect.right + 200 > window.innerWidth) {
                 tooltip.style.left = `${rect.left - 200}px`;
             }
@@ -96,12 +95,21 @@ export function createUiHelpers({
             tooltip.querySelector('.hover-profile-name').textContent = basicData?.displayName || 'Anonymous';
             tooltip.querySelector('#hover-activity').textContent = basicData?.current_activity || 'Online';
 
-            tooltip.style.display = 'block';
-
+            // Set up action buttons
+            const dmBtn = tooltip.querySelector('#hover-dm-btn');
+            const friendBtn = tooltip.querySelector('#hover-friend-btn');
+            const actionsDiv = tooltip.querySelector('.hover-profile-actions');
+            
+            const isSelf = AppState.currentUser && userId === AppState.currentUser.uid;
+            const viewerCanSocial = isRegisteredUser?.();
+            
+            // Fetch profile to check if target is guest
+            let targetIsGuest = true;
             try {
                 const profile = await ProfileManager?.getProfile?.(userId);
                 if (profile?.exists()) {
                     const data = profile.data();
+                    targetIsGuest = !data?.email;
                     const wins = data.stats?.wins || 0;
                     const losses = data.stats?.losses || 0;
                     const total = wins + losses;
@@ -114,13 +122,63 @@ export function createUiHelpers({
             } catch (e) {
                 console.warn('Could not fetch profile for hover:', e);
             }
+
+            const canSocial = viewerCanSocial && !targetIsGuest && !isSelf;
+
+            // Show/hide buttons based on permissions
+            if (actionsDiv) {
+                actionsDiv.style.display = canSocial ? 'flex' : 'none';
+            }
+
+            if (dmBtn && canSocial) {
+                // Remove old listener and add new one
+                const newDmBtn = dmBtn.cloneNode(true);
+                dmBtn.parentNode.replaceChild(newDmBtn, dmBtn);
+                newDmBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    ui.hideHoverProfile();
+                    try {
+                        await window.ChatWidget?.openDm?.(userId);
+                    } catch (err) {
+                        console.warn('DM open failed:', err);
+                    }
+                });
+            }
+
+            if (friendBtn && canSocial) {
+                const newFriendBtn = friendBtn.cloneNode(true);
+                friendBtn.parentNode.replaceChild(newFriendBtn, friendBtn);
+                newFriendBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    ui.hideHoverProfile();
+                    try {
+                        const result = await ProfileManager?.sendFriendRequest?.(AppState.currentUser.uid, userId);
+                        const accepted = result === 'accepted_existing';
+                        ui.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
+                    } catch (err) {
+                        console.warn('Friend request failed:', err);
+                        ui.showToast(err?.message || 'Failed to send friend request.', 'error');
+                    }
+                });
+            }
+
+            tooltip.style.display = 'block';
+            
+            // Keep tooltip visible while mouse is over it
+            tooltip.onmouseenter = () => {
+                if (ui.hoverTimeout) {
+                    clearTimeout(ui.hoverTimeout);
+                    ui.hoverTimeout = null;
+                }
+            };
+            tooltip.onmouseleave = () => ui.hideHoverProfile();
         },
 
         hideHoverProfile() {
             ui.hoverTimeout = setTimeout(() => {
                 const tooltip = document.getElementById('hover-profile');
                 if (tooltip) tooltip.style.display = 'none';
-            }, 100);
+            }, 300);
         },
 
         escapeHtml(text) {

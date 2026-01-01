@@ -4,7 +4,7 @@ Stateful service modules that manage application data, state, and coordinate ope
 
 ## Conventions
 - One manager per file
-- File names are lowerCamelCase (e.g., `chatManager.js`)
+- File names are lowerCamelCase with `Manager` suffix (e.g., `chatManager.js`)
 - Factory pattern: `createXxxManager(deps)` returns instance
 - Singleton pattern: `XxxManager` object (for stateless services with init)
 - Managers may import from `/lib` and `/ui`
@@ -24,8 +24,8 @@ Stateful service modules that manage application data, state, and coordinate ope
 | `viewManager.js` | `createViewManager` | SPA view navigation |
 | `tourManager.js` | `createTourManager` | New user onboarding tour |
 | `onboardingManager.js` | `createOnboardingManager` | Account registration wizard |
-| `creativeFeatures.js` | `createCreativeFeatures` | Streak, confetti, cell animations |
+| `creativeFeaturesManager.js` | `createCreativeFeatures` | Streak, confetti, cell animations |
 | `architecturalStateManager.js` | `createArchitecturalStateManager` | Board fracture/repair effects |
-| `accessibilityManager.js` | `createAccessibilityManager` | Keyboard nav, ARIA, screen readers |
+| `accessibilityManager.js` | `AccessibilityManager` | ARIA labels, screen reader announcements |
 | `logManager.js` | `createLogManager` | Client-side logging to Firestore |
 | `index.js` | - | Barrel exports |
