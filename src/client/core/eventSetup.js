@@ -6,6 +6,42 @@
  */
 
 /**
+ * Password visibility toggle setup
+ */
+export function setupPasswordToggles() {
+    const passwordToggles = [
+        'signin-password-toggle',
+        'onboard-password-toggle',
+        'onboard-confirm-toggle',
+        'reset-new-password-toggle',
+        'reset-confirm-password-toggle'
+    ];
+
+    passwordToggles.forEach(toggleId => {
+        const toggleBtn = document.getElementById(toggleId);
+        if (!toggleBtn) return;
+
+        // Find the associated input field
+        const inputId = toggleId.replace('-toggle', '');
+        const input = document.getElementById(inputId);
+        if (!input) return;
+
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Toggle password visibility
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            
+            // Update button state
+            toggleBtn.setAttribute('aria-pressed', (!isPassword).toString());
+            toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+        });
+    });
+}
+
+/**
  * Theme management utilities
  */
 export function applyTheme(mode, CookieConsent) {
@@ -101,7 +137,7 @@ export function setupHeaderMenu() {
  */
 export function setupAuthListeners(deps) {
     const { auth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-            updateProfile, signOut, deleteUser, deleteDoc, doc, firestore,
+            updateProfile, signOut, deleteUser, deleteDoc, doc, getDoc, firestore,
             AppState, ViewManager, PresenceManager, ProfileManager, PasswordPolicy, PasswordReset,
             OnboardingManager } = deps;
 
@@ -144,25 +180,64 @@ export function setupAuthListeners(deps) {
         OnboardingManager?.start();
     });
 
-    // Sign In form
+    // Sign In form - support both username and email
     document.getElementById('signin-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = (document.getElementById('signin-email').value || '').trim();
+        const input = (document.getElementById('signin-email').value || '').trim();
         const password = document.getElementById('signin-password').value;
         const btn = e.target.querySelector('button[type="submit"]');
 
         try {
             btn.disabled = true;
             btn.textContent = 'Signing in...';
-            await signInWithEmailAndPassword(auth, email, password);
+            
+            // Try to determine if input is email or username
+            let emailToAuth = input;
+            
+            // If input doesn't contain @, assume it's a username and look it up
+            if (!input.includes('@')) {
+                console.log('Attempting username login for:', input);
+                try {
+                    // Query Firestore to find the userId by username
+                    const usernameDoc = await getDoc(doc(firestore, 'usernames', input.toLowerCase()));
+                    console.log('Username doc exists:', usernameDoc.exists());
+                    if (usernameDoc.exists()) {
+                        const userId = usernameDoc.data()?.userId;
+                        console.log('Found userId:', userId);
+                        if (userId) {
+                            // Get the user's email from their profile
+                            const userDoc = await getDoc(doc(firestore, 'users', userId));
+                            console.log('User doc exists:', userDoc.exists());
+                            if (userDoc.exists()) {
+                                emailToAuth = userDoc.data()?.email || input;
+                                console.log('Username lookup successful, will sign in with email:', emailToAuth);
+                            } else {
+                                console.warn('User document not found for userId:', userId);
+                            }
+                        } else {
+                            console.warn('No userId in username document');
+                        }
+                    } else {
+                        console.warn('Username not found in Firestore:', input);
+                    }
+                } catch (lookupError) {
+                    // If lookup fails, try using input as-is
+                    console.warn('Username lookup failed, attempting direct auth:', lookupError.message);
+                }
+            } else {
+                console.log('Attempting email login for:', input);
+            }
+            
+            console.log('Calling signInWithEmailAndPassword with email:', emailToAuth);
+            await signInWithEmailAndPassword(auth, emailToAuth, password);
         } catch (error) {
             console.error('Sign in failed:', error);
             if (error.code === 'auth/user-not-found') {
-                alert('No account found with this email. Please sign up first.');
+                alert('No account found with this email or username. Please sign up first.');
             } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
                 alert('Incorrect password. Please try again.');
             } else if (error.code === 'auth/invalid-email') {
-                alert('Please enter a valid email address.');
+                alert('Please enter a valid email address or username.');
             } else if (error.code === 'auth/too-many-requests') {
                 alert('Too many attempts. Please wait a moment and try again.');
             } else {
@@ -819,6 +894,7 @@ export function createEventSetup(deps) {
             syncSoundToggleUi(AppState);
 
             setupHeaderMenu();
+            setupPasswordToggles();
 
             // Theme toggle
             document.getElementById('theme-toggle')?.addEventListener('click', () => {

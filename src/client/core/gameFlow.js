@@ -368,7 +368,7 @@ export function createGameFlow({
         }, 1000);
     };
 
-    const handleMatchUpdate = (match) => {
+    const handleMatchUpdate = async (match) => {
         if (!match) return;
         
         const board = match.board;
@@ -386,7 +386,7 @@ export function createGameFlow({
         GameUI?.updateLives(match.mistakes, match.playerIds, match.maxMistakes || 3);
         
         if (match.status === 'finished') {
-            GameUI?.endVersusGame(match);
+            await GameUI?.endVersusGame(match);
         }
     };
 

@@ -16,6 +16,16 @@ export function createViewManager({ AppState, MotionUtils: motion = MotionUtils,
                 ArchitecturalStateManager.reset();
             }
 
+            // Clear URL hash when leaving special pages like admin/updates to prevent
+            // navigation to old views on refresh. Special views (admin, updates) manage their own URLs.
+            const specialViews = new Set(['admin', 'updates']);
+            if (!specialViews.has(viewName) && specialViews.has(prev)) {
+                try {
+                    const cleanUrl = window.location.origin + window.location.pathname;
+                    window.history.replaceState({}, document.title, cleanUrl);
+                } catch { /* ignore */ }
+            }
+
             const nextEl = document.getElementById(`${viewName}-view`);
             const prevEl = prev ? document.getElementById(`${prev}-view`) : null;
 

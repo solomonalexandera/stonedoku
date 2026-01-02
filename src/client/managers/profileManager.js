@@ -77,9 +77,30 @@ export function createProfileManager({
             };
         },
 
+        _formatDisplayName(displayName, isAdmin) {
+            if (!displayName) displayName = 'Player';
+            // Remove existing admin prefix if present
+            displayName = displayName.replace(/^admin_/, '');
+            // Add admin prefix if needed
+            if (isAdmin) {
+                return `admin_${displayName}`;
+            }
+            return displayName;
+        },
+
         async checkUsernameAvailable(username) {
             const cleaned = (username || '').trim().toLowerCase();
             if (!cleaned) return false;
+            
+            // Check for reserved usernames
+            const reservedTerms = ['admin', 'administrator', 'staff', 'mod', 'moderator', 'support', 'system', 'root', 'superuser', 'owner'];
+            if (reservedTerms.includes(cleaned) || 
+                cleaned.includes('admin') || 
+                cleaned.includes('staff') || 
+                cleaned.includes('moderator')) {
+                throw new Error('username_reserved');
+            }
+            
             const usernameRef = doc(firestore, 'usernames', cleaned);
             const snapshot = await getDoc(usernameRef);
             return !snapshot.exists();
@@ -146,10 +167,16 @@ export function createProfileManager({
                 const email = data.email || existing.email || null;
                 const base = this._defaults(userId, chosenUsername, email);
                 if (existing.memberSince) base.memberSince = existing.memberSince;
+                
+                // Apply admin prefix to displayName if needed
+                const displayName = data.displayName || existing.displayName || chosenUsername;
+                const isAdmin = data.isAdmin !== undefined ? data.isAdmin : existing.isAdmin;
+                const formattedDisplayName = this._formatDisplayName(displayName, isAdmin);
+                
                 tx.set(profileRef, Object.assign({}, base, existing, data, {
                     username: chosenUsername,
                     usernameLower,
-                    displayName: data.displayName || existing.displayName || chosenUsername,
+                    displayName: formattedDisplayName,
                     email
                 }), { merge: true });
             });

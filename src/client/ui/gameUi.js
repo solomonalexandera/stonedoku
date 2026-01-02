@@ -358,8 +358,8 @@ export function createGameUi({
                             }, 400);
 
                             if (appState.mistakes >= appState.maxMistakes) {
-                                setTimeout(() => {
-                                    this.endSinglePlayerGame(false);
+                                setTimeout(async () => {
+                                    await this.endSinglePlayerGame(false);
                                 }, 600);
                                 return;
                             }
@@ -374,8 +374,8 @@ export function createGameUi({
                             gameHelpers.updateMistakesDisplay();
 
                             if (appState.mistakes >= appState.maxMistakes) {
-                                setTimeout(() => {
-                                    this.endSinglePlayerGame(false);
+                                setTimeout(async () => {
+                                    await this.endSinglePlayerGame(false);
                                 }, 600);
                                 return;
                             }
@@ -403,7 +403,7 @@ export function createGameUi({
             } catch (e) {}
         },
 
-        checkSinglePlayerComplete() {
+        async checkSinglePlayerComplete() {
             if (!appState.puzzle || !appState.solution) return;
 
             for (let row = 0; row < 9; row++) {
@@ -414,7 +414,7 @@ export function createGameUi({
                 }
             }
 
-            this.endSinglePlayerGame(true);
+            await this.endSinglePlayerGame(true);
         },
 
         startTimer() {
@@ -422,14 +422,14 @@ export function createGameUi({
             const timerEl = document.getElementById('game-timer');
             const versusTimerEl = document.getElementById('game-timer-versus');
 
-            appState.gameTimer = setInterval(() => {
+            appState.gameTimer = setInterval(async () => {
                 appState.gameSeconds++;
                 const formatted = ui.formatTime(appState.gameSeconds);
                 if (timerEl) timerEl.textContent = formatted;
                 if (versusTimerEl) versusTimerEl.textContent = formatted;
 
                 if (appState.gameMode === 'single' && appState.timeLimitSeconds > 0 && appState.gameSeconds >= appState.timeLimitSeconds) {
-                    this.endSinglePlayerGame(false, 'Time limit reached');
+                    await this.endSinglePlayerGame(false, 'Time limit reached');
                 }
             }, 1000);
         },
@@ -441,7 +441,7 @@ export function createGameUi({
             }
         },
 
-        endSinglePlayerGame(won, reason = null) {
+        async endSinglePlayerGame(won, reason = null) {
             this.stopTimer();
 
             document.getElementById('game-over-title').textContent = won ? 'Congratulations!' : 'Game Over';
@@ -473,11 +473,37 @@ export function createGameUi({
 
             const uid = appState.currentUser?.uid;
             if (uid) {
-                profileManager.updateStats(uid, !!won).catch(() => {});
+                await profileManager.updateStats(uid, !!won).catch(() => {});
+            }
+
+            // Display newly earned badges
+            const awardsSection = document.getElementById('game-awards');
+            const awardsListEl = document.getElementById('game-awards-list');
+            if (awardsListEl && appState.newBadgesPostMatch && appState.newBadgesPostMatch.length > 0) {
+                awardsListEl.innerHTML = '';
+                const badgeInfo = (ui?.badgeInfo || window.BadgeInfo || {});
+                appState.newBadgesPostMatch.forEach((badgeKey, index) => {
+                    const info = badgeInfo[badgeKey] || { name: badgeKey, desc: '', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>' };
+                    const badgeEl = document.createElement('div');
+                    badgeEl.className = 'award-item';
+                    badgeEl.innerHTML = `
+                        <div class="award-icon">${info.iconHtml}</div>
+                        <div class="award-content">
+                            <div class="award-name">${ui?.escapeHtml?.(info.name || badgeKey) || (info.name || badgeKey)}</div>
+                            <div class="award-desc">${ui?.escapeHtml?.(info.desc || '') || (info.desc || '')}</div>
+                        </div>
+                    `;
+                    awardsListEl.appendChild(badgeEl);
+                    // Play staggered badge earned sounds
+                    setTimeout(() => audioManager.playBadgeEarned?.(), index * 250);
+                });
+                if (awardsSection) awardsSection.style.display = '';
+            } else if (awardsSection) {
+                awardsSection.style.display = 'none';
             }
         },
 
-        endVersusGame(match) {
+        async endVersusGame(match) {
             if (appState.isGameOver) return;
             appState.isGameOver = true;
 
@@ -507,16 +533,16 @@ export function createGameUi({
 
             if (isTie) {
                 audioManager.playTie();
-                profileManager.updateStats(userId, null);
+                await profileManager.updateStats(userId, null);
             } else if (isWinner) {
                 audioManager.playVictory();
                 creativeFeatures.showConfetti();
                 architecturalStateManager.onVictory({ perfect: false });
-                profileManager.updateStats(userId, true);
+                await profileManager.updateStats(userId, true);
             } else if (isWinner === false) {
                 audioManager.playDefeat();
                 architecturalStateManager.pulseStrain(1400);
-                profileManager.updateStats(userId, false);
+                await profileManager.updateStats(userId, false);
             }
 
             // Store last match for rematch functionality

@@ -398,7 +398,7 @@ function initProfilePage() {
 const eventSetup = createEventSetup({
     // Firebase
     auth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-    updateProfile, signOut, deleteUser, deleteDoc, doc, firestore, rtdb, ref, get, update,
+    updateProfile, signOut, deleteUser, deleteDoc, doc, getDoc, firestore, rtdb, ref, get, update,
     // State & Managers
     AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager, MatchManager, ChatManager,
     GameUI: GameUi, GameHelpers, AudioManager, UI, ChallengeSystemManager,

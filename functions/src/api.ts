@@ -231,13 +231,23 @@ export const api = onRequest(async (req, res) => {
         await firestore.runTransaction(async (tx) => {
           const usernameLower = usernameRaw.toLowerCase();
           const usernameRef = firestore.collection('usernames').doc(usernameLower);
-          const existing = await tx.get(usernameRef);
-          if (existing.exists) {
-            const owner = existing.data()?.userId || null;
+          const profileRef = firestore.collection('users').doc(uid);
+          const vanityRef = firestore.collection('vanityLinks').doc(usernameLower);
+          
+          // ALL READS FIRST
+          const existingUsername = await tx.get(usernameRef);
+          const profileSnap = await tx.get(profileRef);
+          const vSnap = await tx.get(vanityRef);
+          
+          // THEN ALL WRITES
+          // Check username availability
+          if (existingUsername.exists) {
+            const owner = existingUsername.data()?.userId || null;
             if (!owner) throw new Error('username_taken');
             if (owner !== uid) throw new Error('username_taken');
           }
-
+          
+          // Reserve username
           tx.set(usernameRef, {
             userId: uid,
             username: usernameRaw,
@@ -245,8 +255,7 @@ export const api = onRequest(async (req, res) => {
             createdAt: admin.firestore.FieldValue.serverTimestamp()
           });
 
-          const profileRef = firestore.collection('users').doc(uid);
-          const profileSnap = await tx.get(profileRef);
+          // Update/create user profile
           const base = {
             userId: uid,
             displayName,
@@ -266,22 +275,15 @@ export const api = onRequest(async (req, res) => {
             tx.set(profileRef, base, { merge: true });
           }
 
-          // Vanity link
-          try {
-            const vanityRef = firestore.collection('vanityLinks').doc(usernameLower);
-            const vSnap = await tx.get(vanityRef);
-            if (!vSnap.exists) {
-              tx.set(vanityRef, {
-                userId: uid,
-                username: usernameRaw,
-                path: `/u/${usernameLower}`,
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
-              });
-            }
-          } catch (e) {
-            console.warn('Failed to set vanity link', e);
+          // Create vanity link if needed
+          if (!vSnap.exists) {
+            tx.set(vanityRef, {
+              userId: uid,
+              username: usernameRaw,
+              path: `/u/${usernameLower}`,
+              createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
           }
-
         });
 
         // Enqueue onboarding email

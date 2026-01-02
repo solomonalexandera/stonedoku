@@ -441,9 +441,11 @@ export function createOnboardingManager({
                 if (token !== state.usernameCheckToken) return;
                 if (err.message === 'username_reserved') {
                     showError('username-error', 'This username contains reserved terms and cannot be used.');
+                    if (nextBtn1) nextBtn1.disabled = true;
                 } else {
                     console.warn('Username availability lookup failed', err);
                     showError('username-error', 'Unable to verify username right now.');
+                    if (nextBtn1) nextBtn1.disabled = true;
                 }
             }
         });

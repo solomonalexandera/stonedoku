@@ -224,6 +224,10 @@
             <circle cx="12" cy="15.5" r="1" fill="currentColor" stroke="none"></circle>
             <circle cx="13.5" cy="9.5" r="1" fill="currentColor" stroke="none"></circle>
         </symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+        </symbol>
     </svg>
     <!-- Skip Links for Accessibility -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -411,13 +415,20 @@
                                 <div class="auth-panel" id="signin-panel">
                                     <form id="signin-form" class="auth-form">
                                         <div class="form-group">
-                                            <label for="signin-email">Email</label>
-                                            <input type="email" id="signin-email" placeholder="you@example.com"
+                                            <label for="signin-email">Email or Username</label>
+                                            <input type="text" id="signin-email" placeholder="you@example.com or username"
                                                 required>
                                         </div>
                                         <div class="form-group">
                                             <label for="signin-password">Password</label>
-                                            <input type="password" id="signin-password" placeholder="••••••••" required>
+                                            <div class="password-input-wrapper">
+                                                <input type="password" id="signin-password" placeholder="••••••••" required>
+                                                <button type="button" class="password-toggle" id="signin-password-toggle" aria-label="Show password" aria-pressed="false">
+                                                    <svg class="ui-icon" aria-hidden="true">
+                                                        <use href="#i-eye"></use>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="form-group">
                                             <button type="button" id="forgot-password" class="link-btn-inline">Forgot
@@ -537,9 +548,16 @@
                                         </div>
                                         <div class="form-group">
                                             <label for="onboard-password">Create Password</label>
-                                            <input type="password" id="onboard-password" class="onboard-input"
-                                                placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6"
-                                                maxlength="4096">
+                                            <div class="password-input-wrapper">
+                                                <input type="password" id="onboard-password" class="onboard-input"
+                                                    placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6"
+                                                    maxlength="4096">
+                                                <button type="button" class="password-toggle" id="onboard-password-toggle" aria-label="Show password" aria-pressed="false">
+                                                    <svg class="ui-icon" aria-hidden="true">
+                                                        <use href="#i-eye"></use>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                             <div class="password-strength" id="password-strength">
                                                 <div class="strength-bar"></div>
                                                 <span class="strength-text"></span>
@@ -548,8 +566,15 @@
                                         </div>
                                         <div class="form-group">
                                             <label for="onboard-confirm">Confirm Password</label>
-                                            <input type="password" id="onboard-confirm" class="onboard-input"
-                                                placeholder="Type password again" minlength="6">
+                                            <div class="password-input-wrapper">
+                                                <input type="password" id="onboard-confirm" class="onboard-input"
+                                                    placeholder="Type password again" minlength="6">
+                                                <button type="button" class="password-toggle" id="onboard-confirm-toggle" aria-label="Show password" aria-pressed="false">
+                                                    <svg class="ui-icon" aria-hidden="true">
+                                                        <use href="#i-eye"></use>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                             <span class="form-error" id="confirm-error"></span>
                                         </div>
                                     </div>
@@ -705,14 +730,28 @@
                                     <form id="reset-confirm-form" class="auth-form">
                                         <div class="form-group">
                                             <label for="reset-new-password">New password</label>
-                                            <input type="password" id="reset-new-password"
-                                                placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6"
-                                                maxlength="4096" required>
+                                            <div class="password-input-wrapper">
+                                                <input type="password" id="reset-new-password"
+                                                    placeholder="Min 6 chars • Upper/lower • Symbol" minlength="6"
+                                                    maxlength="4096" required>
+                                                <button type="button" class="password-toggle" id="reset-new-password-toggle" aria-label="Show password" aria-pressed="false">
+                                                    <svg class="ui-icon" aria-hidden="true">
+                                                        <use href="#i-eye"></use>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="form-group">
                                             <label for="reset-confirm-password">Confirm password</label>
-                                            <input type="password" id="reset-confirm-password"
-                                                placeholder="Repeat password" minlength="6" required>
+                                            <div class="password-input-wrapper">
+                                                <input type="password" id="reset-confirm-password"
+                                                    placeholder="Repeat password" minlength="6" required>
+                                                <button type="button" class="password-toggle" id="reset-confirm-password-toggle" aria-label="Show password" aria-pressed="false">
+                                                    <svg class="ui-icon" aria-hidden="true">
+                                                        <use href="#i-eye"></use>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </div>
                                         <button type="submit" class="btn btn-primary btn-block">Update password</button>
                                         <div class="form-error" id="reset-confirm-status"></div>
@@ -1247,6 +1286,14 @@
                                     <div class="stat-row">
                                         <span>Time:</span>
                                         <span id="final-time">00:00</span>
+                                    </div>
+                                </div>
+                                <div class="game-awards" id="game-awards" style="display: none;">
+                                    <div class="awards-header">
+                                        <h2>New Awards!</h2>
+                                    </div>
+                                    <div class="awards-container" id="game-awards-list">
+                                        <!-- New badges will be rendered here -->
                                     </div>
                                 </div>
                             </div>

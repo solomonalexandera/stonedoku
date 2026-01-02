@@ -47,6 +47,15 @@ All notable changes to the Stonedoku project are documented here.
 - **Friend request acceptance permissions**: Changed from setDoc to updateDoc
   - Firestore security rules only allow `update` operation, not `create`
   - Changed both acceptFriendRequest and declineFriendRequest to use updateDoc
+- **Badge awards post-match modal race condition**: Fixed timing issue preventing badge display on versus game completion
+  - Made `endVersusGame()` async and awaited `profileManager.updateStats()` calls
+  - Made `handleMatchUpdate()` async to await badge checking before showing post-match modal
+  - Ensures `appState.newBadgesPostMatch` is populated before post-match screen renders
+- **Badge awards single player support**: Extended badge awards system to single player games
+  - Made `endSinglePlayerGame()` async and awaited `profileManager.updateStats()` calls
+  - Made `checkSinglePlayerComplete()` async to await badge checking before modal display
+  - Added "New Awards!" section to game-over-modal with same styling as post-match awards
+  - Single player games now show earned badges with staggered celebratory sounds
 
 ### Changed - 2025-01-02
 - **Sound Effects**: Enhanced audio feedback for better game feel
