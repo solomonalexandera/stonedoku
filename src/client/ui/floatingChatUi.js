@@ -568,7 +568,7 @@ export function createFloatingChat(deps) {
                 const data = snap.data() || {};
                 const updated = {
                     ...existing,
-                    otherDisplayName: data.username || data.displayName || existing.otherDisplayName || `Player_${String(otherUserId).substring(0, 6)}`,
+                    otherDisplayName: data.displayName || data.username || existing.otherDisplayName || `Player_${String(otherUserId).substring(0, 6)}`,
                     otherPhotoUrl: data.profilePicture || existing.otherPhotoUrl || null
                 };
                 AppState.dmThreads[otherUserId] = updated;
@@ -658,7 +658,7 @@ export function createFloatingChat(deps) {
         for (const p of profiles) {
             const row = document.createElement('div');
             row.className = 'dm-friend-item';
-            const name = p.username || p.displayName || `Player_${String(p.id).substring(0, 6)}`;
+            const name = p.displayName || p.username || `Player_${String(p.id).substring(0, 6)}`;
             row.innerHTML = `
                 <div class="dm-friend-name">${UI.escapeHtml(name)}</div>
                 <div class="dm-friend-actions">
@@ -1253,7 +1253,7 @@ export function createFloatingChat(deps) {
                             if (snap.exists()) {
                                 const data = snap.data() || {};
                                 next[t.otherUserId].otherPhotoUrl = data.profilePicture || null;
-                                next[t.otherUserId].otherDisplayName = data.username || data.displayName || next[t.otherUserId].otherDisplayName;
+                                next[t.otherUserId].otherDisplayName = data.displayName || data.username || next[t.otherUserId].otherDisplayName;
                             }
                         } catch { /* ignore */ }
                     })());

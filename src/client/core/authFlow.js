@@ -43,7 +43,7 @@ export function createAuthFlow({
     };
 
     const getFallbackDisplayName = (user, profileData = null) => {
-        const base = profileData?.username || profileData?.displayName || user?.displayName;
+        const base = profileData?.displayName || profileData?.username || user?.displayName;
         if (base) return base;
         const uid = String(user?.uid || '');
         if (uid) {
@@ -104,7 +104,7 @@ export function createAuthFlow({
     const getCurrentDisplayName = () => {
         const user = AppState?.currentUser;
         const profile = AppState?.profile;
-        return profile?.username || profile?.displayName || user?.displayName || 
+        return profile?.displayName || profile?.username || user?.displayName || 
                (user?.uid ? `Player_${user.uid.substring(0, 6)}` : 'Player');
     };
 

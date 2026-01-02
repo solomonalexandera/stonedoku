@@ -508,6 +508,7 @@ async function handleAuthStateChange(user) {
                 // getFriends returns full friend objects, but AppState.friends should be IDs
                 const friendObjects = await ProfileManager.getFriends(user.uid);
                 AppState.friends = friendObjects.map(f => f.id || f);
+                FriendsManager.startRealtime?.();
                 FriendsManager.refresh();
             } catch (e) {
                 console.warn('Failed to load friends:', e);
@@ -529,6 +530,7 @@ async function handleAuthStateChange(user) {
         
     } else {
         // Signed out
+        FriendsManager.stopRealtime?.();
         AppState.currentUser = null;
         AppState.profile = null;
         AppState.friends = [];

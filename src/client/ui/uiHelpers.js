@@ -263,9 +263,9 @@ export function createUiHelpers({
             const profileView = document.getElementById('profile-view');
             if (profileView) profileView.dataset.userId = userId;
 
-            const username = data.username || data.displayName || 'Anonymous';
-            document.getElementById('profile-page-title').textContent = isOwnProfile ? 'Your Profile' : `${username}'s Profile`;
-            document.getElementById('profile-page-username').textContent = username;
+            const displayName = data.displayName || data.username || 'Anonymous';
+            document.getElementById('profile-page-title').textContent = isOwnProfile ? 'Your Profile' : `${displayName}'s Profile`;
+            document.getElementById('profile-page-username').textContent = displayName;
             document.getElementById('profile-page-bio').textContent = data.bio || 'No bio yet...';
 
             const pictureEl = document.getElementById('profile-page-picture');
@@ -556,7 +556,7 @@ export function createUiHelpers({
                 const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
                 const statusClass = isOnline ? 'online' : 'offline';
                 const statusText = isOnline ? 'Online' : 'Offline';
-                const name = profileData.username || profileData.displayName || displayName;
+                const name = profileData.displayName || profileData.username || displayName;
                 const isRegistered = !!profileData?.email;
                 const targetIsGuest = !profileData?.email;
                 const isSelf = AppState.currentUser && userId === AppState.currentUser.uid;

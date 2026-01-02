@@ -482,12 +482,6 @@ export function createProfileManager({
                 participants
             });
 
-            const userRef = doc(firestore, 'users', userId);
-            const friendRef = doc(firestore, 'users', friendId);
-            await Promise.all([
-                updateDoc(userRef, { friends: arrayUnion(friendId) }),
-                updateDoc(friendRef, { friends: arrayUnion(userId) })
-            ]);
             try {
                 if (rtdb) {
                     await rtdbSet(ref(rtdb, `notifications/${friendId}/friend_${userId}`), {

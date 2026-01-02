@@ -1,5 +1,5 @@
 import { AppState } from '../core/appState.js';
-import { collection, getDocs, limit, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { collection, doc, getDocs, limit, onSnapshot, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 export function createFriendsManager({
     firestore,
@@ -14,7 +14,29 @@ export function createFriendsManager({
     const resolveUI = () => (typeof getUI === 'function' ? getUI() : getUI) || globalThis.UI;
     const resolveChatWidget = () => (typeof getChatWidget === 'function' ? getChatWidget() : getChatWidget) || globalThis.ChatWidget;
 
+    let unsubscribeProfile = null;
+
     return {
+        startRealtime() {
+            if (!appState.currentUser || !onSnapshot || !doc) return;
+            if (unsubscribeProfile) unsubscribeProfile();
+            const profileRef = doc(firestore, 'users', appState.currentUser.uid);
+            unsubscribeProfile = onSnapshot(profileRef, (snap) => {
+                if (!snap?.exists?.()) return;
+                const data = snap.data() || {};
+                appState.profile = data;
+                appState.friends = Array.isArray(data.friends) ? data.friends : [];
+                this.render();
+            });
+        },
+
+        stopRealtime() {
+            if (unsubscribeProfile) {
+                unsubscribeProfile();
+                unsubscribeProfile = null;
+            }
+        },
+
         async refresh() {
             if (!appState.currentUser) return;
             try {
@@ -66,7 +88,7 @@ export function createFriendsManager({
                 requestsList.innerHTML = '<div class="friend-empty">No incoming requests.</div>';
             } else {
                 for (const r of requestProfiles) {
-                    const name = r.data?.username || r.data?.displayName || `Player_${String(r.id).substring(0, 6)}`;
+                    const name = r.data?.displayName || r.data?.username || `Player_${String(r.id).substring(0, 6)}`;
                     const row = document.createElement('div');
                     row.className = 'friend-item';
                     row.innerHTML = `
@@ -105,7 +127,7 @@ export function createFriendsManager({
                 friendsList.innerHTML = '<div class="friend-empty">No friends yet.</div>';
             } else {
                 for (const f of friendProfiles) {
-                    const name = f.data?.username || f.data?.displayName || `Player_${String(f.id).substring(0, 6)}`;
+                    const name = f.data?.displayName || f.data?.username || `Player_${String(f.id).substring(0, 6)}`;
                     const row = document.createElement('div');
                     row.className = 'friend-item';
                     row.innerHTML = `
