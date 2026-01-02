@@ -5,6 +5,13 @@ All notable changes to the Stonedoku project are documented here.
 ## [Unreleased]
 
 ### Added - 2025-01-02
+- **Badge Awards Post-Match Display**: Newly earned badges now display on post-match screen
+  - "New Awards!" section shows all badges earned in the match
+  - Each badge displays icon, name, and description
+  - SlideInUp animation for visual impact and celebration
+  - Consolidated badge notification system (removed floating reveals)
+- **Badge Descriptions**: All 18 badges now include descriptive text
+  - Examples: "Completed your first game", "Won 20 matches", "Have 5 friends"
 - **Comprehensive test suite**: 190 unit tests covering all source modules (lib, core, managers, ui)
   - Tests for accessibilityManager, appState, audioManager, authFlow, eventSetup, gameHelpersUi
   - Tests for motionUtils, passwordPolicy, profileManager, uiHelpers, versionUtils, viewManager

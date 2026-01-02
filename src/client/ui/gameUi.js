@@ -227,7 +227,7 @@ export function createGameUi({
                 if (num === 0 && appState.notesMode) {
                     delete appState.notes[key];
                     if (notesEl) notesEl.innerHTML = '';
-                    audioManager.playCellFill();
+                    audioManager.playClearCell();
                     return;
                 }
             }
@@ -506,6 +506,7 @@ export function createGameUi({
             const opponentId = playerIds?.find(id => id !== userId);
 
             if (isTie) {
+                audioManager.playTie();
                 profileManager.updateStats(userId, null);
             } else if (isWinner) {
                 audioManager.playVictory();
@@ -598,7 +599,7 @@ export function createGameUi({
             if (awardsListEl && appState.newBadgesPostMatch && appState.newBadgesPostMatch.length > 0) {
                 awardsListEl.innerHTML = '';
                 const badgeInfo = (ui?.badgeInfo || window.BadgeInfo || {});
-                appState.newBadgesPostMatch.forEach(badgeKey => {
+                appState.newBadgesPostMatch.forEach((badgeKey, index) => {
                     const info = badgeInfo[badgeKey] || { name: badgeKey, desc: '', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>' };
                     const badgeEl = document.createElement('div');
                     badgeEl.className = 'award-item';
@@ -610,6 +611,8 @@ export function createGameUi({
                         </div>
                     `;
                     awardsListEl.appendChild(badgeEl);
+                    // Play staggered badge earned sounds
+                    setTimeout(() => audioManager.playBadgeEarned?.(), index * 250);
                 });
                 if (awardsSection) awardsSection.style.display = '';
             } else if (awardsSection) {
