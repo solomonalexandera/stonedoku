@@ -227,7 +227,7 @@ export function createUiHelpers({
                     if (cs?.sendChallenge && AppState.currentUser) {
                         await cs.sendChallenge(AppState.currentUser.uid, getCurrentDisplayName?.(), userId);
                         ViewManager?.hideModal?.('profile-modal');
-                        alert('Challenge sent!');
+                        ui.showToast('Challenge sent!', 'success');
                     }
                 };
             }
@@ -254,7 +254,7 @@ export function createUiHelpers({
 
             const profile = await ProfileManager?.getProfile?.(userId);
             if (!profile?.exists()) {
-                alert('Profile not found');
+                ui.showToast('Profile not found', 'error');
                 return;
             }
 

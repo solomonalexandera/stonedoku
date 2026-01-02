@@ -88,6 +88,16 @@ export function createProfileManager({
         async _reserveUsername(tx, usernameRaw, userId) {
             const username = (usernameRaw || '').trim();
             const usernameLower = username.toLowerCase();
+            
+            // Check for reserved usernames
+            const reservedTerms = ['admin', 'administrator', 'staff', 'mod', 'moderator', 'support', 'system', 'root', 'superuser', 'owner'];
+            if (reservedTerms.includes(usernameLower) || 
+                usernameLower.includes('admin') || 
+                usernameLower.includes('staff') || 
+                usernameLower.includes('moderator')) {
+                throw new Error('username_reserved');
+            }
+            
             const usernameRef = doc(firestore, 'usernames', usernameLower);
             const existingUsername = await tx.get(usernameRef);
             if (existingUsername.exists()) {
@@ -430,11 +440,14 @@ export function createProfileManager({
             const reqId = friendRequestId(userId, friendId);
             const reqRef = doc(firestore, 'friendRequests', reqId);
             const participants = friendParticipants(userId, friendId);
-            await setDoc(reqRef, {
+            
+            // Use updateDoc instead of setDoc to comply with Firestore rules
+            // The rules only allow update (not create) for accepting requests
+            await updateDoc(reqRef, {
                 status: 'accepted',
                 respondedAt: Timestamp.now(),
                 participants
-            }, { merge: true });
+            });
 
             const userRef = doc(firestore, 'users', userId);
             const friendRef = doc(firestore, 'users', friendId);
@@ -460,11 +473,13 @@ export function createProfileManager({
             const reqId = friendRequestId(userId, friendId);
             const reqRef = doc(firestore, 'friendRequests', reqId);
             const participants = friendParticipants(userId, friendId);
-            await setDoc(reqRef, {
+            
+            // Use updateDoc instead of setDoc to comply with Firestore rules
+            await updateDoc(reqRef, {
                 status: 'declined',
                 respondedAt: Timestamp.now(),
                 participants
-            }, { merge: true });
+            });
             try {
                 if (rtdb) {
                     await rtdbSet(ref(rtdb, `notifications/${friendId}/friend_${userId}`), {

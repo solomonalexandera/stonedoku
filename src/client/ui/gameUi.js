@@ -11,8 +11,7 @@ export function createGameUi({
     UI: ui = globalThis.UI,
     ProfileManager: profileManager = globalThis.ProfileManager,
     ViewManager: viewManager = globalThis.ViewManager,
-    MatchManager: matchManager = globalThis.MatchManager,
-    showPostMatchScreen: showPostMatchScreenFn = globalThis.showPostMatchScreen
+    MatchManager: matchManager = globalThis.MatchManager
 } = {}) {
     if (!gameHelpers) throw new Error('GameUI requires GameHelpers');
     if (!audioManager) throw new Error('GameUI requires AudioManager');
@@ -519,7 +518,99 @@ export function createGameUi({
                 profileManager.updateStats(userId, false);
             }
 
-            showPostMatchScreenFn(match, userId, opponentId, isWinner, isTie, isDisconnect, isMistakesLoss);
+            // Store last match for rematch functionality
+            appState.lastMatch = match;
+
+            gameUI.showPostMatchScreen(match, userId, opponentId, isWinner, isTie, isDisconnect, isMistakesLoss);
+        },
+
+        showPostMatchScreen(match, userId, opponentId, isWinner, isTie, isDisconnect, isMistakesLoss) {
+            const titleEl = document.getElementById('postmatch-title');
+            const winnerNameEl = document.getElementById('postmatch-winner-name');
+            const winnerScoreEl = document.getElementById('postmatch-winner-score');
+            const loserNameEl = document.getElementById('postmatch-loser-name');
+            const loserScoreEl = document.getElementById('postmatch-loser-score');
+            const timeEl = document.getElementById('postmatch-time');
+            const reasonEl = document.getElementById('postmatch-reason');
+            const winnerContainer = document.getElementById('postmatch-winner');
+            const loserContainer = document.getElementById('postmatch-loser');
+
+            const scores = match.scores || {};
+            const players = match.players || {};
+            const playerScore = scores[userId] || 0;
+            const opponentScore = scores[opponentId] || 0;
+
+            const playerName = players[userId]?.displayName || `Player_${userId?.substring(0, 6)}`;
+            const opponentName = players[opponentId]?.displayName || `Player_${opponentId?.substring(0, 6)}`;
+
+            // Determine winner and loser
+            let winnerName, winnerScore, loserName, loserScore;
+            if (isTie) {
+                if (titleEl) titleEl.textContent = "It's a Tie!";
+                winnerName = playerName;
+                winnerScore = playerScore;
+                loserName = opponentName;
+                loserScore = opponentScore;
+                if (winnerContainer) winnerContainer.classList.remove('winner');
+                if (loserContainer) loserContainer.classList.remove('loser');
+            } else if (isWinner) {
+                if (titleEl) titleEl.textContent = 'You Won!';
+                winnerName = playerName;
+                winnerScore = playerScore;
+                loserName = opponentName;
+                loserScore = opponentScore;
+            } else {
+                if (titleEl) titleEl.textContent = 'You Lost';
+                winnerName = opponentName;
+                winnerScore = opponentScore;
+                loserName = playerName;
+                loserScore = playerScore;
+            }
+
+            if (winnerNameEl) winnerNameEl.textContent = winnerName;
+            if (winnerScoreEl) winnerScoreEl.textContent = `${winnerScore} points`;
+            if (loserNameEl) loserNameEl.textContent = loserName;
+            if (loserScoreEl) loserScoreEl.textContent = `${loserScore} points`;
+
+            // Calculate elapsed time
+            const startTime = match.startedAt || match.createdAt;
+            const endTime = match.endedAt || Date.now();
+            let elapsed = 0;
+            if (startTime) {
+                const startMs = typeof startTime === 'number' ? startTime : startTime?.toMillis?.() || Date.parse(startTime) || 0;
+                const endMs = typeof endTime === 'number' ? endTime : endTime?.toMillis?.() || Date.parse(endTime) || Date.now();
+                elapsed = Math.max(0, Math.floor((endMs - startMs) / 1000));
+            }
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            if (timeEl) timeEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            // Set result reason
+            let reason = 'Completed';
+            if (isDisconnect) reason = 'Opponent Disconnected';
+            else if (isMistakesLoss) reason = 'Too Many Mistakes';
+            else if (isTie) reason = 'Tie Game';
+            if (reasonEl) reasonEl.textContent = reason;
+
+            // Reset rematch UI
+            const rematchActions = document.getElementById('rematch-actions');
+            const rematchWaiting = document.getElementById('rematch-waiting');
+            const rematchVoteSelf = document.getElementById('rematch-vote-self');
+            const rematchVoteOpponent = document.getElementById('rematch-vote-opponent');
+            if (rematchActions) rematchActions.style.display = '';
+            if (rematchWaiting) rematchWaiting.style.display = 'none';
+            if (rematchVoteSelf) {
+                const icon = rematchVoteSelf.querySelector('.vote-icon');
+                if (icon) icon.textContent = '?';
+                rematchVoteSelf.classList.remove('voted-yes', 'voted-no');
+            }
+            if (rematchVoteOpponent) {
+                const icon = rematchVoteOpponent.querySelector('.vote-icon');
+                if (icon) icon.textContent = '?';
+                rematchVoteOpponent.classList.remove('voted-yes', 'voted-no');
+            }
+
+            viewManager.show('postmatch');
         },
 
         updateScores(scores, playerIds) {

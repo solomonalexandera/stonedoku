@@ -266,13 +266,15 @@ export function setupAuthListeners(deps) {
             console.error('Sign up failed:', error);
             AppState.pendingUsername = null;
             if (error.code === 'auth/email-already-in-use') {
-                alert('An account with this email already exists. Please sign in instead.');
+                UI?.showToast?.('An account with this email already exists. Please sign in instead.', 'error');
             } else if (error.code === 'auth/weak-password') {
-                alert(PasswordPolicy.message(password) || 'Password does not meet requirements.');
+                UI?.showToast?.(PasswordPolicy.message(password) || 'Password does not meet requirements.', 'error');
             } else if (error.message === 'username_taken') {
-                alert('This username was just taken. Please choose another.');
+                UI?.showToast?.('This username was just taken. Please choose another.', 'error');
+            } else if (error.message === 'username_reserved') {
+                UI?.showToast?.('This username contains reserved terms and cannot be used. Please choose another.', 'error');
             } else {
-                alert('Sign up failed: ' + error.message);
+                UI?.showToast?.('Sign up failed: ' + error.message, 'error');
             }
         } finally {
             btn.disabled = false;
@@ -398,7 +400,7 @@ export function setupGameListeners(deps) {
             LobbyManager.listenToRoom(code, handleRoomUpdate);
         } catch (error) {
             console.error('Failed to create room:', error);
-            alert('Failed to create room: ' + error.message);
+            UI?.showToast?.('Failed to create room: ' + error.message, 'error');
         }
     });
 
@@ -410,7 +412,7 @@ export function setupGameListeners(deps) {
         console.log('Attempting to join room with code:', code);
 
         if (!code || code.length !== 4) {
-            alert('Please enter a valid 4-digit room code');
+            UI?.showToast?.('Please enter a valid 4-digit room code', 'error');
             return;
         }
 
@@ -428,7 +430,7 @@ export function setupGameListeners(deps) {
             LobbyManager.listenToRoom(code, handleRoomUpdate);
         } catch (error) {
             console.error('Failed to join room:', error);
-            alert(error.message || 'Failed to join room');
+            UI?.showToast?.(error.message || 'Failed to join room', 'error');
         }
     };
 

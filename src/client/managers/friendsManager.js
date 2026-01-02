@@ -83,7 +83,7 @@ export function createFriendsManager({
                             await this.refresh();
                         } catch (e) {
                             console.error('Failed to accept friend request', e);
-                            alert('Failed to accept request.');
+                            UI?.showToast?.('Failed to accept request.', 'error');
                         }
                     });
                     declineBtn?.addEventListener('click', async () => {
@@ -92,7 +92,7 @@ export function createFriendsManager({
                             await this.refresh();
                         } catch (e) {
                             console.error('Failed to decline friend request', e);
-                            alert('Failed to decline request.');
+                            UI?.showToast?.('Failed to decline request.', 'error');
                         }
                     });
                     requestsList.appendChild(row);
@@ -126,13 +126,15 @@ export function createFriendsManager({
                         }
                     });
                     removeBtn?.addEventListener('click', async () => {
-                        if (!confirm('Remove this friend?')) return;
+                        const confirmed = await (UI?.confirm ? UI.confirm('Remove this friend?') : Promise.resolve(confirm('Remove this friend?')));
+                        if (!confirmed) return;
                         try {
                             await pm.removeFriend(appState.currentUser.uid, f.id);
                             await this.refresh();
+                            UI?.showToast?.('Friend removed.', 'info');
                         } catch (e) {
                             console.error('Failed to remove friend', e);
-                            alert('Failed to remove friend.');
+                            UI?.showToast?.('Failed to remove friend.', 'error');
                         }
                     });
                     friendsList.appendChild(row);

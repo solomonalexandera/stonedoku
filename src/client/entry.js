@@ -122,8 +122,8 @@ import { createPasswordReset } from './ui/passwordResetUi.js';
 import { createTourManager } from './managers/tourManager.js';
 import { createCookieConsent, CookieConsent } from './ui/cookieConsentUi.js';
 import { createLegalModals, LegalModals } from './ui/legalModalsUi.js';
-import { createUpdatesCenter, UpdatesCenter } from './ui/updatesCenterUi.js';
-import { createAdminConsole, AdminConsole } from './ui/adminConsoleUi.js';
+import { createUpdatesCenter } from './ui/updatesCenterUi.js';
+import { createAdminConsole } from './ui/adminConsoleUi.js';
 import { createFloatingChat } from './ui/floatingChatUi.js';
 import { createProfilePage, handleVanityUrl, handleUpdatesUrl, handleAdminUrl } from './ui/profilePageUi.js';
 
@@ -198,6 +198,48 @@ const GameUi = createGameUi({
 
 // Wire up FriendsManager.UI
 FriendsManager.UI = UI;
+
+// ===========================================
+// Updates Center and Admin Console (with proper deps)
+// ===========================================
+const UpdatesCenter = createUpdatesCenter({
+    firestore,
+    collection, query, orderBy, limit, onSnapshot,
+    ViewManager
+});
+
+const AdminConsole = createAdminConsole({
+    firestore,
+    rtdb,
+    functions,
+    ViewManager,
+    waitForAuthReady: () => {
+        if (AppState.authReady) return Promise.resolve(true);
+        return new Promise((resolve) => {
+            const start = Date.now();
+            const timer = setInterval(() => {
+                if (AppState.authReady) {
+                    clearInterval(timer);
+                    resolve(true);
+                } else if (Date.now() - start > 8000) {
+                    clearInterval(timer);
+                    resolve(false);
+                }
+            }, 100);
+        });
+    },
+    UI,
+    formatDate: UpdatesCenter.formatDate,
+    normalizeItem: UpdatesCenter.normalizeItem,
+    AppState,
+    firestoreFns: {
+        doc, getDoc, setDoc, deleteDoc, updateDoc, addDoc,
+        collection, query, where, getDocs, orderBy, limit,
+        onSnapshot, Timestamp, documentId
+    },
+    rtdbFns: { ref, get },
+    functionsFns: { httpsCallable }
+});
 
 const PasswordReset = createPasswordReset({
     auth, verifyPasswordResetCode, confirmPasswordReset, sendPasswordResetEmail,
@@ -463,7 +505,9 @@ async function handleAuthStateChange(user) {
         // Load friends for registered users
         if (isRegisteredUser()) {
             try {
-                AppState.friends = await ProfileManager.loadFriends(user.uid);
+                // getFriends returns full friend objects, but AppState.friends should be IDs
+                const friendObjects = await ProfileManager.getFriends(user.uid);
+                AppState.friends = friendObjects.map(f => f.id || f);
                 FriendsManager.refresh();
             } catch (e) {
                 console.warn('Failed to load friends:', e);
@@ -552,6 +596,10 @@ function bootstrap() {
     
     // Initialize accessibility features (ARIA labels, screen reader)
     AccessibilityManager.init?.();
+    
+    // Initialize updates center and admin console
+    UpdatesCenter.init?.();
+    AdminConsole.init?.();
     
     // Set up event listeners
     eventSetup.setup();

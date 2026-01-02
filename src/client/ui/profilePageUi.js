@@ -258,12 +258,12 @@ export function initProfilePage(deps) {
         if (!file || !AppState.currentUser) return;
 
         if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
+            UI?.showToast?.('Please select an image file', 'error');
             return;
         }
 
         if (file.size > 2 * 1024 * 1024) {
-            alert('Image must be less than 2MB');
+            UI?.showToast?.('Image must be less than 2MB', 'error');
             return;
         }
 
@@ -339,7 +339,7 @@ export function initProfilePage(deps) {
         const profileUserId = document.getElementById('profile-view')?.dataset.userId;
         if (!profileUserId || !AppState.currentUser) return;
         if (!isRegisteredUser()) {
-            alert('Sign in with an email account to add friends.');
+            UI?.showToast?.('Sign in with an email account to add friends.', 'error');
             return;
         }
 
@@ -352,12 +352,12 @@ export function initProfilePage(deps) {
                 await ProfileManager.sendFriendRequest(AppState.currentUser.uid, profileUserId);
                 if (labelEl) labelEl.textContent = 'Request Sent';
                 else if (btn) btn.textContent = 'Request Sent';
-                alert('Friend request sent!');
+                UI?.showToast?.('Friend request sent!', 'success');
             } else if (currentText.includes('Remove Friend')) {
                 await ProfileManager.removeFriend(AppState.currentUser.uid, profileUserId);
                 if (labelEl) labelEl.textContent = 'Add Friend';
                 else if (btn) btn.textContent = 'Add Friend';
-                alert('Friend removed');
+                UI?.showToast?.('Friend removed', 'info');
             } else if (currentText.includes('Accept Request')) {
                 await ProfileManager.acceptFriendRequest(AppState.currentUser.uid, profileUserId);
                 if (labelEl) labelEl.textContent = 'Friends';
@@ -366,7 +366,7 @@ export function initProfilePage(deps) {
         } catch (error) {
             console.error('Friend action error:', error);
             const msg = error?.message || 'Failed to complete action';
-            alert(msg.includes('registered') ? msg : 'Failed to complete action: ' + msg);
+            UI?.showToast?.(msg.includes('registered') ? msg : 'Failed to complete action: ' + msg, 'error');
         }
     });
 

@@ -439,8 +439,12 @@ export function createOnboardingManager({
                 }
             } catch (err) {
                 if (token !== state.usernameCheckToken) return;
-                console.warn('Username availability lookup failed', err);
-                showError('username-error', 'Unable to verify username right now.');
+                if (err.message === 'username_reserved') {
+                    showError('username-error', 'This username contains reserved terms and cannot be used.');
+                } else {
+                    console.warn('Username availability lookup failed', err);
+                    showError('username-error', 'Unable to verify username right now.');
+                }
             }
         });
         backBtn1?.addEventListener('click', () => {

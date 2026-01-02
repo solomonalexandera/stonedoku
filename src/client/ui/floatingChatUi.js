@@ -687,6 +687,15 @@ export function createFloatingChat(deps) {
         if (!msg.text) return;
 
         const list = messageStore.get(channel) || [];
+        
+        // Deduplicate: check if message already exists by matching text, userId, and approximate timestamp
+        const isDuplicate = list.some(existing => 
+            existing.text === msg.text && 
+            existing.userId === msg.userId &&
+            Math.abs((existing.timestamp || 0) - (msg.timestamp || 0)) < 5000 // within 5 seconds
+        );
+        if (isDuplicate) return;
+
         list.push(msg);
         if (list.length > MAX_MESSAGES_PER_CHANNEL) list.splice(0, list.length - MAX_MESSAGES_PER_CHANNEL);
         messageStore.set(channel, list);

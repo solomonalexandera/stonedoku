@@ -308,3 +308,10 @@ export const api = onRequest(async (req, res) => {
         return;
       }
     }
+    // Default 404 for unmatched routes
+    res.status(404).json({error: 'not found'});
+  } catch (e) {
+    console.error('api error', e);
+    res.status(500).json({error: 'internal server error'});
+  }
+});

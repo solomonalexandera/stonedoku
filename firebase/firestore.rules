@@ -28,7 +28,13 @@ service cloud.firestore {
     // Creatable by anyone signing up, not updatable or deletable
     match /usernames/{username} {
         allow read: if true; // Public read for availability checks
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        // Block reserved usernames (admin, administrator, staff, mod, moderator, support, system, root, superuser, owner)
+        allow create: if isSignedIn() 
+          && request.resource.data.userId == request.auth.uid
+          && !(username.lower() in ['admin', 'administrator', 'staff', 'mod', 'moderator', 'support', 'system', 'root', 'superuser', 'owner'])
+          && !(username.lower().matches('.*admin.*'))
+          && !(username.lower().matches('.*staff.*'))
+          && !(username.lower().matches('.*moderator.*'));
         allow update, delete: if false;
     }
     
@@ -176,7 +182,9 @@ service cloud.firestore {
     // Admin allowlist (seeded manually in console: admins/{uid})
     match /admins/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create, update, delete: if isAdmin();
+      // Allow creation if user is already an admin OR if creating their own doc and their profile has isAdmin=true
+      allow create: if isAdmin() || (isOwner(uid) && exists(/databases/$(database)/documents/users/$(uid)) && get(/databases/$(database)/documents/users/$(uid)).data.isAdmin == true);
+      allow update, delete: if isAdmin();
     }
 
     // Community updates / status feed (public read, write via console/admin tooling)
