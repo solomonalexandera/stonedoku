@@ -337,12 +337,18 @@ export function createProfileManager({
                     appState.friends = refreshed.friends || [];
                     try { ui?.updateBadges?.(refreshed.badges || []); } catch (e) { /* ignore */ }
                 }
+                
+                // Store new badges for post-match display
+                if (newBadges.length > 0) {
+                    appState.newBadgesPostMatch = newBadges;
+                }
+                
+                // Show toast notification for new badges
                 for (const badge of newBadges) {
                     if (revealSet.has(badge)) continue;
                     revealSet.add(badge);
                     const info = badgeInfo[badge] || { name: badge, desc: '' };
                     if (appState.settings?.notifications?.badges) ui?.showToast?.(`New badge: ${info.name}`, 'success');
-                    ui?.showBadgeReveal?.(badge);
                 }
             }
         },

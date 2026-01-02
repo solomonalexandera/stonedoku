@@ -1,23 +1,23 @@
 import { AppState as defaultAppState } from '../core/appState.js';
 
 const defaultBadgeInfo = {
-    rookie: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Rookie' },
-    learner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Learner' },
-    veteran: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Veteran' },
-    marathoner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Marathoner' },
-    legend: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Legend' },
-    winner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: 'Winner' },
-    champion: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Champion' },
-    unstoppable: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Unstoppable' },
-    undefeated: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg>', name: 'Undefeated' },
-    tactician: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-target"></use></svg>', name: 'Tactician' },
-    speedster: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>', name: 'Speedster' },
-    socialite: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Socialite' },
-    connector: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Connector' },
-    ambassador: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Ambassador' },
-    storyteller: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg>', name: 'Storyteller' },
-    portrait: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>', name: 'Portrait' },
-    warden: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-lock"></use></svg>', name: 'Warden' }
+    rookie: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Rookie', desc: 'Completed your first game' },
+    learner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Learner', desc: 'Completed 5 games' },
+    veteran: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Veteran', desc: 'Completed 10 games' },
+    marathoner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-award"></use></svg>', name: 'Marathoner', desc: 'Completed 50 games' },
+    legend: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Legend', desc: 'Completed 100 games' },
+    winner: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: 'Winner', desc: 'Won your first match' },
+    champion: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Champion', desc: 'Won 20 matches' },
+    unstoppable: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-crown"></use></svg>', name: 'Unstoppable', desc: 'Won 50 matches' },
+    undefeated: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg>', name: 'Undefeated', desc: '10 wins with no losses' },
+    tactician: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-target"></use></svg>', name: 'Tactician', desc: '70% win rate with 20+ games' },
+    speedster: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-bolt"></use></svg>', name: 'Speedster', desc: 'Solved puzzle in 3 minutes' },
+    socialite: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Socialite', desc: 'Made your first friend' },
+    connector: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Connector', desc: 'Have 5 friends' },
+    ambassador: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg>', name: 'Ambassador', desc: 'Have 15 friends' },
+    storyteller: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg>', name: 'Storyteller', desc: 'Wrote a bio' },
+    portrait: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg>', name: 'Portrait', desc: 'Uploaded a profile picture' },
+    warden: { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-lock"></use></svg>', name: 'Warden', desc: 'Appointed as moderator' }
 };
 
 export function createUiHelpers({

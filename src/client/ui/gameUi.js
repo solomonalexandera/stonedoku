@@ -534,6 +534,8 @@ export function createGameUi({
             const reasonEl = document.getElementById('postmatch-reason');
             const winnerContainer = document.getElementById('postmatch-winner');
             const loserContainer = document.getElementById('postmatch-loser');
+            const awardsSection = document.getElementById('postmatch-awards');
+            const awardsListEl = document.getElementById('postmatch-awards-list');
 
             const scores = match.scores || {};
             const players = match.players || {};
@@ -592,6 +594,28 @@ export function createGameUi({
             else if (isTie) reason = 'Tie Game';
             if (reasonEl) reasonEl.textContent = reason;
 
+            // Display newly earned badges in post-match screen
+            if (awardsListEl && appState.newBadgesPostMatch && appState.newBadgesPostMatch.length > 0) {
+                awardsListEl.innerHTML = '';
+                const badgeInfo = (ui?.badgeInfo || window.BadgeInfo || {});
+                appState.newBadgesPostMatch.forEach(badgeKey => {
+                    const info = badgeInfo[badgeKey] || { name: badgeKey, desc: '', iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>' };
+                    const badgeEl = document.createElement('div');
+                    badgeEl.className = 'award-item';
+                    badgeEl.innerHTML = `
+                        <div class="award-icon">${info.iconHtml}</div>
+                        <div class="award-content">
+                            <div class="award-name">${ui?.escapeHtml?.(info.name || badgeKey) || (info.name || badgeKey)}</div>
+                            <div class="award-desc">${ui?.escapeHtml?.(info.desc || '') || (info.desc || '')}</div>
+                        </div>
+                    `;
+                    awardsListEl.appendChild(badgeEl);
+                });
+                if (awardsSection) awardsSection.style.display = '';
+            } else if (awardsSection) {
+                awardsSection.style.display = 'none';
+            }
+
             // Reset rematch UI
             const rematchActions = document.getElementById('rematch-actions');
             const rematchWaiting = document.getElementById('rematch-waiting');
@@ -609,6 +633,9 @@ export function createGameUi({
                 if (icon) icon.textContent = '?';
                 rematchVoteOpponent.classList.remove('voted-yes', 'voted-no');
             }
+
+            // Clear new badges after displaying them
+            appState.newBadgesPostMatch = [];
 
             viewManager.show('postmatch');
         },

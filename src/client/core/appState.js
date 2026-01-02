@@ -90,7 +90,8 @@ export function createAppState() {
         viewingProfileId: null,
         lastMatch: null,
         lastOpponentId: null,
-        isGameOver: false
+        isGameOver: false,
+        newBadgesPostMatch: [] // Badges earned in the last match, displayed post-match
     };
 }
 
