@@ -5,6 +5,13 @@ All notable changes to the Stonedoku project are documented here.
 ## [Unreleased]
 
 ### Added - 2025-01-02
+- **Comprehensive Audio Manager Enhancement**: Professional sound design overhaul
+  - Master gain control for volume management
+  - Duplicate prevention system with cooldown tracking
+  - New sound effects: clearCell, note, tie, countdown, opponentMove, friendRequest, badgeEarned, soundToggle
+  - Enhanced victory/defeat sounds with extended durations and depth
+  - Detailed JSDoc documentation for all audio methods
+  - Staggered badge earned sounds for post-match celebration
 - **Badge Awards Post-Match Display**: Newly earned badges now display on post-match screen
   - "New Awards!" section shows all badges earned in the match
   - Each badge displays icon, name, and description
@@ -42,6 +49,11 @@ All notable changes to the Stonedoku project are documented here.
   - Changed both acceptFriendRequest and declineFriendRequest to use updateDoc
 
 ### Changed - 2025-01-02
+- **Sound Effects**: Enhanced audio feedback for better game feel
+  - Clear cell now uses distinct playback instead of fill sound
+  - Tie game results have unique sound signature
+  - Badge earned displays staggered celebratory sounds
+  - Victory/defeat sounds extended with better depth and presence
 - Version bumped from 20251231A to 20260102D (cache busting for deployments)
 
 ## [2024-12-31] - Modular Architecture Refactor
