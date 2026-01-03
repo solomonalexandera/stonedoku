@@ -11,11 +11,9 @@ type Action =
   | "clearGlobalChat"
   | "clearUserGlobalChat";
 
-async function assertAdmin(userId: string): Promise<void> {
-  const firestore = db();
-  const snap = await firestore.doc(`admins/${userId}`).get();
-  const isAdmin = snap.exists;
-  if (!isAdmin) {
+async function assertAdmin(auth: any): Promise<void> {
+  // Check custom claims instead of /admins collection
+  if (!auth.token.admin && !auth.token.superAdmin) {
     throw new HttpsError("permission-denied", "Admin access required.");
   }
 }
@@ -54,7 +52,8 @@ export const moderate = onCall(async (request) => {
   const targetUid = data.targetUid as string | undefined;
   if (!action) throw new HttpsError("invalid-argument", "Action required.");
 
-  await assertAdmin(callerUid);
+  // Check admin/superAdmin custom claims instead of /admins collection
+  await assertAdmin(request.auth);
 
   const realtime = rtdb();
 

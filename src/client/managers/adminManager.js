@@ -171,6 +171,19 @@ export function createAdminManager({ functions, httpsCallable, AppState, UI } = 
             
             UI.showToast?.(result.data.message, 'success');
             
+            // If we appointed the current user, refresh their token to get updated claims
+            if (targetUid === AppState.currentUser?.uid) {
+                try {
+                    const idTokenResult = await AppState.currentUser.getIdTokenResult(true);
+                    AppState.currentUser.isSuperAdmin = idTokenResult.claims.superAdmin === true;
+                    AppState.currentUser.isAdmin = idTokenResult.claims.admin === true;
+                    AppState.currentUser.isModerator = idTokenResult.claims.moderator === true;
+                    console.log('Updated current user claims after appointment');
+                } catch (e) {
+                    console.warn('Failed to refresh user token:', e);
+                }
+            }
+            
             // Refresh search results
             await searchUsers();
             
