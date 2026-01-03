@@ -561,8 +561,11 @@ export function createProfileManager({
             if (!userId || !friendId) return;
             const userRef = doc(firestore, 'users', userId);
             
-            // Only update the current user's friends list and create a removal document
-            // The Cloud Function will handle removing from both sides symmetrically
+            // Only update the current user's friends list and create a removal document.
+            // The Cloud Function 'removeFriendsOnRemoval' (in functions/src/friends.ts)
+            // listens to the friendRemovals collection and handles removing both users
+            // from each other's friends arrays symmetrically. This design respects
+            // Firestore security rules which only allow users to update their own profile.
             await Promise.all([
                 updateDoc(userRef, { friends: arrayRemove(friendId) }),
                 addDoc(collection(firestore, 'friendRemovals'), {
