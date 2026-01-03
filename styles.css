@@ -873,6 +873,146 @@ body:not(.header-compact) .header-menu-toggle {
     margin-bottom: 0.9rem;
 }
 
+/* New modernized admin section cards */
+.admin-section-card {
+    background: var(--color-card-bg-solid);
+    border: 1px solid var(--color-grid-border);
+    border-radius: var(--border-radius);
+    padding: 1.75rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.admin-section-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--color-primary), transparent);
+}
+
+.admin-section-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.1));
+    pointer-events: none;
+}
+
+.admin-section-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.admin-section-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-grid-border);
+}
+
+.admin-section-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    color: var(--color-text-primary);
+}
+
+.admin-section-subtitle {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+.admin-section-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.admin-section-full {
+    grid-column: 1 / -1;
+}
+
+/* Moderation layout */
+.admin-mod-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.admin-mod-search-panel,
+.admin-mod-actions-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.admin-mod-panel-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0.5rem 0 0.75rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.9rem;
+}
+
+.admin-mod-action-group {
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-grid-border);
+}
+
+.admin-mod-action-group:first-of-type {
+    border-top: none;
+    padding-top: 0;
+}
+
+.admin-mod-subheader {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin: 0 0 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.admin-mod-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.5rem;
+}
+
+.admin-mod-buttons .btn {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+}
+
+/* Role management layout */
+.admin-role-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.admin-role-search {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .admin-mod-layout {
+        grid-template-columns: 1fr;
+    }
+    
+    .admin-role-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
 .admin-flags {
     display: grid;
     grid-template-columns: 1fr 1fr;

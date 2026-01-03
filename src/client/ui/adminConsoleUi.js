@@ -52,15 +52,6 @@ export function createAdminConsole({
     let form = null;
     let statusEl = null;
     let listEl = null;
-    let allowlistForm = null;
-    let allowlistInput = null;
-    let allowlistStatus = null;
-    let allowlistAddBtn = null;
-    let allowlistRemoveBtn = null;
-    let lookupInput = null;
-    let lookupStatus = null;
-    let lookupBtn = null;
-    let lookupCopyBtn = null;
     let modSearchInput = null;
     let modSearchBtn = null;
     let modSearchClearBtn = null;
@@ -218,15 +209,6 @@ export function createAdminConsole({
         form = document.getElementById('admin-update-form');
         statusEl = document.getElementById('admin-update-status');
         listEl = document.getElementById('admin-updates-list');
-        allowlistForm = document.getElementById('admin-allowlist-form');
-        allowlistInput = document.getElementById('admin-allowlist-uid');
-        allowlistStatus = document.getElementById('admin-allowlist-status');
-        allowlistAddBtn = document.getElementById('admin-allowlist-add');
-        allowlistRemoveBtn = document.getElementById('admin-allowlist-remove');
-        lookupInput = document.getElementById('admin-lookup-username');
-        lookupStatus = document.getElementById('admin-lookup-status');
-        lookupBtn = document.getElementById('admin-lookup-btn');
-        lookupCopyBtn = document.getElementById('admin-lookup-copy');
         modSearchInput = document.getElementById('admin-mod-search');
         modSearchBtn = document.getElementById('admin-mod-search-btn');
         modSearchClearBtn = document.getElementById('admin-mod-search-clear');
@@ -246,129 +228,9 @@ export function createAdminConsole({
             ViewManager?.show(AppState?.currentUser ? 'lobby' : 'auth');
         });
 
-        // Setup all the admin listeners (allowlist, lookup, moderation, etc.)
-        // This is abbreviated - the full implementation would be in the init function
-        setupAllowlistListeners();
-        setupLookupListeners();
+        // Setup moderation and form listeners
         setupModerationListeners();
         setupFormListener();
-    };
-
-    const setupAllowlistListeners = () => {
-        const setAllowStatus = (msg, isError = false) => {
-            if (!allowlistStatus) return;
-            allowlistStatus.textContent = msg || '';
-            allowlistStatus.classList.toggle('error', !!isError);
-        };
-
-        const getUidFromInput = () => {
-            const uid = (allowlistInput?.value || '').trim();
-            if (!uid) {
-                setAllowStatus('Enter a user UID.', true);
-                return null;
-            }
-            setAllowStatus('');
-            return uid;
-        };
-
-        allowlistAddBtn?.addEventListener('click', async () => {
-            if (!isAdmin) {
-                setAllowStatus('Admin required.', true);
-                return;
-            }
-            const uid = getUidFromInput();
-            if (!uid) return;
-            try {
-                // Use new appointAdmin function instead of old /admins collection
-                const appointFn = httpsCallable(functions, 'appointAdmin');
-                await appointFn({ targetUid: uid, role: 'admin' });
-                setAllowStatus('Admin granted.', false);
-                allowlistInput.value = '';
-            } catch (e) {
-                console.error('Grant admin failed', e);
-                setAllowStatus(`Failed: ${e.message}`, true);
-            }
-        });
-
-        allowlistRemoveBtn?.addEventListener('click', async () => {
-            if (!isAdmin) {
-                setAllowStatus('Admin required.', true);
-                return;
-            }
-            const uid = getUidFromInput();
-            if (!uid) return;
-            try {
-                // Use appointAdmin to revoke role
-                const appointFn = httpsCallable(functions, 'appointAdmin');
-                await appointFn({ targetUid: uid, role: 'user' });
-                setAllowStatus('Admin revoked.', false);
-                allowlistInput.value = '';
-            } catch (e) {
-                console.error('Revoke admin failed', e);
-                setAllowStatus(`Failed: ${e.message}`, true);
-            }
-        });
-    };
-
-    const setupLookupListeners = () => {
-        const setLookupStatus = (msg, isError = false) => {
-            if (!lookupStatus) return;
-            lookupStatus.textContent = msg || '';
-            lookupStatus.classList.toggle('error', !!isError);
-        };
-
-        const lookupUser = async () => {
-            const raw = (lookupInput?.value || '').trim().replace(/^@/, '').toLowerCase();
-            if (!raw) {
-                setLookupStatus('Enter a username.', true);
-                return null;
-            }
-            try {
-                setLookupStatus('Looking up...', false);
-                const unameSnap = await getDoc(doc(firestore, 'usernames', raw));
-                if (unameSnap.exists()) {
-                    const uid = unameSnap.data()?.userId;
-                    if (uid) {
-                        setLookupStatus(`UID: ${uid}`, false);
-                        if (lookupCopyBtn) {
-                            lookupCopyBtn.disabled = false;
-                            lookupCopyBtn.dataset.uid = uid;
-                        }
-                        return uid;
-                    }
-                }
-                const q = query(collection(firestore, 'users'), where('usernameLower', '==', raw), limit(1));
-                const snap = await getDocs(q);
-                if (!snap.empty) {
-                    const docSnap = snap.docs[0];
-                    setLookupStatus(`UID: ${docSnap.id}`, false);
-                    if (lookupCopyBtn) {
-                        lookupCopyBtn.disabled = false;
-                        lookupCopyBtn.dataset.uid = docSnap.id;
-                    }
-                    return docSnap.id;
-                }
-                setLookupStatus('User not found.', true);
-                if (lookupCopyBtn) lookupCopyBtn.disabled = true;
-                return null;
-            } catch (e) {
-                console.error('Lookup failed', e);
-                setLookupStatus('Lookup failed.', true);
-                return null;
-            }
-        };
-
-        lookupBtn?.addEventListener('click', lookupUser);
-        lookupCopyBtn?.addEventListener('click', () => {
-            const uid = lookupCopyBtn?.dataset?.uid;
-            if (!uid) return;
-            try {
-                navigator.clipboard.writeText(uid);
-                if (lookupStatus) lookupStatus.textContent = 'UID copied.';
-            } catch {
-                if (lookupStatus) lookupStatus.textContent = 'Copy failed.';
-            }
-        });
     };
 
     const setupModerationListeners = () => {

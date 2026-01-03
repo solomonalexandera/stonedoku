@@ -1608,102 +1608,26 @@
                                 </div>
                             </div>
                             <div class="admin-grid">
-                                <div class="admin-card admin-card-compact">
-                                    <h3 class="admin-card-title">Admin Access</h3>
-                                    <p class="admin-card-subtitle">Add or revoke admin users by UID (admins only).</p>
-                                    <form id="admin-allowlist-form" class="auth-form">
-                                        <div class="form-group">
-                                            <label for="admin-allowlist-uid">User UID</label>
-                                            <input type="text" id="admin-allowlist-uid" required autocomplete="off"
-                                                placeholder="Enter Firebase UID">
-                                        </div>
-                                        <div class="admin-form-actions inline">
-                                            <button type="button" class="btn btn-primary btn-sm"
-                                                id="admin-allowlist-add">Grant</button>
-                                            <button type="button" class="btn btn-ghost btn-sm"
-                                                id="admin-allowlist-remove">Revoke</button>
-                                        </div>
-                                        <div class="form-error" id="admin-allowlist-status"></div>
-                                    </form>
-                                </div>
-                                <div class="admin-card admin-card-compact">
-                                    <h3 class="admin-card-title">Lookup User UID</h3>
-                                    <p class="admin-card-subtitle">Find a user by username/@handle.</p>
-                                    <div class="form-group">
-                                        <label for="admin-lookup-username">Username</label>
-                                        <input type="text" id="admin-lookup-username"
-                                            placeholder="e.g. player123 or @player123" autocomplete="off">
+                                <!-- Updates Section -->
+                                <div class="admin-section-card">
+                                    <div class="admin-section-header">
+                                        <h3 class="admin-section-title">📢 Announcements</h3>
+                                        <p class="admin-section-subtitle">Post and manage game updates and announcements</p>
                                     </div>
-                                    <div class="admin-form-actions inline">
-                                        <button type="button" class="btn btn-secondary btn-sm"
-                                            id="admin-lookup-btn">Lookup</button>
-                                        <button type="button" class="btn btn-ghost btn-sm" id="admin-lookup-copy"
-                                            disabled>Copy UID</button>
-                                    </div>
-                                    <div class="form-error" id="admin-lookup-status"></div>
-                                </div>
-                                <div class="admin-card admin-card-compact">
-                                    <h3 class="admin-card-title">Moderation Lookup</h3>
-                                    <p class="admin-card-subtitle">Search by username or UID to see flags and key stats.
-                                    </p>
-                                    <div class="form-group">
-                                        <label for="admin-mod-search">Username or UID</label>
-                                        <input type="text" id="admin-mod-search" placeholder="@handle or UID"
-                                            autocomplete="off">
-                                    </div>
-                                    <div class="admin-form-actions inline">
-                                        <button type="button" class="btn btn-secondary btn-sm"
-                                            id="admin-mod-search-btn">Search</button>
-                                        <button type="button" class="btn btn-ghost btn-sm"
-                                            id="admin-mod-search-clear">Clear</button>
-                                    </div>
-                                    <div class="form-error" id="admin-mod-search-status"></div>
-                                    <div class="admin-mod-result" id="admin-mod-search-result"></div>
-                                </div>
-                                <div class="admin-card admin-card-compact">
-                                    <h3 class="admin-card-title">Moderation</h3>
-                                    <p class="admin-card-subtitle">Mute/block users and clean up chat.</p>
-                                    <div class="moderation-grid">
-                                        <div class="form-group">
-                                            <label for="mod-target-uid">User UID</label>
-                                            <input type="text" id="mod-target-uid" placeholder="Target UID"
-                                                autocomplete="off">
-                                        </div>
-                                        <div class="mod-actions">
-                                            <button type="button" class="btn btn-secondary btn-sm"
-                                                id="mod-mute">Mute</button>
-                                            <button type="button" class="btn btn-ghost btn-sm"
-                                                id="mod-unmute">Unmute</button>
-                                            <button type="button" class="btn btn-secondary btn-sm"
-                                                id="mod-block">Block</button>
-                                            <button type="button" class="btn btn-ghost btn-sm"
-                                                id="mod-unblock">Unblock</button>
-                                        </div>
-                                        <div class="mod-actions">
-                                            <button type="button" class="btn btn-danger btn-sm"
-                                                id="mod-clear-global">Clear Global Chat</button>
-                                            <button type="button" class="btn btn-danger btn-sm"
-                                                id="mod-clear-user-global">Clear User Messages</button>
-                                        </div>
-                                        <div class="form-error" id="mod-status"></div>
-                                    </div>
-                                </div>
-                                <div class="admin-card">
-                                    <h3 class="admin-card-title">Post update</h3>
-                                    <form id="admin-update-form" class="auth-form">
+                                    <form id="admin-update-form" class="admin-section-form auth-form">
                                         <div class="form-group">
                                             <label for="admin-update-title">Title</label>
                                             <input type="text" id="admin-update-title" required maxlength="120"
-                                                autocomplete="off">
+                                                autocomplete="off" placeholder="Announcement title">
                                         </div>
                                         <div class="form-group">
-                                            <label for="admin-update-body">Body</label>
-                                            <textarea id="admin-update-body" rows="5" required
-                                                maxlength="1200"></textarea>
+                                            <label for="admin-update-body">Message</label>
+                                            <textarea id="admin-update-body" rows="4" required
+                                                maxlength="1200" placeholder="Announcement content..."></textarea>
                                         </div>
                                         <div class="form-group grid-2">
                                             <div>
-                                                <label for="admin-update-kind">Kind</label>
+                                                <label for="admin-update-kind">Type</label>
                                                 <select id="admin-update-kind">
                                                     <option value="update" selected>Update</option>
                                                     <option value="status">Status</option>
@@ -1711,10 +1635,10 @@
                                                 </select>
                                             </div>
                                             <div>
-                                                <label for="admin-update-severity">Severity</label>
+                                                <label for="admin-update-severity">Priority</label>
                                                 <select id="admin-update-severity">
                                                     <option value="info" selected>Info</option>
-                                                    <option value="warn">Warn</option>
+                                                    <option value="warn">Warning</option>
                                                     <option value="critical">Critical</option>
                                                 </select>
                                             </div>
@@ -1726,7 +1650,7 @@
                                             </label>
                                             <label class="setting-row checkbox-row">
                                                 <input type="checkbox" id="admin-update-pinned">
-                                                <span class="setting-label">Pinned</span>
+                                                <span class="setting-label">Pin announcement</span>
                                             </label>
                                         </div>
                                         <div class="admin-form-actions">
@@ -1735,38 +1659,118 @@
                                     </form>
                                     <div class="form-error" id="admin-update-status"></div>
                                 </div>
-                                <div class="admin-card">
-                                    <h3 class="admin-card-title">Manage updates</h3>
+
+                                <div class="admin-section-card">
+                                    <div class="admin-section-header">
+                                        <h3 class="admin-section-title">Active Announcements</h3>
+                                    </div>
                                     <div class="admin-updates-list" id="admin-updates-list" aria-live="polite"></div>
+                                </div>
+
+                                <!-- Moderation Section -->
+                                <div class="admin-section-card admin-section-full">
+                                    <div class="admin-section-header">
+                                        <h3 class="admin-section-title">🛡️ Moderation</h3>
+                                        <p class="admin-section-subtitle">Search, monitor, and manage user accounts</p>
+                                    </div>
+                                    <div class="admin-mod-layout">
+                                        <!-- Search Section -->
+                                        <div class="admin-mod-search-panel">
+                                            <h4 class="admin-mod-panel-title">User Search</h4>
+                                            <div class="form-group">
+                                                <label for="admin-mod-search">Find by username or UID</label>
+                                                <input type="text" id="admin-mod-search" 
+                                                    placeholder="@username or UID..." autocomplete="off">
+                                            </div>
+                                            <div class="admin-form-actions">
+                                                <button type="button" class="btn btn-secondary btn-sm"
+                                                    id="admin-mod-search-btn">Search</button>
+                                                <button type="button" class="btn btn-ghost btn-sm"
+                                                    id="admin-mod-search-clear">Clear</button>
+                                            </div>
+                                            <div class="form-error" id="admin-mod-search-status"></div>
+                                            <div class="admin-mod-result" id="admin-mod-search-result"></div>
+                                        </div>
+
+                                        <!-- Actions Section -->
+                                        <div class="admin-mod-actions-panel">
+                                            <h4 class="admin-mod-panel-title">User Actions</h4>
+                                            <div class="form-group">
+                                                <label for="mod-target-uid">Target User UID</label>
+                                                <input type="text" id="mod-target-uid" 
+                                                    placeholder="Enter or search for a user..." autocomplete="off">
+                                            </div>
+                                            
+                                            <div class="admin-mod-action-group">
+                                                <h5 class="admin-mod-subheader">Chat Control</h5>
+                                                <div class="admin-mod-buttons">
+                                                    <button type="button" class="btn btn-secondary btn-sm"
+                                                        id="mod-mute" title="Prevent user from sending messages">Mute User</button>
+                                                    <button type="button" class="btn btn-ghost btn-sm"
+                                                        id="mod-unmute" title="Allow user to send messages">Unmute</button>
+                                                </div>
+                                            </div>
+
+                                            <div class="admin-mod-action-group">
+                                                <h5 class="admin-mod-subheader">Account Control</h5>
+                                                <div class="admin-mod-buttons">
+                                                    <button type="button" class="btn btn-secondary btn-sm"
+                                                        id="mod-block" title="Prevent user from playing">Block User</button>
+                                                    <button type="button" class="btn btn-ghost btn-sm"
+                                                        id="mod-unblock" title="Allow user to play">Unblock</button>
+                                                </div>
+                                            </div>
+
+                                            <div class="admin-mod-action-group">
+                                                <h5 class="admin-mod-subheader">Chat Cleanup</h5>
+                                                <div class="admin-mod-buttons">
+                                                    <button type="button" class="btn btn-danger btn-sm"
+                                                        id="mod-clear-user-global" title="Delete all messages from this user">Delete User Messages</button>
+                                                    <button type="button" class="btn btn-danger btn-sm"
+                                                        id="mod-clear-global" title="Clear all messages in global chat">Clear Global Chat</button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="form-error" id="mod-status"></div>
+                                        </div>
+                                    </div>
                                 </div>
                                 
                                 <!-- Role Management (Super-Admin Only) -->
-                                <div class="admin-card" id="admin-role-management" style="display: none;">
-                                    <h3 class="admin-card-title">Role Management</h3>
-                                    <p class="admin-card-subtitle">Search for users and manage their roles (Super-Admin only).</p>
-                                    
-                                    <div class="form-group">
-                                        <label for="admin-user-search">Search Users</label>
-                                        <input type="text" id="admin-user-search" 
-                                            placeholder="Enter email or username..." autocomplete="off">
-                                    </div>
-                                    <div class="admin-form-actions">
-                                        <button type="button" class="btn btn-secondary btn-sm" id="admin-user-search-btn">
-                                            Search
-                                        </button>
+                                <div class="admin-section-card admin-section-full" id="admin-role-management" style="display: none;">
+                                    <div class="admin-section-header">
+                                        <h3 class="admin-section-title">👑 Role Management</h3>
+                                        <p class="admin-section-subtitle">Manage admin and moderator roles (Super-Admin only)</p>
                                     </div>
                                     
-                                    <div id="admin-user-results" class="admin-user-results" style="display: none;">
-                                        <!-- User search results will be rendered here -->
+                                    <div class="admin-role-layout">
+                                        <div class="admin-role-search">
+                                            <h4 class="admin-mod-panel-title">Search Users</h4>
+                                            <div class="form-group">
+                                                <label for="admin-user-search">Find by email or username</label>
+                                                <input type="text" id="admin-user-search" 
+                                                    placeholder="user@example.com or username..." autocomplete="off">
+                                            </div>
+                                            <div class="admin-form-actions">
+                                                <button type="button" class="btn btn-secondary btn-sm" id="admin-user-search-btn">
+                                                    Search Users
+                                                </button>
+                                            </div>
+                                            <div class="form-error" id="admin-role-status"></div>
+                                        </div>
+                                        
+                                        <div id="admin-user-results" class="admin-user-results" style="display: none;">
+                                            <!-- User search results will be rendered here -->
+                                        </div>
                                     </div>
-                                    
-                                    <div class="form-error" id="admin-role-status"></div>
                                 </div>
                                 
                                 <!-- Audit Log (Admin Only) -->
-                                <div class="admin-card" id="admin-audit-log" style="display: none;">
-                                    <h3 class="admin-card-title">Audit Log</h3>
-                                    <p class="admin-card-subtitle">View recent admin actions and role changes.</p>
+                                <div class="admin-section-card admin-section-full" id="admin-audit-log" style="display: none;">
+                                    <div class="admin-section-header">
+                                        <h3 class="admin-section-title">📋 Audit Log</h3>
+                                        <p class="admin-section-subtitle">View all admin actions and role changes</p>
+                                    </div>
                                     <div id="admin-audit-list" class="admin-audit-list">
                                         <!-- Audit log entries will be rendered here -->
                                     </div>
