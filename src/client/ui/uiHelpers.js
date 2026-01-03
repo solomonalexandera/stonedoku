@@ -180,7 +180,9 @@ export function createUiHelpers({
 
             // Fetch full profile data
             const isSelf = AppState.currentUser && userId === AppState.currentUser.uid;
-            const viewerIsRegistered = isRegisteredUser?.();
+            // Check if viewer is registered - must have email from Auth or profile
+            const viewerHasEmail = AppState.currentUser?.email || AppState.profile?.email;
+            const viewerIsRegistered = !AppState.currentUser?.isAnonymous && !!viewerHasEmail;
             
             let targetIsGuest = true;
             let profileData = {};
@@ -410,7 +412,9 @@ export function createUiHelpers({
 
             const data = profile.data();
             const targetIsGuest = !data.email;
-            const viewerCanSocial = isRegisteredUser?.();
+            // Check if viewer is registered - must have email from Auth or profile
+            const viewerHasEmail = AppState.currentUser?.email || AppState.profile?.email;
+            const viewerCanSocial = !AppState.currentUser?.isAnonymous && !!viewerHasEmail;
 
             document.getElementById('profile-name').textContent = data.displayName || data.username || 'Anonymous';
             document.getElementById('profile-member-since').textContent =
@@ -586,7 +590,10 @@ export function createUiHelpers({
                 const friendBtn = document.getElementById('profile-friend-btn');
                 const labelEl = friendBtn?.querySelector('.btn-label');
                 const dmBtn = document.getElementById('profile-dm-btn');
-                const socialEnabled = isRegisteredUser?.() && !targetIsGuest;
+                // Check if viewer is registered - must have email from Auth or profile
+                const viewerHasEmail = AppState.currentUser?.email || AppState.profile?.email;
+                const viewerIsRegistered = !AppState.currentUser?.isAnonymous && !!viewerHasEmail;
+                const socialEnabled = viewerIsRegistered && !targetIsGuest;
                 let hasIncomingRequest = false;
                 let hasOutgoingRequest = false;
 
