@@ -457,7 +457,7 @@ export function createProfileManager({
                     // If not in friends list, treat as stale request and allow new one
                 }
 
-                // For declined or cancelled requests, or stale accepted requests, delete and continue
+                // For declined, cancelled, or stale accepted requests, delete and continue
                 try {
                     await deleteDoc(existingSnap.ref);
                 } catch (e) {
@@ -544,8 +544,19 @@ export function createProfileManager({
             const reqId = friendRequestId(userId, friendId);
             const reqRef = doc(firestore, 'friendRequests', reqId);
             
-            // Delete the friend request document
-            await deleteDoc(reqRef);
+            // Set status to 'cancelled' instead of deleting, to avoid race conditions
+            // The sendFriendRequest function will clean up cancelled requests
+            try {
+                const snap = await getDoc(reqRef);
+                if (snap.exists()) {
+                    await updateDoc(reqRef, {
+                        status: 'cancelled',
+                        cancelledAt: Timestamp.now()
+                    });
+                }
+            } catch (e) {
+                console.warn('Failed to cancel friend request', e);
+            }
             
             // Clean up notification if it exists
             try {

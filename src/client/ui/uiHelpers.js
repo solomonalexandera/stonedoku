@@ -288,12 +288,52 @@ export function createUiHelpers({
                 const statusClass = isOnline ? 'online' : 'offline';
                 const statusText = isOnline ? 'Online' : 'Offline';
 
+                // Check friend status
+                let isFriend = (AppState.friends || []).includes(userId);
+                let hasIncomingRequest = false;
+                let hasOutgoingRequest = false;
+                let friendButtonText = 'Add Friend';
+                let friendButtonDisabled = false;
+                
+                if (canSocialWithTarget) {
+                    try {
+                        const reqSnap = await ProfileManager?.getFriendRequestBetween?.(AppState.currentUser.uid, userId);
+                        if (reqSnap?.exists()) {
+                            const reqData = reqSnap.data() || {};
+                            if (reqData.status === 'pending') {
+                                hasIncomingRequest = reqData.toUid === AppState.currentUser.uid;
+                                hasOutgoingRequest = reqData.fromUid === AppState.currentUser.uid;
+                            } else if (reqData.status === 'accepted') {
+                                // If friend request is accepted, they are friends
+                                isFriend = true;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Failed to check friend request state in mini-profile', e);
+                    }
+                    
+                    // Determine button state based on relationship
+                    if (hasIncomingRequest) {
+                        friendButtonText = 'Accept Request';
+                        friendButtonDisabled = false;
+                    } else if (hasOutgoingRequest) {
+                        friendButtonText = 'Request Sent';
+                        friendButtonDisabled = true;
+                    } else if (isFriend) {
+                        friendButtonText = 'Friends';
+                        friendButtonDisabled = false;
+                    } else {
+                        friendButtonText = 'Add Friend';
+                        friendButtonDisabled = false;
+                    }
+                }
+
                 let actionsHtml = '';
                 if (canSocialWithTarget) {
                     actionsHtml = `
                         <div class="mini-profile-actions">
                             <button type="button" class="btn btn-secondary btn-sm mini-dm-btn">DM</button>
-                            <button type="button" class="btn btn-ghost btn-sm mini-friend-btn">Add Friend</button>
+                            <button type="button" class="btn btn-ghost btn-sm mini-friend-btn" ${friendButtonDisabled ? 'disabled' : ''}>${ui.escapeHtml(friendButtonText)}</button>
                             <button type="button" class="btn btn-ghost btn-sm mini-profile-btn">Profile</button>
                         </div>
                     `;
@@ -349,21 +389,47 @@ export function createUiHelpers({
                         });
 
                         friendBtn?.addEventListener('click', async () => {
+                            const currentText = friendBtn.textContent?.trim() || '';
+                            
                             try {
-                                const result = await ProfileManager?.sendFriendRequest?.(AppState.currentUser.uid, userId);
-                                const accepted = result === 'accepted_existing';
-                                ui.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
-                                friendBtn.disabled = true;
-                                friendBtn.textContent = accepted ? 'Friends' : 'Request Sent';
-                                if (accepted) await FriendsManager?.refresh?.();
+                                if (currentText === 'Friends') {
+                                    // Remove friend
+                                    const confirmed = await (ui.confirm ? ui.confirm('Remove this friend?') : Promise.resolve(confirm('Remove this friend?')));
+                                    if (!confirmed) return;
+                                    
+                                    await ProfileManager?.removeFriend?.(AppState.currentUser.uid, userId);
+                                    ui.showToast('Friend removed.', 'info');
+                                    friendBtn.textContent = 'Add Friend';
+                                    friendBtn.disabled = false;
+                                    await FriendsManager?.refresh?.();
+                                } else if (currentText === 'Accept Request') {
+                                    // Accept incoming friend request
+                                    await ProfileManager?.acceptFriendRequest?.(AppState.currentUser.uid, userId);
+                                    ui.showToast('Friend request accepted.', 'success');
+                                    friendBtn.textContent = 'Friends';
+                                    friendBtn.disabled = false;
+                                    await FriendsManager?.refresh?.();
+                                } else if (currentText === 'Add Friend') {
+                                    // Send friend request
+                                    const result = await ProfileManager?.sendFriendRequest?.(AppState.currentUser.uid, userId);
+                                    const accepted = result === 'accepted_existing';
+                                    ui.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
+                                    friendBtn.disabled = true;
+                                    friendBtn.textContent = accepted ? 'Friends' : 'Request Sent';
+                                    if (accepted) await FriendsManager?.refresh?.();
+                                }
                             } catch (e) {
-                                console.warn('Mini profile add friend failed', e);
+                                console.warn('Mini profile friend action failed', e);
                                 if (e?.message === 'You are already friends.') {
                                     ui.showToast('You are already friends.', 'info');
                                     friendBtn.disabled = true;
                                     friendBtn.textContent = 'Friends';
+                                } else if (e?.message === 'Friend request already pending.') {
+                                    ui.showToast('Friend request already pending.', 'info');
+                                    friendBtn.disabled = true;
+                                    friendBtn.textContent = 'Request Sent';
                                 } else {
-                                    ui.showToast(e?.message || 'Failed to send friend request.', 'error');
+                                    ui.showToast(e?.message || 'Failed to perform friend action.', 'error');
                                 }
                             }
                         });
