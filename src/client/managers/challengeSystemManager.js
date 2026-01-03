@@ -4,7 +4,10 @@
 export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTimestamp, onChildAdded, update, AppState, LobbyManager, PresenceManager, ViewManager, UI, handleRoomUpdate }) {
     return {
         async sendChallenge(fromUserId, fromName, toUserId) {
-            const notificationRef = ref(rtdb, `notifications/${toUserId}/${fromUserId}`);
+            // Use a unique ID for the notification to avoid overwriting other notifications
+            // and to comply with the new database rules structure
+            const notificationId = `challenge_${fromUserId}`;
+            const notificationRef = ref(rtdb, `notifications/${toUserId}/${notificationId}`);
             
             await set(notificationRef, {
                 type: 'challenge',
@@ -70,19 +73,31 @@ export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTim
             };
 
             // Notify challenger of acceptance + room code
-            await set(ref(rtdb, `notifications/${challengerId}/${acceptingUserId}`), acceptedPayload);
+            const notificationId = `challenge_accept_${acceptingUserId}`;
+            await set(ref(rtdb, `notifications/${challengerId}/${notificationId}`), acceptedPayload);
             // Keep a copy for the acceptor too (useful for debugging / multi-device)
-            await update(ref(rtdb, `notifications/${acceptingUserId}/${challengerId}`), {
-                status: 'accepted',
-                roomCode: code
-            });
+            // Note: This update might fail if the original notification was already deleted
+            try {
+                await update(ref(rtdb, `notifications/${acceptingUserId}/challenge_${challengerId}`), {
+                    status: 'accepted',
+                    roomCode: code
+                });
+            } catch (e) {
+                console.warn('Failed to update local challenge status', e);
+            }
 
             return code;
         },
         
         async declineChallenge(acceptingUserId, acceptingName, challengerId) {
-            await remove(ref(rtdb, `notifications/${acceptingUserId}/${challengerId}`));
-            await set(ref(rtdb, `notifications/${challengerId}/${acceptingUserId}`), {
+            try {
+                await remove(ref(rtdb, `notifications/${acceptingUserId}/challenge_${challengerId}`));
+            } catch (e) {
+                console.warn('Failed to remove challenge notification', e);
+            }
+            
+            const notificationId = `challenge_decline_${acceptingUserId}`;
+            await set(ref(rtdb, `notifications/${challengerId}/${notificationId}`), {
                 type: 'challenge',
                 from: acceptingUserId,
                 fromName: acceptingName,

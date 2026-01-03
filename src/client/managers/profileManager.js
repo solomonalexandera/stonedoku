@@ -440,7 +440,16 @@ export function createProfileManager({
                 }
 
                 if (status === 'accepted') {
-                    throw new Error('You are already friends.');
+                    // Check if they are actually friends in the user profile
+                    // Sometimes the request doc stays 'accepted' but users unfriended each other
+                    const fromProfile = await this.getProfile(fromUserId);
+                    const friends = fromProfile.exists() ? (fromProfile.data().friends || []) : [];
+                    
+                    if (friends.includes(toUserId)) {
+                        throw new Error('You are already friends.');
+                    }
+                    
+                    // If not in friends list, treat as stale request and allow new one
                 }
 
                 try {

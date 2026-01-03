@@ -620,17 +620,10 @@ export function createUiHelpers({
                     if (hasIncomingRequest) {
                         if (labelEl) labelEl.textContent = 'Accept Request';
                         else if (friendBtn) friendBtn.textContent = 'Accept Request';
+                        // Remove any previous onclick handlers to prevent conflicts with the global listener
                         if (friendBtn) {
                             friendBtn.disabled = false;
-                            friendBtn.onclick = async () => {
-                                try {
-                                    await ProfileManager?.acceptFriendRequest?.(AppState.currentUser.uid, userId);
-                                    ui.showToast('Friend request accepted.', 'success');
-                                    await FriendsManager?.refresh?.();
-                                } catch (err) {
-                                    ui.showToast(err?.message || 'Failed to accept request.', 'error');
-                                }
-                            };
+                            friendBtn.onclick = null;
                         }
                     } else if (hasOutgoingRequest) {
                         if (labelEl) labelEl.textContent = 'Request Sent';
@@ -644,30 +637,16 @@ export function createUiHelpers({
                         else if (friendBtn) friendBtn.textContent = 'Remove Friend';
                         if (friendBtn) {
                             friendBtn.disabled = false;
-                            friendBtn.onclick = async () => {
-                                try {
-                                    await ProfileManager?.removeFriend?.(AppState.currentUser.uid, userId);
-                                    ui.showToast('Friend removed.', 'info');
-                                    await FriendsManager?.refresh?.();
-                                } catch (err) {
-                                    ui.showToast(err?.message || 'Failed to remove friend.', 'error');
-                                }
-                            };
+                            friendBtn.onclick = null;
                         }
                     } else {
                         if (labelEl) labelEl.textContent = 'Add Friend';
                         else if (friendBtn) friendBtn.textContent = 'Add Friend';
                         if (friendBtn) {
                             friendBtn.disabled = false;
-                            friendBtn.onclick = async () => {
-                                try {
-                                    const result = await ProfileManager?.sendFriendRequest?.(AppState.currentUser.uid, userId);
-                                    ui.showToast(result === 'accepted_existing' ? 'Friend request accepted.' : 'Friend request sent.', 'success');
-                                    await FriendsManager?.refresh?.();
-                                } catch (err) {
-                                    ui.showToast(err?.message || 'Failed to send request.', 'error');
-                                }
-                            };
+                            friendBtn.onclick = null;
+                        }
+                    }
                         }
                     }
                 }

@@ -4117,6 +4117,11 @@ body:not(.light-theme) .cell-notes span.on {
     .players-card,
     .friends-card {
         flex: 1;
+        display: block !important; /* Force display on mobile if content exists */
+    }
+
+    .friends-card[style*="display: none"] {
+        display: none !important; /* Respect explicit hiding */
     }
 
     .friends-card {

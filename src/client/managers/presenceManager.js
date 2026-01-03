@@ -108,10 +108,21 @@ export function createPresenceManager({ rtdb, appState = AppState } = {}) {
 
         async cleanup() {
             if (!state.presenceRef) return;
+            // Only attempt cleanup if we still have a user (permission check)
+            // If auth state changed to null, we can't write to RTDB anyway
+            if (!appState.currentUser) {
+                state._ready = false;
+                return;
+            }
+            
             try {
                 await remove(state.presenceRef);
             } catch (e) {
-                console.warn('Presence cleanup failed', e);
+                // Ignore permission denied errors during logout as they are expected
+                // when the auth token is invalidated before the write completes
+                if (e?.code !== 'PERMISSION_DENIED' && e?.message?.indexOf('permission_denied') === -1) {
+                    console.warn('Presence cleanup failed', e);
+                }
             } finally {
                 state._ready = false;
             }
