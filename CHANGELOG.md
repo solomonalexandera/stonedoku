@@ -4,6 +4,28 @@ All notable changes to the Stonedoku project are documented here.
 
 ## [Unreleased]
 
+### Fixed - 2025-01-03
+- **Display name consistency**: Fixed inconsistent username/displayName usage across the application
+  - Chat messages now use `getCurrentDisplayName()` helper for consistent display names
+  - Added username fallback to `getCurrentDisplayName()` function
+  - Profile displays now properly fall back to username when displayName is missing
+  - Fixed mini profile tooltips to show correct names for all user types
+- **Social feature access**: Improved detection of email-authenticated users for social features
+  - Mini profile engagement options now properly unlock for registered users
+  - Better error handling for targetIsGuest detection in profile tooltips
+  - Consistent `isRegisteredUser()` checks across all social interactions
+
+### Changed - 2025-01-03
+- **Code consolidation**: Removed duplicate utility functions for better maintainability
+  - Removed duplicate `getCurrentDisplayName()` and `isRegisteredUser()` from authFlow.js
+  - Consolidated `escapeHtml()` function (gameFlow now uses UI.escapeHtml)
+  - Single source of truth for all helper utilities in entry.js
+- **Performance improvements**: Implemented event delegation pattern
+  - Friends list now uses event delegation instead of per-item listeners
+  - DM conversations list uses event delegation for better performance
+  - Player list hover events use delegation to prevent memory leaks
+  - Badge list click handlers use delegation pattern
+
 ### Added - 2025-01-02
 - **Comprehensive Audio Manager Enhancement**: Professional sound design overhaul
   - Master gain control for volume management
