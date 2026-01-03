@@ -338,7 +338,7 @@ export function initProfilePage(deps) {
     document.getElementById('profile-friend-btn')?.addEventListener('click', async () => {
         const profileUserId = document.getElementById('profile-view')?.dataset.userId;
         if (!profileUserId || !AppState.currentUser) return;
-        if (!isRegisteredUser()) {
+        if (!isRegisteredUser(AppState.currentUser, AppState.profile)) {
             UI?.showToast?.('Sign up with an email account to add friends.', 'info');
             return;
         }
@@ -374,7 +374,7 @@ export function initProfilePage(deps) {
     document.getElementById('profile-dm-btn')?.addEventListener('click', async () => {
         const profileUserId = document.getElementById('profile-view')?.dataset.userId;
         if (!profileUserId) return;
-        if (!isRegisteredUser()) {
+        if (!isRegisteredUser(AppState.currentUser, AppState.profile)) {
             UI?.showToast?.('Sign up with an email account to send direct messages and add friends.', 'info');
             return;
         }

@@ -542,7 +542,7 @@ async function handleAuthStateChange(user) {
         }
         
         // Load friends for registered users
-        if (isRegisteredUser()) {
+        if (isRegisteredUser(user, profileData)) {
             try {
                 // getFriends returns full friend objects, but AppState.friends should be IDs
                 const friendObjects = await ProfileManager.getFriends(user.uid);

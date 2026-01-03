@@ -984,7 +984,7 @@ export function createFloatingChat(deps) {
 
     dmQuickAddBtn?.addEventListener('click', async () => {
         setDmQuickStatus('');
-        if (!isRegisteredUser()) {
+        if (!isRegisteredUser(AppState.currentUser, AppState.profile)) {
             setDmQuickStatus('Add friend requires an email account.', true);
             return;
         }
@@ -1000,7 +1000,7 @@ export function createFloatingChat(deps) {
     });
 
     friendAddBtn?.addEventListener('click', async () => {
-        if (!isRegisteredUser()) {
+        if (!isRegisteredUser(AppState.currentUser, AppState.profile)) {
             UI.showToast('Sign in with email to add friends.', 'error');
             return;
         }
