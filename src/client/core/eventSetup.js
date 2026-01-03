@@ -775,6 +775,52 @@ export function setupGameListeners(deps) {
         })();
     });
 
+    // Daily Puzzle button
+    document.getElementById('daily-puzzle-btn')?.addEventListener('click', () => {
+        // Start daily puzzle with predefined settings
+        const today = new Date();
+        const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        UI?.showToast?.(`Starting Daily Puzzle for ${dateStr}`, 'info');
+        
+        // Use a special mode for daily puzzle
+        AppState.gameMode = 'daily';
+        AppState.currentDifficulty = 'medium';
+        AppState.playerScore = 0;
+        AppState.selectedCell = null;
+        AppState.timeLimitSeconds = 0;
+        AppState.maxMistakes = 3;
+        AppState.settings.autoCheck = true;
+
+        const autoToggle = document.getElementById('auto-check');
+        if (autoToggle) autoToggle.checked = true;
+        
+        GameHelpers?.resetGameState();
+        ArchitecturalStateManager?.reset();
+        ArchitecturalStateManager?.startIdleWatch();
+        
+        const { puzzle, solution, seed } = SudokuGenerator.createDailyPuzzle();
+        AppState.puzzle = puzzle.map(row => [...row]);
+        AppState.solution = solution;
+        AppState.originalPuzzle = puzzle.map(row => [...row]);
+        AppState.dailySeed = seed;
+        
+        GameUI?.createGrid();
+        GameUI?.renderPuzzle(AppState.puzzle);
+        
+        const currentDiffEl = document.getElementById('current-difficulty');
+        if (currentDiffEl) currentDiffEl.textContent = `Daily Challenge - ${dateStr}`;
+        
+        const vsHeader = document.getElementById('game-header-versus');
+        const soloHeader = document.getElementById('game-header-solo');
+        if (vsHeader) vsHeader.style.display = 'none';
+        if (soloHeader) soloHeader.style.display = 'flex';
+        
+        ViewManager?.show?.('game');
+        PresenceManager?.updateActivity?.('Playing Daily Puzzle');
+        GameUI?.startTimer();
+    });
+
     // Custom Sudoku modal
     document.getElementById('open-custom-sudoku')?.addEventListener('click', () => {
         ViewManager.showModal('custom-sudoku-modal');
@@ -823,15 +869,79 @@ export function setupGameListeners(deps) {
         GameHelpers.toggleNotesMode();
     });
 
+    // Hint button - provides a hint for the selected cell
+    document.getElementById('hint-btn')?.addEventListener('click', () => {
+        if (!AppState.selectedCell) {
+            UI?.showToast?.('Please select a cell first.', 'info');
+            return;
+        }
+        
+        const { row, col } = AppState.selectedCell;
+        
+        // Check if cell is already filled (given or player filled)
+        const currentValue = AppState.puzzle[row][col];
+        if (currentValue !== 0 && AppState.originalPuzzle[row][col] !== 0) {
+            UI?.showToast?.('This cell is already given.', 'info');
+            return;
+        }
+        
+        // Get the correct value from solution
+        const correctValue = AppState.solution[row][col];
+        
+        // Fill in the correct value
+        AppState.puzzle[row][col] = correctValue;
+        const cell = document.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
+        if (cell) {
+            const valueEl = cell.querySelector('.cell-value');
+            if (valueEl) valueEl.textContent = correctValue;
+            cell.classList.remove('error', 'player-fill');
+            cell.classList.add('correct', 'hint-fill');
+        }
+        
+        GameHelpers?.updateMistakesDisplay();
+        GameHelpers?.checkCompletion();
+        UI?.showToast?.('Hint provided!', 'success');
+    });
+
+    // Clear button - clears the selected cell
+    document.getElementById('clear-btn')?.addEventListener('click', () => {
+        if (!AppState.selectedCell) {
+            UI?.showToast?.('Please select a cell first.', 'info');
+            return;
+        }
+        
+        const { row, col } = AppState.selectedCell;
+        
+        // Don't allow clearing given cells
+        if (AppState.originalPuzzle && AppState.originalPuzzle[row][col] !== 0) {
+            UI?.showToast?.('Cannot clear a given cell.', 'info');
+            return;
+        }
+        
+        // Clear the cell
+        AppState.puzzle[row][col] = 0;
+        const cell = document.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
+        if (cell) {
+            const valueEl = cell.querySelector('.cell-value');
+            if (valueEl) valueEl.textContent = '';
+            cell.classList.remove('error', 'correct', 'player-fill', 'hint-fill');
+        }
+        
+        GameHelpers?.updateMistakesDisplay();
+    });
+
     // Settings toggles
     document.getElementById('highlight-conflicts')?.addEventListener('change', (e) => {
         AppState.settings.highlightConflicts = e.target.checked;
+        import('../core/appState.js').then(({ saveSettings }) => saveSettings(AppState.settings));
     });
     document.getElementById('highlight-same')?.addEventListener('change', (e) => {
         AppState.settings.highlightSameNumbers = e.target.checked;
+        import('../core/appState.js').then(({ saveSettings }) => saveSettings(AppState.settings));
     });
     document.getElementById('auto-check')?.addEventListener('change', (e) => {
         AppState.settings.autoCheck = e.target.checked;
+        import('../core/appState.js').then(({ saveSettings }) => saveSettings(AppState.settings));
     });
 
     // Keyboard shortcuts

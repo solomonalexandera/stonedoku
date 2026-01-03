@@ -3249,6 +3249,11 @@ body:not(.light-theme) .difficulty-btn.btn-daily {
     animation: pop 0.2s ease;
 }
 
+.sudoku-cell.hint-fill {
+    color: var(--color-info);
+    font-weight: 600;
+}
+
 .sudoku-cell.same-number {
     background: var(--color-cell-same-number);
 }

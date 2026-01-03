@@ -70,6 +70,16 @@ export function createGameHelpers({ AppState: appState = AppState, BoardIntegrit
                 dot.className = `mistake-dot${i >= appState.mistakes ? ' empty' : ''}`;
                 container.appendChild(dot);
             }
+            
+            // Update hint text to show mistake count when a limit is set
+            const hintEl = container.parentElement?.querySelector('.game-info-hint');
+            if (hintEl) {
+                if (appState.maxMistakes > 0) {
+                    hintEl.textContent = `${appState.mistakes} of ${appState.maxMistakes} mistakes used`;
+                } else {
+                    hintEl.textContent = 'Mistakes are permanent.';
+                }
+            }
         },
 
         highlightSameNumbers(num) {
