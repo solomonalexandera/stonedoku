@@ -5,6 +5,8 @@
  * @module core/eventSetup
  */
 
+import { saveSettings } from './appState.js';
+
 /**
  * Password visibility toggle setup
  */
@@ -402,7 +404,7 @@ export function setupGameListeners(deps) {
     const { AppState, ViewManager, PresenceManager, MatchManager, LobbyManager, GameUI,
             GameHelpers, AudioManager, UI, ChallengeSystemManager, getCurrentDisplayName,
             startSinglePlayerGame, handleRoomUpdate, quitGame, navigateCell,
-            ref, rtdb, get, update } = deps;
+            ref, rtdb, get, update, SudokuGenerator, ArchitecturalStateManager } = deps;
 
     let countdownInterval = null;
 
@@ -933,15 +935,15 @@ export function setupGameListeners(deps) {
     // Settings toggles
     document.getElementById('highlight-conflicts')?.addEventListener('change', (e) => {
         AppState.settings.highlightConflicts = e.target.checked;
-        import('../core/appState.js').then(({ saveSettings }) => saveSettings(AppState.settings));
+        saveSettings(AppState.settings);
     });
     document.getElementById('highlight-same')?.addEventListener('change', (e) => {
         AppState.settings.highlightSameNumbers = e.target.checked;
-        import('../core/appState.js').then(({ saveSettings }) => saveSettings(AppState.settings));
+        saveSettings(AppState.settings);
     });
     document.getElementById('auto-check')?.addEventListener('change', (e) => {
         AppState.settings.autoCheck = e.target.checked;
-        import('../core/appState.js').then(({ saveSettings }) => saveSettings(AppState.settings));
+        saveSettings(AppState.settings);
     });
 
     // Keyboard shortcuts
