@@ -84,6 +84,9 @@ export function createGameFlow({
         if (typeof options?.autoCheck === 'boolean') {
             AppState.settings.autoCheck = options.autoCheck;
         }
+
+        const autoToggle = document.getElementById('auto-check');
+        if (autoToggle) autoToggle.checked = !!AppState.settings.autoCheck;
         
         GameHelpers?.resetGameState();
         GameHelpers?.resetToolLimits(difficulty);

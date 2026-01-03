@@ -204,6 +204,11 @@ export function createFloatingChat(deps) {
     const form = document.getElementById('chat-widget-form');
     const input = document.getElementById('chat-widget-input');
 
+    // Ensure guests always see a hint in the input
+    if (input && !input.placeholder) {
+        input.placeholder = 'Type a message…';
+    }
+
     if (!widget || !fab) return null;
 
     // State
@@ -1226,6 +1231,13 @@ export function createFloatingChat(deps) {
                     await ChatManager.sendDirectMessage(AppState.currentUser.uid, displayName, otherUserId, text, toName);
                 } else {
                     await ChatManager.sendGlobalMessage(AppState.currentUser.uid, displayName, text);
+                    // Optimistically append so guests immediately see their message
+                    storeAppend('global', {
+                        userId: AppState.currentUser.uid,
+                        displayName,
+                        text,
+                        timestamp: Date.now()
+                    });
                 }
             } catch (err) {
                 console.error('Failed to send chat message', err);
