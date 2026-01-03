@@ -522,11 +522,11 @@ export function createUiHelpers({
             const vanityEl = document.getElementById('profile-vanity-url');
             const vanityLinkEl = document.getElementById('profile-vanity-link');
             const hostBase = window.location.origin || 'https://stone-doku.web.app';
-            const vanityUrl = `${hostBase}/u/${encodeURIComponent(username.toLowerCase())}`;
+            const vanityUrl = `${hostBase}/u/${encodeURIComponent((data.username || '').toLowerCase())}`;
             const isRegistered = !!data.email;
             const targetIsGuest = !isRegistered;
             if (isRegistered && vanityEl && vanityLinkEl) {
-                vanityLinkEl.href = `/u/${encodeURIComponent(username.toLowerCase())}`;
+                vanityLinkEl.href = `/u/${encodeURIComponent((data.username || '').toLowerCase())}`;
                 vanityLinkEl.textContent = vanityUrl;
                 vanityEl.style.display = 'flex';
             } else if (vanityEl) {
