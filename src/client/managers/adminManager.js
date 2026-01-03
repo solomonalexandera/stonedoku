@@ -14,6 +14,8 @@
  */
 export function createAdminManager({ functions, httpsCallable, AppState, UI } = {}) {
     
+    // Use an object to hold UI reference so it can be updated later
+    const deps = { UI };
     let lastAuditId = null;
     
     /**
@@ -137,7 +139,7 @@ export function createAdminManager({ functions, httpsCallable, AppState, UI } = 
                             `<option value="superAdmin" ${user.role === 'superAdmin' ? 'selected' : ''}>Super Admin</option>` : 
                             ''}
                     </select>
-                    <button class="btn btn-primary btn-sm" onclick="window.AdminManager.appointRole('${UI.escapeHtml(user.uid)}')">
+                    <button class="btn btn-primary btn-sm" onclick="window.AdminManager.appointRole('${deps.UI?.escapeHtml(user.uid)}')">
                         Update
                     </button>
                 </div>
@@ -221,13 +223,13 @@ export function createAdminManager({ functions, httpsCallable, AppState, UI } = 
                 entry.innerHTML = `
                     <div class="audit-entry-time">${dateStr}</div>
                     <div class="audit-entry-action">
-                        <strong>${UI.escapeHtml(log.action)}</strong>
-                        ${log.targetEmail ? `• ${UI.escapeHtml(log.targetEmail)}` : ''}
-                        ${log.targetRole ? `→ <strong>${UI.escapeHtml(log.targetRole)}</strong>` : ''}
+                        <strong>${deps.UI?.escapeHtml(log.action)}</strong>
+                        ${log.targetEmail ? `• ${deps.UI?.escapeHtml(log.targetEmail)}` : ''}
+                        ${log.targetRole ? `→ <strong>${deps.UI?.escapeHtml(log.targetRole)}</strong>` : ''}
                     </div>
                     <div class="audit-entry-meta">
-                        By: ${UI.escapeHtml(log.performedByEmail || 'system')}
-                        ${log.reason ? `• Reason: ${UI.escapeHtml(log.reason)}` : ''}
+                        By: ${deps.UI?.escapeHtml(log.performedByEmail || 'system')}
+                        ${log.reason ? `• Reason: ${deps.UI?.escapeHtml(log.reason)}` : ''}
                     </div>
                 `;
                 
@@ -249,6 +251,9 @@ export function createAdminManager({ functions, httpsCallable, AppState, UI } = 
         init,
         searchUsers,
         appointRole,
-        loadAuditLog
+        loadAuditLog,
+        set UI(value) {
+            deps.UI = value;
+        }
     };
 }
