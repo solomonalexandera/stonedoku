@@ -305,22 +305,18 @@ export function createGameUi({
                 const oldValue = appState.puzzle[row][col];
 
                 if (num === 0) {
-                    if (appState.toolLimits.eraseLeft <= 0) return;
                     const valueEl = cell.querySelector('.cell-value');
                     if (valueEl) valueEl.textContent = '';
                     else cell.textContent = '';
                     appState.puzzle[row][col] = 0;
-                    gameHelpers.addToHistory(row, col, oldValue, 0);
                     delete appState.notes[`${row}_${col}`];
                     const notesEl = cell.querySelector('.cell-notes');
                     if (notesEl) notesEl.innerHTML = '';
-                    gameHelpers.consumeEraseIfNeeded(oldValue !== 0);
                 } else {
                     const valueEl = cell.querySelector('.cell-value');
                     if (valueEl) valueEl.textContent = String(num);
                     else cell.textContent = String(num);
                     appState.puzzle[row][col] = num;
-                    gameHelpers.addToHistory(row, col, oldValue, num);
                     delete appState.notes[`${row}_${col}`];
                     const notesEl = cell.querySelector('.cell-notes');
                     if (notesEl) notesEl.innerHTML = '';

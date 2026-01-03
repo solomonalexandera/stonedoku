@@ -48,14 +48,6 @@ test('createAppState initializes empty arrays and objects', () => {
     assert.deepEqual(state.moveHistory, []);
 });
 
-test('createAppState initializes toolLimits with zeros', () => {
-    const state = createAppState();
-    assert.equal(state.toolLimits.undoMax, 0);
-    assert.equal(state.toolLimits.eraseMax, 0);
-    assert.equal(state.toolLimits.undoLeft, 0);
-    assert.equal(state.toolLimits.eraseLeft, 0);
-});
-
 test('createAppState initializes passwordReset with defaults', () => {
     const state = createAppState();
     assert.equal(state.passwordReset.active, false);

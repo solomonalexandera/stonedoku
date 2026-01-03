@@ -818,19 +818,6 @@ export function setupGameListeners(deps) {
         }
     });
 
-    // Undo button
-    document.getElementById('undo-btn')?.addEventListener('click', () => {
-        GameHelpers.tryUndo();
-        AudioManager.playCellFill();
-    });
-
-    // Erase button
-    document.getElementById('erase-btn')?.addEventListener('click', () => {
-        if (AppState.selectedCell) {
-            GameUI.inputNumber(0);
-        }
-    });
-
     // Notes button
     document.getElementById('notes-btn')?.addEventListener('click', () => {
         GameHelpers.toggleNotesMode();
@@ -850,12 +837,6 @@ export function setupGameListeners(deps) {
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (AppState.currentView !== 'game') return;
-
-        // Ctrl+Z for undo
-        if (e.ctrlKey && e.key === 'z') {
-            e.preventDefault();
-            GameHelpers.tryUndo();
-        }
 
         // N for notes mode toggle
         if (e.key === 'n' || e.key === 'N') {

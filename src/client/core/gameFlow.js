@@ -92,7 +92,6 @@ export function createGameFlow({
         if (autoToggle) autoToggle.checked = !!AppState.settings.autoCheck;
         
         GameHelpers?.resetGameState();
-        GameHelpers?.resetToolLimits(difficulty);
         ArchitecturalStateManager?.reset();
         ArchitecturalStateManager?.startIdleWatch();
         
@@ -132,7 +131,6 @@ export function createGameFlow({
         AppState.selectedCell = null;
         
         GameHelpers?.resetGameState();
-        GameHelpers?.resetToolLimits('hard');
         ArchitecturalStateManager?.reset();
         ArchitecturalStateManager?.startIdleWatch();
         AppState.isGameOver = false;

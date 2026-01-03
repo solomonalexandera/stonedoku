@@ -593,7 +593,7 @@ export function createUiHelpers({
             document.getElementById('profile-other-actions').style.display = isOwnProfile ? 'none' : 'flex';
 
             if (!isOwnProfile) {
-                const isFriend = (AppState.friends || []).includes(userId);
+                let isFriend = (AppState.friends || []).includes(userId);
                 const friendBtn = document.getElementById('profile-friend-btn');
                 const labelEl = friendBtn?.querySelector('.btn-label');
                 const dmBtn = document.getElementById('profile-dm-btn');
@@ -618,6 +618,9 @@ export function createUiHelpers({
                             if (reqData.status === 'pending') {
                                 hasIncomingRequest = reqData.toUid === AppState.currentUser.uid;
                                 hasOutgoingRequest = reqData.fromUid === AppState.currentUser.uid;
+                            } else if (reqData.status === 'accepted') {
+                                // If friend request is accepted, they are friends
+                                isFriend = true;
                             }
                         }
                     } catch (e) {

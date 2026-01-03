@@ -56,12 +56,6 @@ export function createAppState() {
         notesMode: false,
         notes: {},
         moveHistory: [],
-        toolLimits: {
-            undoMax: 0,
-            eraseMax: 0,
-            undoLeft: 0,
-            eraseLeft: 0,
-        },
         currentDifficulty: 'medium',
         widgetChatMode: 'global',
         widgetGameChatContext: null,
