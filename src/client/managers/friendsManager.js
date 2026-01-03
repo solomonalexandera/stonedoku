@@ -65,7 +65,7 @@ export function createFriendsManager({
                 delegationBound = true;
             }
 
-            if (!isRegisteredUser()) {
+            if (!isRegisteredUser(appState.currentUser, appState.profile)) {
                 card.style.display = 'none';
                 return;
             }

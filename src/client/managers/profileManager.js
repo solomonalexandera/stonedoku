@@ -412,7 +412,7 @@ export function createProfileManager({
 
         async sendFriendRequest(fromUserId, toUserId) {
             if (!fromUserId || !toUserId || fromUserId === toUserId) return;
-            if (!isRegisteredUser()) {
+            if (!isRegisteredUser(appState.currentUser, appState.profile)) {
                 throw new Error('Friends require a registered email account.');
             }
             const reqId = friendRequestId(fromUserId, toUserId);

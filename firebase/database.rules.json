@@ -74,7 +74,10 @@
     "notifications": {
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
-        ".write": "auth != null && (auth.uid == $userId || auth.uid == newData.child('from').val())"
+        ".write": "auth != null && auth.uid == $userId",
+        "$notificationId": {
+          ".write": "auth != null && (auth.uid == $userId || auth.uid == newData.child('from').val())"
+        }
       }
     }
   }

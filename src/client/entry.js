@@ -164,10 +164,10 @@ const PresenceManager = createPresenceManager({ rtdb, appState: AppState });
 const ProfileManager = createProfileManager({
     firestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs,
     onSnapshot, arrayUnion, arrayRemove, runFsTransaction, fsServerTimestamp, storage, storageRef,
-    uploadBytes, getDownloadURL, rtdb, ref, update, serverTimestamp, AppState
+    uploadBytes, getDownloadURL, rtdb, ref, update, serverTimestamp, AppState, isRegisteredUser
 });
 const FriendsManager = createFriendsManager({
-    firestore, AppState, profileManager: ProfileManager, UI: null // Will be set after UI is created
+    firestore, AppState, profileManager: ProfileManager, isRegisteredUser, UI: null // Will be set after UI is created
 });
 const LobbyManager = createLobbyManager({ rtdb, appState: AppState });
 const MatchManager = createMatchManager({ rtdb, appState: AppState });
