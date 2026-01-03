@@ -647,8 +647,6 @@ export function createUiHelpers({
                             friendBtn.onclick = null;
                         }
                     }
-                        }
-                    }
                 }
             }
 
