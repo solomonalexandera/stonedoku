@@ -80,39 +80,77 @@ export function createFriendsManager({
 
             const friends = Array.isArray(appState.friends) ? appState.friends : [];
             let incomingRequests = [];
+            let outgoingRequests = [];
+            
             try {
-                const reqQ = query(
+                // Load incoming requests
+                const incomingQ = query(
                     collection(firestore, 'friendRequests'),
                     where('toUid', '==', appState.currentUser.uid),
                     where('status', '==', 'pending'),
                     limit(30)
                 );
-                const snap = await getDocs(reqQ);
-                incomingRequests = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+                const incomingSnap = await getDocs(incomingQ);
+                incomingRequests = incomingSnap.docs.map(d => ({ id: d.id, ...(d.data() || {}), direction: 'incoming' }));
+                
+                // Load outgoing requests
+                const outgoingQ = query(
+                    collection(firestore, 'friendRequests'),
+                    where('fromUid', '==', appState.currentUser.uid),
+                    where('status', '==', 'pending'),
+                    limit(30)
+                );
+                const outgoingSnap = await getDocs(outgoingQ);
+                outgoingRequests = outgoingSnap.docs.map(d => ({ id: d.id, ...(d.data() || {}), direction: 'outgoing' }));
             } catch (e) {
-                console.warn('Failed to load incoming friend requests', e);
+                console.warn('Failed to load friend requests', e);
             }
 
             const UI = resolveUI();
 
-            const requestIds = incomingRequests.map((r) => r?.fromUid).filter(Boolean);
-            const requestProfiles = await pm.getProfiles(requestIds);
+            // Render incoming and outgoing requests
+            const incomingIds = incomingRequests.map((r) => r?.fromUid).filter(Boolean);
+            const outgoingIds = outgoingRequests.map((r) => r?.toUid).filter(Boolean);
+            const allRequestIds = [...incomingIds, ...outgoingIds];
+            const requestProfiles = await pm.getProfiles(allRequestIds);
+            const profilesMap = new Map(requestProfiles.map(p => [p.id, p]));
+            
             requestsList.innerHTML = '';
-            if (requestProfiles.length === 0) {
-                requestsList.innerHTML = '<div class="friend-empty">No incoming requests.</div>';
+            const totalRequests = incomingRequests.length + outgoingRequests.length;
+            
+            if (totalRequests === 0) {
+                requestsList.innerHTML = '<div class="friend-empty">No pending requests.</div>';
             } else {
-                for (const r of requestProfiles) {
-                    const name = r.data?.displayName || r.data?.username || `Player_${String(r.id).substring(0, 6)}`;
+                // Show incoming requests first
+                for (const req of incomingRequests) {
+                    const profile = profilesMap.get(req.fromUid);
+                    const name = profile?.data?.displayName || profile?.data?.username || `Player_${String(req.fromUid).substring(0, 6)}`;
                     const row = document.createElement('div');
                     row.className = 'friend-item';
-                    row.dataset.userId = r.id;
+                    row.dataset.userId = req.fromUid;
                     row.innerHTML = `
-                    <div class="friend-name">${UI?.escapeHtml?.(name) || name}</div>
-                    <div class="friend-actions">
-                        <button class="btn btn-icon accept-request" type="button" title="Accept"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg></button>
-                        <button class="btn btn-icon decline-request" type="button" title="Decline"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
-                    </div>
-                `;
+                        <div class="friend-name">${UI?.escapeHtml?.(name) || name}</div>
+                        <div class="friend-actions">
+                            <button class="btn btn-icon accept-request" type="button" title="Accept"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg></button>
+                            <button class="btn btn-icon decline-request" type="button" title="Decline"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                        </div>
+                    `;
+                    requestsList.appendChild(row);
+                }
+                
+                // Show outgoing requests
+                for (const req of outgoingRequests) {
+                    const profile = profilesMap.get(req.toUid);
+                    const name = profile?.data?.displayName || profile?.data?.username || `Player_${String(req.toUid).substring(0, 6)}`;
+                    const row = document.createElement('div');
+                    row.className = 'friend-item friend-item-outgoing';
+                    row.dataset.userId = req.toUid;
+                    row.innerHTML = `
+                        <div class="friend-name">${UI?.escapeHtml?.(name) || name} <span class="friend-status">(sent)</span></div>
+                        <div class="friend-actions">
+                            <button class="btn btn-icon cancel-request" type="button" title="Cancel request"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                        </div>
+                    `;
                     requestsList.appendChild(row);
                 }
             }
@@ -156,6 +194,7 @@ export function createFriendsManager({
                     try {
                         await pm.acceptFriendRequest(appState.currentUser.uid, userId);
                         await this.refresh();
+                        UI?.showToast?.('Friend request accepted!', 'success');
                     } catch (e) {
                         console.error('Failed to accept friend request', e);
                         UI?.showToast?.('Failed to accept request.', 'error');
@@ -164,9 +203,19 @@ export function createFriendsManager({
                     try {
                         await pm.declineFriendRequest(appState.currentUser.uid, userId);
                         await this.refresh();
+                        UI?.showToast?.('Friend request declined.', 'info');
                     } catch (e) {
                         console.error('Failed to decline friend request', e);
                         UI?.showToast?.('Failed to decline request.', 'error');
+                    }
+                } else if (btn.classList.contains('cancel-request')) {
+                    try {
+                        await pm.cancelFriendRequest(appState.currentUser.uid, userId);
+                        await this.refresh();
+                        UI?.showToast?.('Friend request cancelled.', 'info');
+                    } catch (e) {
+                        console.error('Failed to cancel friend request', e);
+                        UI?.showToast?.('Failed to cancel request.', 'error');
                     }
                 }
             });

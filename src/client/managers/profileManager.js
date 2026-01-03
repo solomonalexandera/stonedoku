@@ -457,6 +457,7 @@ export function createProfileManager({
                     // If not in friends list, treat as stale request and allow new one
                 }
 
+                // For declined or cancelled requests, or stale accepted requests, delete and continue
                 try {
                     await deleteDoc(existingSnap.ref);
                 } catch (e) {
@@ -538,13 +539,32 @@ export function createProfileManager({
             }
         },
 
+        async cancelFriendRequest(userId, friendId) {
+            if (!userId || !friendId) return;
+            const reqId = friendRequestId(userId, friendId);
+            const reqRef = doc(firestore, 'friendRequests', reqId);
+            
+            // Delete the friend request document
+            await deleteDoc(reqRef);
+            
+            // Clean up notification if it exists
+            try {
+                if (rtdb) {
+                    await rtdbSet(ref(rtdb, `notifications/${friendId}/friend_${userId}`), null);
+                }
+            } catch (e) {
+                console.debug('Friend request notification cleanup skipped', e?.message || e);
+            }
+        },
+
         async removeFriend(userId, friendId) {
             if (!userId || !friendId) return;
             const userRef = doc(firestore, 'users', userId);
-            const friendRef = doc(firestore, 'users', friendId);
+            
+            // Only update the current user's friends list and create a removal document
+            // The Cloud Function will handle removing from both sides symmetrically
             await Promise.all([
                 updateDoc(userRef, { friends: arrayRemove(friendId) }),
-                updateDoc(friendRef, { friends: arrayRemove(userId) }),
                 addDoc(collection(firestore, 'friendRemovals'), {
                     users: [userId, friendId],
                     createdAt: Timestamp.now()
