@@ -2528,7 +2528,7 @@ body.light-theme .player-item {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    max-height: 160px;
+    max-height: 300px;
     overflow: auto;
 }
 

@@ -187,7 +187,9 @@ const UiHelpers = createUiHelpers({
     storage, storageRef, uploadBytes, getDownloadURL,
     AppState, ViewManager, ProfileManager, PresenceManager, LobbyManager, MatchManager, ChatManager, AudioManager,
     MotionUtils, ArchitecturalStateManager, BoardIntegrityHelper,
-    SudokuGenerator, ProfanityFilter, httpsCallable, functions
+    SudokuGenerator, ProfanityFilter, httpsCallable, functions,
+    ChallengeManager: () => ChallengeSystemManager,
+    getCurrentDisplayName
 });
 // Use UiHelpers as the primary UI object - it has the most complete functionality
 const UI = UiHelpers;
@@ -266,6 +268,9 @@ const ChallengeSystemManager = createChallengeSystemManager({
     AppState, LobbyManager, PresenceManager, ViewManager, UI,
     handleRoomUpdate: (...args) => handleRoomUpdate?.(...args)
 });
+
+// Assign to global scope for lazy resolution in UI helpers
+globalThis.ChallengeManager = ChallengeSystemManager;
 
 // ===========================================
 // Game Flow
@@ -638,6 +643,9 @@ function bootstrap() {
     // Initialize accessibility features (ARIA labels, screen reader)
     AccessibilityManager.init?.();
     
+    // Initialize Audio System
+    AudioManager.init?.();
+
     // Initialize updates center and admin console
     UpdatesCenter.init?.();
     AdminConsole.init?.();

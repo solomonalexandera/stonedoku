@@ -424,7 +424,11 @@ export function createGameUi({
 
             appState.gameTimer = setInterval(async () => {
                 appState.gameSeconds++;
-                const formatted = ui.formatTime(appState.gameSeconds);
+                const elapsed = appState.gameSeconds;
+                const remaining = appState.timeLimitSeconds > 0
+                    ? Math.max(0, appState.timeLimitSeconds - elapsed)
+                    : elapsed;
+                const formatted = ui.formatTime(remaining);
                 if (timerEl) timerEl.textContent = formatted;
                 if (versusTimerEl) versusTimerEl.textContent = formatted;
 

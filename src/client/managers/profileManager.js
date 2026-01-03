@@ -282,6 +282,11 @@ export function createProfileManager({
         },
 
         async checkBadges(userId, stats) {
+            // Clear previous post-match badges
+            if (appState.newBadgesPostMatch) {
+                appState.newBadgesPostMatch = [];
+            }
+
             const wins = Number(stats.wins) || 0;
             const losses = Number(stats.losses) || 0;
             const gamesPlayed = Number(stats.gamesPlayed) || wins + losses || 0;

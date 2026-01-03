@@ -887,10 +887,20 @@ export function createEventSetup(deps) {
     const { CookieConsent, AppState, initFloatingChat, initProfilePage,
             handleVanityUrl, handleUpdatesUrl, handleAdminUrl } = deps;
 
+    const syncSettingsToggles = () => {
+        const conflictEl = document.getElementById('highlight-conflicts');
+        const sameEl = document.getElementById('highlight-same');
+        const autoEl = document.getElementById('auto-check');
+        if (conflictEl) conflictEl.checked = !!AppState.settings.highlightConflicts;
+        if (sameEl) sameEl.checked = !!AppState.settings.highlightSameNumbers;
+        if (autoEl) autoEl.checked = !!AppState.settings.autoCheck;
+    };
+
     return {
         setup() {
             initTheme(CookieConsent);
             syncSoundToggleUi(AppState);
+            syncSettingsToggles();
 
             setupHeaderMenu();
             setupPasswordToggles();

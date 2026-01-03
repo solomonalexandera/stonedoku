@@ -25,6 +25,7 @@ export function createUiHelpers({
     ViewManager = globalThis.ViewManager,
     ProfileManager = globalThis.ProfileManager,
     FriendsManager = globalThis.FriendsManager,
+    // Lazy load ChallengeManager to avoid circular dependency
     ChallengeManager = () => globalThis.ChallengeManager,
     BadgeInfo = defaultBadgeInfo,
     isRegisteredUser = globalThis.isRegisteredUser,
@@ -357,7 +358,13 @@ export function createUiHelpers({
                                 if (accepted) await FriendsManager?.refresh?.();
                             } catch (e) {
                                 console.warn('Mini profile add friend failed', e);
-                                ui.showToast(e?.message || 'Failed to send friend request.', 'error');
+                                if (e?.message === 'You are already friends.') {
+                                    ui.showToast('You are already friends.', 'info');
+                                    friendBtn.disabled = true;
+                                    friendBtn.textContent = 'Friends';
+                                } else {
+                                    ui.showToast(e?.message || 'Failed to send friend request.', 'error');
+                                }
                             }
                         });
 
