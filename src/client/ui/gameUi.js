@@ -366,20 +366,9 @@ export function createGameUi({
                             return;
                         }
                     } else {
+                        // When auto-check is disabled, don't count mistakes immediately
+                        // Mistakes will be validated when the game is complete or manually checked
                         cell.classList.add('player-fill');
-
-                        if (!isCorrect) {
-                            architecturalStateManager.noteMistake();
-                            appState.mistakes++;
-                            gameHelpers.updateMistakesDisplay();
-
-                            if (appState.mistakes >= appState.maxMistakes) {
-                                setTimeout(async () => {
-                                    await this.endSinglePlayerGame(false);
-                                }, 600);
-                                return;
-                            }
-                        }
                     }
 
                     setTimeout(() => {

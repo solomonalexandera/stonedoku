@@ -75,6 +75,9 @@ export function createGameFlow({
     };
 
     const startSinglePlayerGame = (difficulty, options = null) => {
+        // Stop any existing timer from previous game
+        GameUI?.stopTimer();
+        
         AppState.gameMode = 'single';
         AppState.currentDifficulty = difficulty;
         AppState.playerScore = 0;

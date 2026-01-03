@@ -27,6 +27,13 @@ export function createFriendsManager({
                 const data = snap.data() || {};
                 appState.profile = data;
                 appState.friends = Array.isArray(data.friends) ? data.friends : [];
+                
+                // Update UI stats when profile changes
+                const UI = resolveUI();
+                if (UI?.updateStats) {
+                    UI.updateStats(data.stats || { wins: 0, losses: 0 });
+                }
+                
                 this.render();
             });
         },
