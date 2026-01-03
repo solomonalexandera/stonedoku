@@ -42,11 +42,11 @@ export function createGameFlow({
     let countdownInterval = null;
     let rematchListener = null;
 
-    const escapeHtml = (text) => {
+    const escapeHtml = UI?.escapeHtml || ((text) => {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
-    };
+    });
 
     const navigateCell = (direction) => {
         if (!AppState?.selectedCell) {

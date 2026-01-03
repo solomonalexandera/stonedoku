@@ -92,29 +92,11 @@ export function createAuthFlow({
         });
     };
 
-    const isRegisteredUser = (user = null, profile = null) => {
-        const u = user || AppState?.currentUser;
-        const p = profile || AppState?.profile;
-        if (!u) return false;
-        if (u.isAnonymous) return false;
-        const email = u.email || p?.email || (u.providerData || []).map(pd => pd?.email).find(Boolean);
-        return !!email;
-    };
-
-    const getCurrentDisplayName = () => {
-        const user = AppState?.currentUser;
-        const profile = AppState?.profile;
-        return profile?.displayName || profile?.username || user?.displayName || 
-               (user?.uid ? `Player_${user.uid.substring(0, 6)}` : 'Player');
-    };
-
     return {
         configureAuthPersistence,
         getFallbackDisplayName,
         showAuthenticatedShell,
         shouldDeferLobbyRedirect,
-        waitForAuthReady,
-        isRegisteredUser,
-        getCurrentDisplayName
+        waitForAuthReady
     };
 }

@@ -15,6 +15,7 @@ export function createFriendsManager({
     const resolveChatWidget = () => (typeof getChatWidget === 'function' ? getChatWidget() : getChatWidget) || globalThis.ChatWidget;
 
     let unsubscribeProfile = null;
+    let delegationBound = false;
 
     return {
         startRealtime() {
@@ -58,6 +59,12 @@ export function createFriendsManager({
             const friendsList = document.getElementById('friends-list');
             if (!card || !requestsList || !friendsList) return;
 
+            // Setup event delegation once
+            if (!delegationBound) {
+                this._setupEventDelegation(requestsList, friendsList);
+                delegationBound = true;
+            }
+
             if (!isRegisteredUser()) {
                 card.style.display = 'none';
                 return;
@@ -91,32 +98,14 @@ export function createFriendsManager({
                     const name = r.data?.displayName || r.data?.username || `Player_${String(r.id).substring(0, 6)}`;
                     const row = document.createElement('div');
                     row.className = 'friend-item';
+                    row.dataset.userId = r.id;
                     row.innerHTML = `
                     <div class="friend-name">${UI?.escapeHtml?.(name) || name}</div>
                     <div class="friend-actions">
-                        <button class="btn btn-icon" type="button" title="Accept"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg></button>
-                        <button class="btn btn-icon" type="button" title="Decline"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                        <button class="btn btn-icon accept-request" type="button" title="Accept"><svg class="ui-icon" aria-hidden="true"><use href="#i-check"></use></svg></button>
+                        <button class="btn btn-icon decline-request" type="button" title="Decline"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
                     </div>
                 `;
-                    const [acceptBtn, declineBtn] = row.querySelectorAll('button');
-                    acceptBtn?.addEventListener('click', async () => {
-                        try {
-                            await pm.acceptFriendRequest(appState.currentUser.uid, r.id);
-                            await this.refresh();
-                        } catch (e) {
-                            console.error('Failed to accept friend request', e);
-                            UI?.showToast?.('Failed to accept request.', 'error');
-                        }
-                    });
-                    declineBtn?.addEventListener('click', async () => {
-                        try {
-                            await pm.declineFriendRequest(appState.currentUser.uid, r.id);
-                            await this.refresh();
-                        } catch (e) {
-                            console.error('Failed to decline friend request', e);
-                            UI?.showToast?.('Failed to decline request.', 'error');
-                        }
-                    });
                     requestsList.appendChild(row);
                 }
             }
@@ -130,38 +119,83 @@ export function createFriendsManager({
                     const name = f.data?.displayName || f.data?.username || `Player_${String(f.id).substring(0, 6)}`;
                     const row = document.createElement('div');
                     row.className = 'friend-item';
+                    row.dataset.userId = f.id;
                     row.innerHTML = `
                     <div class="friend-name">${UI?.escapeHtml?.(name) || name}</div>
                     <div class="friend-actions">
-                        <button class="btn btn-icon" type="button" title="Profile"><svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg></button>
-                        <button class="btn btn-icon" type="button" title="Message"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg></button>
-                        <button class="btn btn-icon" type="button" title="Remove"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                        <button class="btn btn-icon view-profile" type="button" title="Profile"><svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg></button>
+                        <button class="btn btn-icon send-message" type="button" title="Message"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg></button>
+                        <button class="btn btn-icon remove-friend" type="button" title="Remove"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
                     </div>
                 `;
-                    const [profileBtn, messageBtn, removeBtn] = row.querySelectorAll('button');
-                    profileBtn?.addEventListener('click', () => UI?.showProfilePage?.(f.id));
-                    messageBtn?.addEventListener('click', async () => {
-                        try {
-                            await resolveChatWidget()?.openDm?.(f.id);
-                        } catch (e) {
-                            console.warn('Failed to open DM from friends panel', e);
-                        }
-                    });
-                    removeBtn?.addEventListener('click', async () => {
-                        const confirmed = await (UI?.confirm ? UI.confirm('Remove this friend?') : Promise.resolve(confirm('Remove this friend?')));
-                        if (!confirmed) return;
-                        try {
-                            await pm.removeFriend(appState.currentUser.uid, f.id);
-                            await this.refresh();
-                            UI?.showToast?.('Friend removed.', 'info');
-                        } catch (e) {
-                            console.error('Failed to remove friend', e);
-                            UI?.showToast?.('Failed to remove friend.', 'error');
-                        }
-                    });
                     friendsList.appendChild(row);
                 }
             }
+        },
+
+        _setupEventDelegation(requestsList, friendsList) {
+            // Friend requests delegation
+            requestsList.addEventListener('click', async (e) => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+
+                const row = btn.closest('.friend-item');
+                const userId = row?.dataset.userId;
+                if (!userId) return;
+
+                const UI = resolveUI();
+
+                if (btn.classList.contains('accept-request')) {
+                    try {
+                        await pm.acceptFriendRequest(appState.currentUser.uid, userId);
+                        await this.refresh();
+                    } catch (e) {
+                        console.error('Failed to accept friend request', e);
+                        UI?.showToast?.('Failed to accept request.', 'error');
+                    }
+                } else if (btn.classList.contains('decline-request')) {
+                    try {
+                        await pm.declineFriendRequest(appState.currentUser.uid, userId);
+                        await this.refresh();
+                    } catch (e) {
+                        console.error('Failed to decline friend request', e);
+                        UI?.showToast?.('Failed to decline request.', 'error');
+                    }
+                }
+            });
+
+            // Friends list delegation
+            friendsList.addEventListener('click', async (e) => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+
+                const row = btn.closest('.friend-item');
+                const userId = row?.dataset.userId;
+                if (!userId) return;
+
+                const UI = resolveUI();
+
+                if (btn.classList.contains('view-profile')) {
+                    UI?.showProfilePage?.(userId);
+                } else if (btn.classList.contains('send-message')) {
+                    try {
+                        await resolveChatWidget()?.openDm?.(userId);
+                    } catch (e) {
+                        console.warn('Failed to open DM from friends panel', e);
+                    }
+                } else if (btn.classList.contains('remove-friend')) {
+                    const confirmed = await (UI?.confirm ? UI.confirm('Remove this friend?') : Promise.resolve(confirm('Remove this friend?')));
+                    if (!confirmed) return;
+                    try {
+                        await pm.removeFriend(appState.currentUser.uid, userId);
+                        await this.refresh();
+                        UI?.showToast?.('Friend removed.', 'info');
+                    } catch (e) {
+                        console.error('Failed to remove friend', e);
+                        UI?.showToast?.('Failed to remove friend.', 'error');
+                    }
+                }
+            });
         }
     };
 }

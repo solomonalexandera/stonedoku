@@ -42,10 +42,46 @@ export function createUiHelpers({
         hoverTimeout: null,
         miniProfileTimeout: null,
         miniProfileHideTimer: null,
+        _playersListDelegationBound: false,
+        _badgesDelegationBound: false,
 
         updatePlayersList(players) {
             const container = document.getElementById('players-list');
             if (!container) return;
+
+            // Setup event delegation once
+            if (!ui._playersListDelegationBound) {
+                container.addEventListener('mouseenter', (e) => {
+                    const nameEl = e.target.closest('.player-name-hoverable');
+                    if (nameEl) {
+                        const userId = nameEl.dataset.userId;
+                        const displayName = nameEl.textContent;
+                        const item = nameEl.closest('.player-item');
+                        const activityEl = item?.querySelector('.player-item-activity');
+                        const basicData = {
+                            displayName: displayName,
+                            current_activity: activityEl?.textContent || 'Online'
+                        };
+                        ui.showProfileTooltip(e, userId, basicData, 'hover');
+                    }
+                }, true);
+
+                container.addEventListener('mouseleave', (e) => {
+                    if (e.target.closest('.player-name-hoverable')) {
+                        ui.hideProfileTooltip('hover');
+                    }
+                }, true);
+
+                container.addEventListener('click', (e) => {
+                    const item = e.target.closest('.player-item');
+                    if (item) {
+                        const userId = item.dataset.userId;
+                        if (userId) ui.showPlayerProfile(userId);
+                    }
+                });
+
+                ui._playersListDelegationBound = true;
+            }
 
             container.innerHTML = '';
 
@@ -61,12 +97,6 @@ export function createUiHelpers({
                         </div>
                         <span class="player-item-activity">${ui.escapeHtml(player.current_activity || '')}</span>
                     `;
-
-                    const nameEl = item.querySelector('.player-name-hoverable');
-                    nameEl.addEventListener('mouseenter', (e) => ui.showHoverProfile(e, id, player));
-                    nameEl.addEventListener('mouseleave', () => ui.hideHoverProfile());
-
-                    item.addEventListener('click', () => ui.showPlayerProfile(id));
                     container.appendChild(item);
                 }
             }
@@ -76,109 +106,296 @@ export function createUiHelpers({
             if (countEl) countEl.textContent = onlineCount;
         },
 
-        async showHoverProfile(event, userId, basicData) {
+        /**
+         * Unified profile tooltip - shows user info with engagement buttons
+         * @param {MouseEvent} event - The mouse event
+         * @param {string} userId - The user ID to show profile for
+         * @param {Object} basicData - Basic user data (displayName, current_activity, etc.)
+         * @param {string} context - Either 'hover' (players list) or 'mini' (chat messages)
+         */
+        async showProfileTooltip(event, userId, basicData, context = 'hover') {
+            // Clear any existing timeouts
             if (ui.hoverTimeout) {
                 clearTimeout(ui.hoverTimeout);
+                ui.hoverTimeout = null;
+            }
+            if (ui.miniProfileTimeout) {
+                clearTimeout(ui.miniProfileTimeout);
+                ui.miniProfileTimeout = null;
+            }
+            if (ui.miniProfileHideTimer) {
+                clearTimeout(ui.miniProfileHideTimer);
+                ui.miniProfileHideTimer = null;
             }
 
-            const tooltip = document.getElementById('hover-profile');
+            // Get or create the appropriate tooltip element
+            const tooltipId = context === 'hover' ? 'hover-profile' : 'chat-mini-profile';
+            let tooltip = document.getElementById(tooltipId);
+            
+            if (context === 'mini' && !tooltip) {
+                tooltip = document.createElement('div');
+                tooltip.id = 'chat-mini-profile';
+                tooltip.className = 'chat-mini-profile';
+                document.body.appendChild(tooltip);
+                tooltip.addEventListener('mouseenter', () => {
+                    if (ui.miniProfileHideTimer) {
+                        clearTimeout(ui.miniProfileHideTimer);
+                        ui.miniProfileHideTimer = null;
+                    }
+                });
+                tooltip.addEventListener('mouseleave', () => {
+                    ui.hideProfileTooltip(context, 400);
+                });
+            }
+
             if (!tooltip) return;
 
+            // Position tooltip
             const rect = event.target.getBoundingClientRect();
-            tooltip.style.left = `${rect.right + 10}px`;
-            tooltip.style.top = `${rect.top - 10}px`;
-
-            if (rect.right + 200 > window.innerWidth) {
-                tooltip.style.left = `${rect.left - 200}px`;
+            if (context === 'hover') {
+                tooltip.style.left = `${rect.right + 10}px`;
+                tooltip.style.top = `${rect.top - 10}px`;
+                if (rect.right + 200 > window.innerWidth) {
+                    tooltip.style.left = `${rect.left - 200}px`;
+                }
+            } else {
+                tooltip.style.left = `${rect.left}px`;
+                tooltip.style.top = `${rect.bottom + 8}px`;
             }
 
-            tooltip.querySelector('.hover-profile-name').textContent = basicData?.displayName || 'Anonymous';
-            tooltip.querySelector('#hover-activity').textContent = basicData?.current_activity || 'Online';
+            // Show loading state for mini profile
+            if (context === 'mini') {
+                tooltip.innerHTML = `
+                    <div class="mini-profile-header">
+                        <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
+                        <div class="mini-profile-name">${ui.escapeHtml(basicData?.displayName || 'Anonymous')}</div>
+                    </div>
+                    <div class="mini-profile-loading">Loading...</div>
+                `;
+                tooltip.classList.add('visible');
+            } else {
+                tooltip.querySelector('.hover-profile-name').textContent = basicData?.displayName || 'Anonymous';
+                tooltip.querySelector('#hover-activity').textContent = basicData?.current_activity || 'Online';
+            }
 
-            // Set up action buttons
-            const dmBtn = tooltip.querySelector('#hover-dm-btn');
-            const friendBtn = tooltip.querySelector('#hover-friend-btn');
-            const actionsDiv = tooltip.querySelector('.hover-profile-actions');
-            
+            // Fetch full profile data
             const isSelf = AppState.currentUser && userId === AppState.currentUser.uid;
-            const viewerCanSocial = isRegisteredUser?.();
+            const viewerIsRegistered = isRegisteredUser?.();
             
-            // Fetch profile to check if target is guest
             let targetIsGuest = true;
+            let profileData = {};
+            let presenceData = null;
+
             try {
-                const profile = await ProfileManager?.getProfile?.(userId);
-                if (profile?.exists()) {
-                    const data = profile.data();
-                    targetIsGuest = !data?.email;
-                    const wins = data.stats?.wins || 0;
-                    const losses = data.stats?.losses || 0;
-                    const total = wins + losses;
-                    const winrate = total > 0 ? Math.round((wins / total) * 100) : 0;
+                const profilePromise = ProfileManager?.getProfile?.(userId);
+                const presencePromise = (ref && get && rtdb && context === 'mini')
+                    ? get(ref(rtdb, `presence/${userId}`))
+                    : Promise.resolve({ val: () => null });
+                
+                const [profileSnap, presenceSnapshot] = await Promise.all([
+                    profilePromise,
+                    presencePromise
+                ]);
 
-                    tooltip.querySelector('#hover-wins').textContent = wins;
-                    tooltip.querySelector('#hover-losses').textContent = losses;
-                    tooltip.querySelector('#hover-winrate').textContent = `${winrate}%`;
+                if (profileSnap?.exists()) {
+                    profileData = profileSnap.data() || {};
+                    // A user is not a guest if they have an email in their profile
+                    targetIsGuest = !profileData?.email;
+                } else {
+                    // If no profile exists, assume guest (anonymous user)
+                    targetIsGuest = true;
                 }
+                presenceData = presenceSnapshot?.val?.();
             } catch (e) {
-                console.warn('Could not fetch profile for hover:', e);
+                console.warn('Could not fetch profile for tooltip:', e);
+                // On error, assume guest to be safe
+                targetIsGuest = true;
             }
 
-            const canSocial = viewerCanSocial && !targetIsGuest && !isSelf;
+            // Calculate stats
+            const stats = profileData.stats || { wins: 0, losses: 0 };
+            const total = stats.wins + stats.losses;
+            const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
+            const name = profileData.displayName || profileData.username || basicData?.displayName || 'Anonymous';
 
-            // Show/hide buttons based on permissions
-            if (actionsDiv) {
-                actionsDiv.style.display = canSocial ? 'flex' : 'none';
-            }
+            // Determine what actions are available
+            const canSocialWithTarget = viewerIsRegistered && !targetIsGuest && !isSelf;
+            const showDisabledMessage = !canSocialWithTarget && (targetIsGuest || !viewerIsRegistered);
 
-            if (dmBtn && canSocial) {
-                // Remove old listener and add new one
-                const newDmBtn = dmBtn.cloneNode(true);
-                dmBtn.parentNode.replaceChild(newDmBtn, dmBtn);
-                newDmBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    ui.hideHoverProfile();
-                    try {
-                        await window.ChatWidget?.openDm?.(userId);
-                    } catch (err) {
-                        console.warn('DM open failed:', err);
-                    }
-                });
-            }
+            // Update tooltip with full data
+            if (context === 'hover') {
+                tooltip.querySelector('#hover-wins').textContent = stats.wins || 0;
+                tooltip.querySelector('#hover-losses').textContent = stats.losses || 0;
+                tooltip.querySelector('#hover-winrate').textContent = `${winrate}%`;
 
-            if (friendBtn && canSocial) {
-                const newFriendBtn = friendBtn.cloneNode(true);
-                friendBtn.parentNode.replaceChild(newFriendBtn, friendBtn);
-                newFriendBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    ui.hideHoverProfile();
-                    try {
-                        const result = await ProfileManager?.sendFriendRequest?.(AppState.currentUser.uid, userId);
-                        const accepted = result === 'accepted_existing';
-                        ui.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
-                    } catch (err) {
-                        console.warn('Friend request failed:', err);
-                        ui.showToast(err?.message || 'Failed to send friend request.', 'error');
-                    }
-                });
-            }
+                const actionsDiv = tooltip.querySelector('.hover-profile-actions');
+                const dmBtn = tooltip.querySelector('#hover-dm-btn');
+                const friendBtn = tooltip.querySelector('#hover-friend-btn');
 
-            tooltip.style.display = 'block';
-            
-            // Keep tooltip visible while mouse is over it
-            tooltip.onmouseenter = () => {
-                if (ui.hoverTimeout) {
-                    clearTimeout(ui.hoverTimeout);
-                    ui.hoverTimeout = null;
+                if (actionsDiv) {
+                    actionsDiv.style.display = canSocialWithTarget ? 'flex' : 'none';
                 }
-            };
-            tooltip.onmouseleave = () => ui.hideHoverProfile();
+
+                if (canSocialWithTarget) {
+                    // Clone buttons to remove old listeners
+                    if (dmBtn) {
+                        const newDmBtn = dmBtn.cloneNode(true);
+                        dmBtn.parentNode.replaceChild(newDmBtn, dmBtn);
+                        newDmBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            ui.hideProfileTooltip('hover');
+                            try {
+                                await window.ChatWidget?.openDm?.(userId);
+                            } catch (err) {
+                                console.warn('DM open failed:', err);
+                            }
+                        });
+                    }
+
+                    if (friendBtn) {
+                        const newFriendBtn = friendBtn.cloneNode(true);
+                        friendBtn.parentNode.replaceChild(newFriendBtn, friendBtn);
+                        newFriendBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            ui.hideProfileTooltip('hover');
+                            try {
+                                const result = await ProfileManager?.sendFriendRequest?.(AppState.currentUser.uid, userId);
+                                const accepted = result === 'accepted_existing';
+                                ui.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
+                                if (accepted) await FriendsManager?.refresh?.();
+                            } catch (err) {
+                                console.warn('Friend request failed:', err);
+                                ui.showToast(err?.message || 'Failed to send friend request.', 'error');
+                            }
+                        });
+                    }
+                }
+
+                tooltip.style.display = 'block';
+                tooltip.onmouseenter = () => {
+                    if (ui.hoverTimeout) {
+                        clearTimeout(ui.hoverTimeout);
+                        ui.hoverTimeout = null;
+                    }
+                };
+                tooltip.onmouseleave = () => ui.hideProfileTooltip('hover');
+            } else {
+                // Mini profile - reconstruct HTML with presence info
+                const isOnline = presenceData?.status === 'online';
+                const statusClass = isOnline ? 'online' : 'offline';
+                const statusText = isOnline ? 'Online' : 'Offline';
+
+                let actionsHtml = '';
+                if (canSocialWithTarget) {
+                    actionsHtml = `
+                        <div class="mini-profile-actions">
+                            <button type="button" class="btn btn-secondary btn-sm mini-dm-btn">DM</button>
+                            <button type="button" class="btn btn-ghost btn-sm mini-friend-btn">Add Friend</button>
+                            <button type="button" class="btn btn-ghost btn-sm mini-profile-btn">Profile</button>
+                        </div>
+                    `;
+                } else if (!viewerIsRegistered) {
+                    actionsHtml = `<div class="mini-profile-actions muted-note">Sign in with email to interact</div>`;
+                } else if (targetIsGuest) {
+                    actionsHtml = `<div class="mini-profile-actions muted-note">Guest account — social disabled</div>`;
+                } else if (isSelf) {
+                    actionsHtml = `<div class="mini-profile-actions muted-note">Your profile</div>`;
+                }
+
+                if (tooltip.classList.contains('visible')) {
+                    tooltip.innerHTML = `
+                        <div class="mini-profile-header">
+                            <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
+                            <div class="mini-profile-info">
+                                <div class="mini-profile-name">${ui.escapeHtml(name)}</div>
+                                <div class="mini-profile-status ${statusClass}">
+                                    <span class="status-dot"></span>
+                                    ${statusText}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mini-profile-stats">
+                            <div class="mini-stat">
+                                <span class="mini-stat-value">${stats.wins || 0}</span>
+                                <span class="mini-stat-label">Wins</span>
+                            </div>
+                            <div class="mini-stat">
+                                <span class="mini-stat-value">${stats.losses || 0}</span>
+                                <span class="mini-stat-label">Losses</span>
+                            </div>
+                            <div class="mini-stat">
+                                <span class="mini-stat-value">${winrate}%</span>
+                                <span class="mini-stat-label">Win Rate</span>
+                            </div>
+                        </div>
+                        ${actionsHtml}
+                    `;
+
+                    if (canSocialWithTarget) {
+                        const dmBtn = tooltip.querySelector('.mini-dm-btn');
+                        const friendBtn = tooltip.querySelector('.mini-friend-btn');
+                        const profileBtn = tooltip.querySelector('.mini-profile-btn');
+
+                        dmBtn?.addEventListener('click', async () => {
+                            ui.hideProfileTooltip('mini', 0);
+                            try {
+                                await window.ChatWidget?.openDm?.(userId);
+                            } catch (e) {
+                                console.warn('Mini profile DM failed', e);
+                            }
+                        });
+
+                        friendBtn?.addEventListener('click', async () => {
+                            try {
+                                const result = await ProfileManager?.sendFriendRequest?.(AppState.currentUser.uid, userId);
+                                const accepted = result === 'accepted_existing';
+                                ui.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
+                                friendBtn.disabled = true;
+                                friendBtn.textContent = accepted ? 'Friends' : 'Request Sent';
+                                if (accepted) await FriendsManager?.refresh?.();
+                            } catch (e) {
+                                console.warn('Mini profile add friend failed', e);
+                                ui.showToast(e?.message || 'Failed to send friend request.', 'error');
+                            }
+                        });
+
+                        profileBtn?.addEventListener('click', () => {
+                            ui.hideProfileTooltip('mini', 0);
+                            ui.showProfilePage(userId);
+                        });
+                    }
+                }
+            }
+        },
+
+        hideProfileTooltip(context = 'hover', delay = null) {
+            const actualDelay = delay !== null ? delay : (context === 'hover' ? 300 : 900);
+            const timeoutKey = context === 'hover' ? 'hoverTimeout' : 'miniProfileHideTimer';
+            
+            if (ui[timeoutKey]) {
+                clearTimeout(ui[timeoutKey]);
+            }
+            
+            ui[timeoutKey] = setTimeout(() => {
+                const tooltipId = context === 'hover' ? 'hover-profile' : 'chat-mini-profile';
+                const tooltip = document.getElementById(tooltipId);
+                if (tooltip) {
+                    if (context === 'hover') {
+                        tooltip.style.display = 'none';
+                    } else {
+                        tooltip.classList.remove('visible');
+                    }
+                }
+            }, actualDelay);
+        },
+
+        // Legacy compatibility methods
+        async showHoverProfile(event, userId, basicData) {
+            return ui.showProfileTooltip(event, userId, basicData, 'hover');
         },
 
         hideHoverProfile() {
-            ui.hoverTimeout = setTimeout(() => {
-                const tooltip = document.getElementById('hover-profile');
-                if (tooltip) tooltip.style.display = 'none';
-            }, 300);
+            return ui.hideProfileTooltip('hover');
         },
 
         escapeHtml(text) {
@@ -195,7 +412,7 @@ export function createUiHelpers({
             const targetIsGuest = !data.email;
             const viewerCanSocial = isRegisteredUser?.();
 
-            document.getElementById('profile-name').textContent = data.displayName || 'Anonymous';
+            document.getElementById('profile-name').textContent = data.displayName || data.username || 'Anonymous';
             document.getElementById('profile-member-since').textContent =
                 `Member since: ${data.memberSince?.toDate?.()?.toLocaleDateString() || 'Unknown'}`;
             document.getElementById('profile-wins').textContent = data.stats?.wins || 0;
@@ -499,150 +716,11 @@ export function createUiHelpers({
         },
 
         async showMiniProfile(userId, displayName, targetEl) {
-            if (ui.miniProfileTimeout) {
-                clearTimeout(ui.miniProfileTimeout);
-                ui.miniProfileTimeout = null;
-            }
-            if (ui.miniProfileHideTimer) {
-                clearTimeout(ui.miniProfileHideTimer);
-                ui.miniProfileHideTimer = null;
-            }
-
-            let miniProfile = document.getElementById('chat-mini-profile');
-            if (!miniProfile) {
-                miniProfile = document.createElement('div');
-                miniProfile.id = 'chat-mini-profile';
-                miniProfile.className = 'chat-mini-profile';
-                document.body.appendChild(miniProfile);
-                miniProfile.addEventListener('mouseenter', () => {
-                    if (ui.miniProfileHideTimer) {
-                        clearTimeout(ui.miniProfileHideTimer);
-                        ui.miniProfileHideTimer = null;
-                    }
-                });
-                miniProfile.addEventListener('mouseleave', () => {
-                    ui.hideMiniProfile(400);
-                });
-            }
-
-            const rect = targetEl.getBoundingClientRect();
-            miniProfile.style.left = `${rect.left}px`;
-            miniProfile.style.top = `${rect.bottom + 8}px`;
-
-            miniProfile.innerHTML = `
-                <div class="mini-profile-header">
-                    <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
-                    <div class="mini-profile-name">${ui.escapeHtml(displayName)}</div>
-                </div>
-                <div class="mini-profile-loading">Loading...</div>
-            `;
-            miniProfile.classList.add('visible');
-
-            try {
-                const profilePromise = ProfileManager?.getProfile?.(userId);
-                const presencePromise = (ref && get && rtdb)
-                    ? get(ref(rtdb, `presence/${userId}`))
-                    : Promise.resolve({ val: () => null });
-                const [profileSnap, presenceSnapshot] = await Promise.all([
-                    profilePromise,
-                    presencePromise
-                ]);
-
-                const presenceData = presenceSnapshot?.val?.();
-                const isOnline = presenceData?.status === 'online';
-                const profileData = profileSnap?.data?.() || {};
-                const stats = profileData.stats || { wins: 0, losses: 0 };
-                const total = stats.wins + stats.losses;
-                const winrate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
-                const statusClass = isOnline ? 'online' : 'offline';
-                const statusText = isOnline ? 'Online' : 'Offline';
-                const name = profileData.displayName || profileData.username || displayName;
-                const isRegistered = !!profileData?.email;
-                const targetIsGuest = !profileData?.email;
-                const isSelf = AppState.currentUser && userId === AppState.currentUser.uid;
-
-                const viewerCanSocial = isRegisteredUser?.();
-                if (miniProfile.classList.contains('visible')) {
-                    const canSocialWithTarget = viewerCanSocial && isRegistered && !isSelf;
-                    miniProfile.innerHTML = `
-                        <div class="mini-profile-header">
-                            <div class="mini-profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#i-user"></use></svg></div>
-                            <div class="mini-profile-info">
-                                <div class="mini-profile-name">${ui.escapeHtml(name)}</div>
-                                <div class="mini-profile-status ${statusClass}">
-                                        <span class="status-dot"></span>
-                                        ${statusText}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mini-profile-stats">
-                                <div class="mini-stat">
-                                    <span class="mini-stat-value">${stats.wins || 0}</span>
-                                    <span class="mini-stat-label">Wins</span>
-                                </div>
-                                <div class="mini-stat">
-                                    <span class="mini-stat-value">${stats.losses || 0}</span>
-                                    <span class="mini-stat-label">Losses</span>
-                                </div>
-                                <div class="mini-stat">
-                                    <span class="mini-stat-value">${winrate}%</span>
-                                    <span class="mini-stat-label">Win Rate</span>
-                                </div>
-                            </div>
-                            ${(canSocialWithTarget) ? `
-                            <div class="mini-profile-actions">
-                                <button type="button" class="btn btn-secondary btn-sm mini-dm-btn">DM</button>
-                                <button type="button" class="btn btn-ghost btn-sm mini-friend-btn">Add Friend</button>
-                                <button type="button" class="btn btn-ghost btn-sm mini-profile-btn">Profile</button>
-                            </div>
-                            ` : (targetIsGuest ? `<div class="mini-profile-actions muted-note">Guest account — social disabled</div>` : '')}
-                        `;
-                    if (canSocialWithTarget) {
-                        const dmBtn = miniProfile.querySelector('.mini-dm-btn');
-                        const friendBtn = miniProfile.querySelector('.mini-friend-btn');
-                        const profileBtn = miniProfile.querySelector('.mini-profile-btn');
-                        dmBtn?.addEventListener('click', async () => {
-                            try { await window.ChatWidget?.openDm?.(userId); } catch (e) { console.warn('Mini profile DM failed', e); }
-                        });
-                        friendBtn?.addEventListener('click', async () => {
-                            if (!isRegisteredUser?.()) {
-                                ui.showToast('Sign in with email to add friends.', 'error');
-                                return;
-                            }
-                            try {
-                                const result = await ProfileManager?.sendFriendRequest?.(AppState.currentUser.uid, userId);
-                                const accepted = result === 'accepted_existing';
-                                ui.showToast(accepted ? 'Friend request accepted.' : 'Friend request sent.', 'success');
-                                friendBtn.disabled = true;
-                                friendBtn.textContent = accepted ? 'Friends' : 'Request Sent';
-                                if (accepted) await FriendsManager?.refresh?.();
-                            } catch (e) {
-                                console.warn('Mini profile add friend failed', e);
-                                ui.showToast(e?.message || 'Failed to send friend request.', 'error');
-                            }
-                        });
-                        profileBtn?.addEventListener('click', () => {
-                            ui.hideMiniProfile(0);
-                            ui.showProfilePage(userId);
-                        });
-                    }
-                }
-            } catch (err) {
-                console.error('Error fetching mini profile:', err);
-            }
+            return ui.showProfileTooltip({ target: targetEl }, userId, { displayName }, 'mini');
         },
 
         hideMiniProfile(delay = 900) {
-            if (ui.miniProfileTimeout) {
-                clearTimeout(ui.miniProfileTimeout);
-                ui.miniProfileTimeout = null;
-            }
-            ui.miniProfileHideTimer = setTimeout(() => {
-                const miniProfile = document.getElementById('chat-mini-profile');
-                if (miniProfile) {
-                    miniProfile.classList.remove('visible');
-                }
-            }, delay);
+            return ui.hideProfileTooltip('mini', delay);
         },
 
         updateStats(stats) {
@@ -657,11 +735,25 @@ export function createUiHelpers({
         updateBadges(badges) {
             const container = document.getElementById('badges-list');
             if (!container) return;
+            
+            // Setup event delegation once
+            if (!ui._badgesDelegationBound) {
+                container.addEventListener('click', (e) => {
+                    const badgeEl = e.target.closest('.badge');
+                    if (badgeEl) {
+                        const badgeKey = badgeEl.dataset.badge;
+                        if (badgeKey) ui.showBadgeReveal(badgeKey);
+                    }
+                });
+                ui._badgesDelegationBound = true;
+            }
+            
             container.innerHTML = '';
             (badges || []).forEach(badge => {
                 const info = badgeInfo[badge] || { iconHtml: '<svg class="ui-icon" aria-hidden="true"><use href="#i-trophy"></use></svg>', name: badge, desc: '' };
                 const badgeEl = document.createElement('button');
                 badgeEl.className = `badge badge-pill ${badge}`;
+                badgeEl.dataset.badge = badge;
                 badgeEl.setAttribute('type', 'button');
                 badgeEl.setAttribute('aria-label', info.name || badge);
                 badgeEl.title = info.desc || info.name || badge;
@@ -673,9 +765,6 @@ export function createUiHelpers({
                 nameSpan.textContent = info.name || badge;
                 badgeEl.appendChild(iconSpan);
                 badgeEl.appendChild(nameSpan);
-                badgeEl.addEventListener('click', () => {
-                    ui.showBadgeReveal(badge);
-                });
                 container.appendChild(badgeEl);
             });
         },

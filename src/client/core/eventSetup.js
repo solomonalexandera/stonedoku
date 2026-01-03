@@ -728,8 +728,7 @@ export function setupGameListeners(deps) {
         const input = document.getElementById('global-chat-input');
         const text = input.value.trim();
         if (text && AppState.currentUser) {
-            const displayName = AppState.currentUser.displayName ||
-                `Player_${AppState.currentUser.uid.substring(0, 6)}`;
+            const displayName = getCurrentDisplayName();
             await deps.ChatManager.sendGlobalMessage(AppState.currentUser.uid, displayName, text);
             input.value = '';
         }

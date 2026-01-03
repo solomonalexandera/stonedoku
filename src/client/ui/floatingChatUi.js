@@ -194,7 +194,7 @@ export function createFloatingChat(deps) {
         AppState, ViewManager, UI, AudioManager, ProfileManager, ChatManager, LobbyManager,
         ref, rtdb, get, update, onChildAdded,
         firestore, collection, query, where, limit, getDocs, getDoc, doc, orderBy, documentId,
-        isRegisteredUser
+        isRegisteredUser, getCurrentDisplayName
     } = deps;
 
     const widget = document.getElementById('chat-widget');
@@ -658,25 +658,14 @@ export function createFloatingChat(deps) {
         for (const p of profiles) {
             const row = document.createElement('div');
             row.className = 'dm-friend-item';
+            row.dataset.userId = p.id;
             const name = p.displayName || p.username || `Player_${String(p.id).substring(0, 6)}`;
             row.innerHTML = `
                 <div class="dm-friend-name">${UI.escapeHtml(name)}</div>
                 <div class="dm-friend-actions">
-                    <button type="button" class="btn btn-secondary btn-sm">DM</button>
+                    <button type="button" class="btn btn-secondary btn-sm dm-friend-btn">DM</button>
                 </div>
             `;
-            row.querySelector('button')?.addEventListener('click', async () => {
-                if (!dmEnabled) {
-                    alert('Sign in with email to use direct messages.');
-                    return;
-                }
-                try {
-                    await openDmConversation(p.id);
-                } catch (e) {
-                    console.warn('Failed to open DM from friends list', e);
-                    alert('Failed to open DM.');
-                }
-            });
             dmFriendsListEl.appendChild(row);
         }
     }
@@ -781,10 +770,6 @@ export function createFloatingChat(deps) {
                 badge.textContent = unread > 99 ? '99+' : String(unread);
                 item.appendChild(badge);
             }
-
-            item.addEventListener('click', () => {
-                openDmConversation(t.otherUserId);
-            });
 
             dmConversationsEl.appendChild(item);
         }
@@ -1082,6 +1067,36 @@ export function createFloatingChat(deps) {
         showChatModerationNotice();
     });
 
+    // Event delegation for DM conversations list
+    dmConversationsEl?.addEventListener('click', (e) => {
+        const item = e.target.closest('.dm-conversation-item');
+        if (item) {
+            const userId = item.dataset.userId;
+            if (userId) openDmConversation(userId);
+        }
+    });
+
+    // Event delegation for DM friends list
+    dmFriendsListEl?.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.dm-friend-btn');
+        if (btn) {
+            const row = btn.closest('.dm-friend-item');
+            const userId = row?.dataset.userId;
+            if (!userId) return;
+            
+            if (!dmEnabled) {
+                alert('Sign in with email to use direct messages.');
+                return;
+            }
+            try {
+                await openDmConversation(userId);
+            } catch (e) {
+                console.warn('Failed to open DM from friends list', e);
+                alert('Failed to open DM.');
+            }
+        }
+    });
+
     // Minimize
     minimizeBtn?.addEventListener('click', () => {
         widget.classList.add('minimized');
@@ -1185,7 +1200,8 @@ export function createFloatingChat(deps) {
                 alert('Sign in to use direct messages.');
                 return;
             }
-            const displayName = AppState.currentUser.displayName ||
+            const displayName = getCurrentDisplayName?.() || 
+                AppState.currentUser.displayName ||
                 `Player_${AppState.currentUser.uid.substring(0, 6)}`;
 
             const activeTab = document.querySelector('.widget-tab.active');

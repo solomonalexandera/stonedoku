@@ -277,6 +277,7 @@ handleRoomUpdate = gameFlow.handleRoomUpdate;
 // ===========================================
 function getCurrentDisplayName() {
     if (AppState.profile?.displayName) return AppState.profile.displayName;
+    if (AppState.profile?.username) return AppState.profile.username;
     if (AppState.currentUser?.displayName) return AppState.currentUser.displayName;
     if (AppState.currentUser?.uid) return `Player_${AppState.currentUser.uid.substring(0, 6)}`;
     return 'Player';
@@ -376,7 +377,7 @@ function initFloatingChat() {
         AppState, ViewManager, UI, AudioManager, ProfileManager, ChatManager, LobbyManager,
         ref, rtdb, get, update, onChildAdded,
         firestore, collection, query, where, limit, getDocs, getDoc, doc, orderBy, documentId,
-        isRegisteredUser
+        isRegisteredUser, getCurrentDisplayName
     });
 }
 
