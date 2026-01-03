@@ -423,7 +423,9 @@ const eventSetup = createEventSetup({
     updateProfile, signOut, deleteUser, deleteDoc, doc, getDoc, firestore, rtdb, ref, get, update,
     // State & Managers
     AppState, ViewManager, PresenceManager, ProfileManager, LobbyManager, MatchManager, ChatManager,
-    GameUI: GameUi, GameHelpers, AudioManager, UI, ChallengeSystemManager,
+    GameUI: GameUi, GameHelpers, AudioManager, UI, ChallengeSystemManager, ArchitecturalStateManager,
+    // Libraries
+    SudokuGenerator,
     // Utilities
     PasswordPolicy, PasswordReset, CookieConsent, OnboardingManager: null, TourManager,
     getCurrentDisplayName, isRegisteredUser,

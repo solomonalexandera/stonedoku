@@ -95,7 +95,7 @@ export const SudokuGenerator = {
 
     // Generate a seeded random number for daily puzzle
     seededRandom(seed) {
-        const x = Math.sin(seed++) * 10000;
+        const x = Math.sin(seed) * 10000;
         return x - Math.floor(x);
     },
 
@@ -109,7 +109,8 @@ export const SudokuGenerator = {
             const arr = [...array];
             let currentSeed = rngSeed;
             for (let i = arr.length - 1; i > 0; i--) {
-                const j = Math.floor(this.seededRandom(currentSeed++) * (i + 1));
+                const j = Math.floor(this.seededRandom(currentSeed) * (i + 1));
+                currentSeed++; // Increment for next iteration
                 [arr[i], arr[j]] = [arr[j], arr[i]];
             }
             return arr;
