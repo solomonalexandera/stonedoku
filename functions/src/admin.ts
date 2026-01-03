@@ -118,6 +118,11 @@ export const appointAdmin = onCall(
       userUpdate.roleExpiresAt = expiresAt;
     }
 
+    // Ensure email is in the profile (from Auth user if not already there)
+    if (targetUser.email && !userUpdate.email) {
+      userUpdate.email = targetUser.email;
+    }
+
     // If granting admin role (not revoking to 'user'), apply admin prefix to username/displayName
     if (role !== 'user') {
       // Get current user data to format username/displayName

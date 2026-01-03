@@ -295,9 +295,9 @@ export function createUiHelpers({
                         </div>
                     `;
                 } else if (!viewerIsRegistered) {
-                    actionsHtml = `<div class="mini-profile-actions muted-note">Sign in with email to interact</div>`;
+                    actionsHtml = `<div class="mini-profile-actions muted-note">Sign in with email to interact<br><small>Create an email account to send DMs and friend requests</small></div>`;
                 } else if (targetIsGuest) {
-                    actionsHtml = `<div class="mini-profile-actions muted-note">Guest account — social disabled</div>`;
+                    actionsHtml = `<div class="mini-profile-actions muted-note">Guest account — social disabled<br><small>This player hasn't verified their email yet</small></div>`;
                 } else if (isSelf) {
                     actionsHtml = `<div class="mini-profile-actions muted-note">Your profile</div>`;
                 }

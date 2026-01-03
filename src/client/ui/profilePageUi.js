@@ -339,7 +339,7 @@ export function initProfilePage(deps) {
         const profileUserId = document.getElementById('profile-view')?.dataset.userId;
         if (!profileUserId || !AppState.currentUser) return;
         if (!isRegisteredUser()) {
-            UI?.showToast?.('Sign in with an email account to add friends.', 'error');
+            UI?.showToast?.('Sign up with an email account to add friends.', 'info');
             return;
         }
 
@@ -375,7 +375,7 @@ export function initProfilePage(deps) {
         const profileUserId = document.getElementById('profile-view')?.dataset.userId;
         if (!profileUserId) return;
         if (!isRegisteredUser()) {
-            alert('Sign in with an email account to send direct messages.');
+            UI?.showToast?.('Sign up with an email account to send direct messages and add friends.', 'info');
             return;
         }
 
