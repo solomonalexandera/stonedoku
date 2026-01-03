@@ -16,7 +16,7 @@
  *   - Or run from Firebase CLI with authenticated project
  */
 
-const admin = require('firebase-admin');
+import admin from 'firebase-admin';
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
