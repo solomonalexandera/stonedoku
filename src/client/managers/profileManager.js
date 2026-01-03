@@ -77,28 +77,22 @@ export function createProfileManager({
             };
         },
 
-        _formatDisplayName(displayName, isAdmin) {
-            if (!displayName) displayName = 'Player';
-            // Remove existing admin prefix if present
-            displayName = displayName.replace(/^admin_/, '');
-            // Add admin prefix if needed
-            if (isAdmin) {
-                return `admin_${displayName}`;
-            }
-            return displayName;
-        },
-
         async checkUsernameAvailable(username) {
             const cleaned = (username || '').trim().toLowerCase();
             if (!cleaned) return false;
             
-            // Check for reserved usernames
+            // Allow admin- prefix for actual admins
+            const isAdminPrefixed = cleaned.startsWith('admin-');
+            
+            // Check for reserved usernames (but allow admin- prefix)
             const reservedTerms = ['admin', 'administrator', 'staff', 'mod', 'moderator', 'support', 'system', 'root', 'superuser', 'owner'];
-            if (reservedTerms.includes(cleaned) || 
-                cleaned.includes('admin') || 
-                cleaned.includes('staff') || 
-                cleaned.includes('moderator')) {
-                throw new Error('username_reserved');
+            if (!isAdminPrefixed) {
+                if (reservedTerms.includes(cleaned) || 
+                    cleaned.includes('admin') || 
+                    cleaned.includes('staff') || 
+                    cleaned.includes('moderator')) {
+                    throw new Error('username_reserved');
+                }
             }
             
             const usernameRef = doc(firestore, 'usernames', cleaned);
@@ -110,13 +104,18 @@ export function createProfileManager({
             const username = (usernameRaw || '').trim();
             const usernameLower = username.toLowerCase();
             
-            // Check for reserved usernames
+            // Allow admin- prefix for actual admins
+            const isAdminPrefixed = usernameLower.startsWith('admin-');
+            
+            // Check for reserved usernames (but allow admin- prefix)
             const reservedTerms = ['admin', 'administrator', 'staff', 'mod', 'moderator', 'support', 'system', 'root', 'superuser', 'owner'];
-            if (reservedTerms.includes(usernameLower) || 
-                usernameLower.includes('admin') || 
-                usernameLower.includes('staff') || 
-                usernameLower.includes('moderator')) {
-                throw new Error('username_reserved');
+            if (!isAdminPrefixed) {
+                if (reservedTerms.includes(usernameLower) || 
+                    usernameLower.includes('admin') || 
+                    usernameLower.includes('staff') || 
+                    usernameLower.includes('moderator')) {
+                    throw new Error('username_reserved');
+                }
             }
             
             const usernameRef = doc(firestore, 'usernames', usernameLower);
@@ -147,13 +146,19 @@ export function createProfileManager({
                 let chosenUsername = data.username || existing.username || data.displayName || `Player_${String(userId).substring(0, 6)}`;
                 let usernameLower = chosenUsername.toLowerCase();
 
-                const needsReservation = !existingSnap.exists() || !!data.username || !existingLower;
+                // Don't apply admin prefix here - it's handled by Cloud Functions when role is granted
+                // Client just reserves the plain username
+                const formattedUsername = chosenUsername.toLowerCase();
+                const formattedUsernameLower = formattedUsername.toLowerCase();
+
+                const needsReservation = !existingSnap.exists() || !!data.username || !existingLower || (existingLower !== formattedUsernameLower);
                 if (needsReservation) {
                     try {
-                        await this._reserveUsername(tx, chosenUsername, userId);
+                        await this._reserveUsername(tx, formattedUsername, userId);
                     } catch (e) {
                         if (e.message === 'username_taken') {
                             if (existingSnap.exists() && !data.username && existingLower) {
+                                // Keep existing username
                                 chosenUsername = existing.username || chosenUsername;
                                 usernameLower = existingLower;
                             } else {
@@ -168,15 +173,15 @@ export function createProfileManager({
                 const base = this._defaults(userId, chosenUsername, email);
                 if (existing.memberSince) base.memberSince = existing.memberSince;
                 
-                // Apply admin prefix to displayName if needed
+                // Don't apply admin prefix - let Cloud Functions handle that
                 const displayName = data.displayName || existing.displayName || chosenUsername;
-                const isAdmin = data.isAdmin !== undefined ? data.isAdmin : existing.isAdmin;
-                const formattedDisplayName = this._formatDisplayName(displayName, isAdmin);
+                const finalUsername = chosenUsername;
+                const finalUsernameLower = chosenUsername.toLowerCase();
                 
                 tx.set(profileRef, Object.assign({}, base, existing, data, {
-                    username: chosenUsername,
-                    usernameLower,
-                    displayName: formattedDisplayName,
+                    username: finalUsername,
+                    usernameLower: finalUsernameLower,
+                    displayName: displayName,
                     email
                 }), { merge: true });
             });
@@ -296,7 +301,7 @@ export function createProfileManager({
             const friendsCount = Array.isArray(profileData.friends) ? profileData.friends.length : 0;
             const hasBio = typeof profileData.bio === 'string' && profileData.bio.trim().length >= 20;
             const hasAvatar = !!profileData.profilePicture;
-            const isAdmin = !!profileData.isAdmin;
+            // Admin status comes from custom claims, not profile
 
             const earnedSet = new Set();
 
@@ -321,8 +326,7 @@ export function createProfileManager({
             if (friendsCount >= 15) earnedSet.add('ambassador');
             if (hasBio) earnedSet.add('storyteller');
             if (hasAvatar) earnedSet.add('portrait');
-
-            if (isAdmin) earnedSet.add('warden');
+            // Warden badge is no longer auto-awarded; admins are handled by custom claims system
 
             const existingBadges = Array.isArray(profileData.badges) ? profileData.badges : [];
             const newBadges = Array.from(earnedSet).filter((b) => !existingBadges.includes(b));

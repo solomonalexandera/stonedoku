@@ -85,31 +85,8 @@ export function createAdminConsole({
             updateNav();
             return false;
         }
-        try {
-            const profileAdmin = AppState.profile?.isAdmin === true;
-            if (profileAdmin) {
-                isAdmin = true;
-            }
-            const adminDocRef = doc(firestore, 'admins', AppState.currentUser.uid);
-            const snap = await getDoc(adminDocRef);
-            if (snap.exists()) {
-                isAdmin = true;
-            } else if (profileAdmin) {
-                try {
-                    await setDoc(adminDocRef, {
-                        userId: AppState.currentUser.uid,
-                        addedBy: AppState.currentUser.uid,
-                        addedAt: Timestamp.now(),
-                        restoredFromProfile: true
-                    });
-                    isAdmin = true;
-                } catch (e) {
-                    console.warn('Failed to restore admin allowlist doc', e);
-                }
-            }
-        } catch (e) {
-            console.warn('Admin check failed', e);
-        }
+        // Check for custom claims (new system)
+        isAdmin = AppState.currentUser.isAdmin === true || AppState.currentUser.isSuperAdmin === true;
         updateNav();
         return isAdmin;
     };
@@ -207,6 +184,11 @@ export function createAdminConsole({
             if (window.location.hash !== '#/admin') window.history.replaceState({}, document.title, '#/admin');
         } catch { /* ignore */ }
         listen();
+        
+        // Initialize role management UI if AdminManager is available
+        if (window.AdminManager) {
+            window.AdminManager.init();
+        }
     };
 
     const openFromNav = async () => {
@@ -297,15 +279,14 @@ export function createAdminConsole({
             const uid = getUidFromInput();
             if (!uid) return;
             try {
-                await setDoc(doc(firestore, 'admins', uid), {
-                    userId: uid,
-                    addedBy: AppState?.currentUser?.uid || null,
-                    addedAt: Timestamp.now()
-                });
+                // Use new appointAdmin function instead of old /admins collection
+                const appointFn = httpsCallable(functions, 'appointAdmin');
+                await appointFn({ targetUid: uid, role: 'admin' });
                 setAllowStatus('Admin granted.', false);
+                allowlistInput.value = '';
             } catch (e) {
                 console.error('Grant admin failed', e);
-                setAllowStatus('Failed to grant admin.', true);
+                setAllowStatus(`Failed: ${e.message}`, true);
             }
         });
 
@@ -317,11 +298,14 @@ export function createAdminConsole({
             const uid = getUidFromInput();
             if (!uid) return;
             try {
-                await deleteDoc(doc(firestore, 'admins', uid));
+                // Use appointAdmin to revoke role
+                const appointFn = httpsCallable(functions, 'appointAdmin');
+                await appointFn({ targetUid: uid, role: 'user' });
                 setAllowStatus('Admin revoked.', false);
+                allowlistInput.value = '';
             } catch (e) {
                 console.error('Revoke admin failed', e);
-                setAllowStatus('Failed to revoke admin.', true);
+                setAllowStatus(`Failed: ${e.message}`, true);
             }
         });
     };

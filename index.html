@@ -1739,6 +1739,44 @@
                                     <h3 class="admin-card-title">Manage updates</h3>
                                     <div class="admin-updates-list" id="admin-updates-list" aria-live="polite"></div>
                                 </div>
+                                
+                                <!-- Role Management (Super-Admin Only) -->
+                                <div class="admin-card" id="admin-role-management" style="display: none;">
+                                    <h3 class="admin-card-title">Role Management</h3>
+                                    <p class="admin-card-subtitle">Search for users and manage their roles (Super-Admin only).</p>
+                                    
+                                    <div class="form-group">
+                                        <label for="admin-user-search">Search Users</label>
+                                        <input type="text" id="admin-user-search" 
+                                            placeholder="Enter email or username..." autocomplete="off">
+                                    </div>
+                                    <div class="admin-form-actions">
+                                        <button type="button" class="btn btn-secondary btn-sm" id="admin-user-search-btn">
+                                            Search
+                                        </button>
+                                    </div>
+                                    
+                                    <div id="admin-user-results" class="admin-user-results" style="display: none;">
+                                        <!-- User search results will be rendered here -->
+                                    </div>
+                                    
+                                    <div class="form-error" id="admin-role-status"></div>
+                                </div>
+                                
+                                <!-- Audit Log (Admin Only) -->
+                                <div class="admin-card" id="admin-audit-log" style="display: none;">
+                                    <h3 class="admin-card-title">Audit Log</h3>
+                                    <p class="admin-card-subtitle">View recent admin actions and role changes.</p>
+                                    <div id="admin-audit-list" class="admin-audit-list">
+                                        <!-- Audit log entries will be rendered here -->
+                                    </div>
+                                    <div class="admin-form-actions">
+                                        <button type="button" class="btn btn-ghost btn-sm" id="admin-audit-load-more" 
+                                            style="display: none;">
+                                            Load More
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </section>

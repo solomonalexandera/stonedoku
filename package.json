@@ -27,6 +27,7 @@
     "deploy:apphosting": "npx firebase-tools deploy --only apphosting",
     "migrate:avatars:dry": "node scripts/migrate-avatars.js --dry",
     "migrate:avatars": "RUN_MIGRATION=1 node scripts/migrate-avatars.js",
+    "appoint-superadmin": "node scripts/appoint-superadmin.js",
     "auth:delete:dry": "node scripts/delete-all-users.js",
     "auth:delete": "RUN_DELETE=1 node scripts/delete-all-users.js",
     "dev": "node scripts/dev.mjs",

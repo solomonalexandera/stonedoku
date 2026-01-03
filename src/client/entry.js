@@ -111,6 +111,7 @@ import { createArchitecturalStateManager } from './managers/architecturalStateMa
 import { createCreativeFeatures, CreativeFeatures } from './managers/creativeFeaturesManager.js';
 import { createAccessibilityManager, AccessibilityManager } from './managers/accessibilityManager.js';
 import { createOnboardingManager } from './managers/onboardingManager.js';
+import { createAdminManager } from './managers/adminManager.js';
 
 // UI
 import { createViewManager } from './managers/viewManager.js';
@@ -173,6 +174,7 @@ const MatchManager = createMatchManager({ rtdb, appState: AppState });
 const ChatManager = createChatManager({ rtdb, firestore, appState: AppState, profanityFilter: ProfanityFilter });
 const LogManager = createLogManager(firestore, () => AppState);
 const ArchitecturalStateManager = createArchitecturalStateManager({ AppState, MotionUtils });
+const AdminManager = createAdminManager({ functions, httpsCallable, AppState, UI: null }); // UI set later
 
 // ===========================================
 // Initialize UI Components
@@ -198,6 +200,12 @@ const GameUi = createGameUi({
 
 // Wire up FriendsManager.UI
 FriendsManager.UI = UI;
+
+// Wire up AdminManager.UI
+AdminManager.UI = UI;
+
+// Expose AdminManager globally for onclick handlers
+window.AdminManager = AdminManager;
 
 // ===========================================
 // Updates Center and Admin Console (with proper deps)
@@ -288,6 +296,14 @@ function isRegisteredUser(user = AppState.currentUser, profile = AppState.profil
     if (user.isAnonymous) return false;
     const email = user.email || profile?.email || (user.providerData || []).map(p => p?.email).find(Boolean);
     return !!email;
+}
+
+function showAdminControls() {
+    // Show admin button in header navigation
+    const adminBtn = document.getElementById('admin-nav-btn');
+    if (adminBtn) {
+        adminBtn.style.display = 'inline-block';
+    }
 }
 
 // ===========================================
@@ -434,6 +450,23 @@ async function handleAuthStateChange(user) {
         AppState.currentUser = user;
         AppState.passwordReset.active = false;
         
+        // Check for custom claims (admin roles)
+        try {
+            const idTokenResult = await user.getIdTokenResult();
+            AppState.currentUser.isSuperAdmin = idTokenResult.claims.superAdmin === true;
+            AppState.currentUser.isAdmin = idTokenResult.claims.admin === true;
+            AppState.currentUser.isModerator = idTokenResult.claims.moderator === true;
+            
+            if (AppState.currentUser.isAdmin || AppState.currentUser.isSuperAdmin) {
+                console.log('Admin privileges detected');
+            }
+        } catch (e) {
+            console.warn('Failed to load custom claims:', e);
+            AppState.currentUser.isSuperAdmin = false;
+            AppState.currentUser.isAdmin = false;
+            AppState.currentUser.isModerator = false;
+        }
+        
         // Configure persistence based on cookie consent
         await authFlow.configureAuthPersistence();
 
@@ -482,6 +515,11 @@ async function handleAuthStateChange(user) {
         // Show guest toast
         if (user.isAnonymous) {
             UI.showToast?.('You are playing as a guest. Create an account to save progress.', 'info');
+        }
+        
+        // Show admin controls if user has admin privileges
+        if (AppState.currentUser.isAdmin || AppState.currentUser.isSuperAdmin) {
+            showAdminControls();
         }
         
         // Initialize presence

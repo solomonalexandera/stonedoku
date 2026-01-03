@@ -32,3 +32,4 @@ export {sendOnboardingEmail} from "./mail";
 export {mailer} from "./mailer";
 export {syncFriendsOnRequest, removeFriendsOnRemoval} from "./friends";
 export {moderate, backfillModerationFields} from "./moderation";
+export {appointAdmin, searchUsers, getAuditLog} from "./admin";
