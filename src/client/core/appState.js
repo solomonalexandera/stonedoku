@@ -4,10 +4,65 @@
  */
 
 /**
+ * Load settings from localStorage
+ * @returns {Object} Saved settings or defaults
+ */
+function loadSavedSettings() {
+    try {
+        const saved = localStorage.getItem('stonedoku_game_settings');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            return {
+                highlightConflicts: parsed.highlightConflicts !== undefined ? parsed.highlightConflicts : true,
+                highlightSameNumbers: parsed.highlightSameNumbers !== undefined ? parsed.highlightSameNumbers : true,
+                autoCheck: parsed.autoCheck !== undefined ? parsed.autoCheck : true,
+                notifications: parsed.notifications || {
+                    global: true,
+                    game: true,
+                    dms: true,
+                    sound: true,
+                    badges: true
+                }
+            };
+        }
+    } catch (e) {
+        console.warn('Failed to load saved settings:', e);
+    }
+    
+    // Return defaults if no saved settings
+    return {
+        highlightConflicts: true,
+        highlightSameNumbers: true,
+        autoCheck: true,
+        notifications: {
+            global: true,
+            game: true,
+            dms: true,
+            sound: true,
+            badges: true
+        }
+    };
+}
+
+/**
+ * Save settings to localStorage
+ * @param {Object} settings - Settings object to save
+ */
+export function saveSettings(settings) {
+    try {
+        localStorage.setItem('stonedoku_game_settings', JSON.stringify(settings));
+    } catch (e) {
+        console.warn('Failed to save settings:', e);
+    }
+}
+
+/**
  * Create the initial application state
  * @returns {Object} Application state object
  */
 export function createAppState() {
+    const savedSettings = loadSavedSettings();
+    
     return {
         currentUser: null,
         currentView: 'auth',
@@ -63,18 +118,7 @@ export function createAppState() {
         activeDMs: {},
         dmThreads: {},
         friends: [],
-        settings: {
-            highlightConflicts: true,
-            highlightSameNumbers: true,
-            autoCheck: true,
-            notifications: {
-                global: true,
-                game: true,
-                dms: true,
-                sound: true,
-                badges: true
-            }
-        },
+        settings: savedSettings,
         moderation: {
             muted: false,
             blocked: false
