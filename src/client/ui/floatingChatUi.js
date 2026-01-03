@@ -1152,6 +1152,11 @@ export function createFloatingChat(deps) {
 
             suggestionBox.style.display = 'none';
 
+            // Clear friend input field when switching away from friends tab
+            if (chatMode !== 'friends' && friendHandleInput) {
+                friendHandleInput.value = '';
+            }
+
             if (chatMode === 'dms') {
                 AppState.widgetChatMode = 'dms';
                 renderDmList();
