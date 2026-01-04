@@ -64,9 +64,6 @@ export function createGameUi({
         },
 
         renderPuzzle(puzzle, board = null) {
-            console.log('renderPuzzle called, board:', board ? 'present' : 'null');
-
-            let cellsFound = 0;
             for (let row = 0; row < 9; row++) {
                 for (let col = 0; col < 9; col++) {
                     const cell = document.querySelector(
@@ -76,7 +73,6 @@ export function createGameUi({
                     if (!cell) {
                         continue;
                     }
-                    cellsFound++;
 
                     cell.classList.remove('given', 'selected', 'error', 'correct',
                                           'player-fill', 'opponent-fill');
@@ -129,8 +125,6 @@ export function createGameUi({
                     }
                 }
             }
-
-            console.log('renderPuzzle complete, cells found:', cellsFound);
 
             if (board) {
                 boardIntegrity.updateFromVersusBoard(board);
@@ -185,27 +179,21 @@ export function createGameUi({
         },
 
         async inputNumber(num) {
-            console.log('inputNumber called:', num, 'gameMode:', appState.gameMode, 'currentMatch:', appState.currentMatch);
-
             if (!appState.selectedCell) {
-                console.log('No cell selected');
                 return;
             }
 
             const { row, col } = appState.selectedCell;
-            console.log('Selected cell:', row, col);
 
             const cell = document.querySelector(
                 `.sudoku-cell[data-row="${row}"][data-col="${col}"]`
             );
 
             if (!cell) {
-                console.log('Cell not found in DOM');
                 return;
             }
 
             if (cell.classList.contains('given')) {
-                console.log('Cell is a given number, cannot modify');
                 return;
             }
 
@@ -235,19 +223,13 @@ export function createGameUi({
             if (appState.gameMode === 'versus') {
                 const hasPlayerFill = cell.classList.contains('player-fill');
                 const hasOpponentFill = cell.classList.contains('opponent-fill');
-                const valueEl = cell.querySelector('.cell-value');
-                const hasContent = (valueEl ? valueEl.textContent : cell.textContent).trim() !== '';
-
-                console.log('Cell state check:', { hasPlayerFill, hasOpponentFill, hasContent, content: (valueEl ? valueEl.textContent : cell.textContent) });
 
                 if (hasPlayerFill || hasOpponentFill) {
-                    console.log('Cell already filled in versus mode (by class)');
                     return;
                 }
 
                 if (appState.puzzle && appState.puzzle[row] && appState.puzzle[row][col] !== 0) {
                     if (cell.classList.contains('given')) {
-                        console.log('Cell is a given number');
                         return;
                     }
                 }
