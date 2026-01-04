@@ -5,12 +5,16 @@ import { AppState } from '../core/appState.js';
  * Provides rich, professional sound effects for game events
  * Uses Web Audio API for dynamic synthesis and filtering
  * 
+ * Includes Zen theme mode for organic, tactile sounds
+ * inspired by natural materials (wood, stone, paper)
+ * 
  * @module managers/audioManager
  */
 export const AudioManager = {
     context: null,
     masterGain: null,
     lastPlayTime: {}, // Track last play time for duplicate prevention
+    zenMode: false,   // Toggle for Zen theme sounds
 
     /**
      * Initialize audio context and resume on user gesture
@@ -21,6 +25,9 @@ export const AudioManager = {
             this.context = new (window.AudioContext || window.webkitAudioContext)();
             this.masterGain = this.context.createGain();
             this.masterGain.connect(this.context.destination);
+            
+            // Check if zen theme is active
+            this.updateZenMode();
             
             // Resume on first user gesture (required by most browsers)
             const resume = () => {
@@ -37,6 +44,17 @@ export const AudioManager = {
     },
 
     /**
+     * Update Zen mode based on current theme
+     */
+    updateZenMode() {
+        this.zenMode = document.body.classList.contains('zen-theme');
+        // Zen mode uses lower master volume (-6dB = 0.5 linear)
+        if (this.masterGain) {
+            this.masterGain.gain.value = this.zenMode ? 0.5 : 1.0;
+        }
+    },
+
+    /**
      * Check if sound is enabled and prevent duplicate plays within cooldown
      */
     canPlay(eventKey, cooldown = 0) {
@@ -46,6 +64,8 @@ export const AudioManager = {
             return false;
         }
         this.lastPlayTime[eventKey] = now;
+        // Update zen mode on each play
+        this.updateZenMode();
         return true;
     },
 
@@ -61,8 +81,14 @@ export const AudioManager = {
 
         const oscillator = this.context.createOscillator();
         const gainNode = this.context.createGain();
+        
+        // Create a low-pass filter to cut high frequencies (Zen: avoid piercing sounds)
+        const filter = this.context.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = this.zenMode ? 8000 : 20000; // Cut above 8kHz in Zen mode
 
-        oscillator.connect(gainNode);
+        oscillator.connect(filter);
+        filter.connect(gainNode);
         gainNode.connect(this.masterGain);
 
         oscillator.frequency.value = frequency;
@@ -108,6 +134,16 @@ export const AudioManager = {
         filter.type = filterType;
         filter.frequency.value = frequency;
         filter.Q.value = q;
+        
+        // High-pass filter to cut muddy low frequencies (Zen spec: cut below 100Hz)
+        const highPass = this.context.createBiquadFilter();
+        highPass.type = 'highpass';
+        highPass.frequency.value = this.zenMode ? 100 : 20;
+        
+        // Low-pass filter for Zen (cut above 14kHz)
+        const lowPass = this.context.createBiquadFilter();
+        lowPass.type = 'lowpass';
+        lowPass.frequency.value = this.zenMode ? 14000 : 20000;
 
         const gainNode = this.context.createGain();
         gainNode.gain.setValueAtTime(0.0001, this.context.currentTime);
@@ -115,7 +151,9 @@ export const AudioManager = {
         gainNode.gain.exponentialRampToValueAtTime(0.0001, this.context.currentTime + duration);
 
         source.connect(filter);
-        filter.connect(gainNode);
+        filter.connect(highPass);
+        highPass.connect(lowPass);
+        lowPass.connect(gainNode);
         gainNode.connect(this.masterGain);
 
         source.start(this.context.currentTime);
@@ -132,11 +170,193 @@ export const AudioManager = {
         });
     },
 
+    // =========================================
+    // ZEN THEME SOUNDS - Organic, Tactile
+    // =========================================
+
+    /**
+     * Zen: Cell Selection - soft wooden tap
+     * Like tapping a fingernail on polished wood
+     */
+    playZenTap() {
+        if (!this.context || !AppState.soundEnabled) return;
+        
+        // High-frequency click with fast decay (wooden tap)
+        this.playNoiseBurst({ 
+            duration: 0.025, 
+            filterType: 'bandpass', 
+            frequency: 2800, 
+            q: 2.5, 
+            gain: 0.04 
+        });
+        
+        // Subtle body resonance
+        this.playTone(180, 0.02, 'sine', 0.03);
+    },
+
+    /**
+     * Zen: Number Input - Go stone placement
+     * Weighted, final "clack" sound
+     */
+    playZenPlace() {
+        if (!this.context || !AppState.soundEnabled) return;
+        
+        // Initial impact - sharp but woody
+        this.playNoiseBurst({ 
+            duration: 0.04, 
+            filterType: 'bandpass', 
+            frequency: 1600, 
+            q: 1.8, 
+            gain: 0.08 
+        });
+        
+        // Lower body thud (stone weight)
+        this.playNoiseBurst({ 
+            duration: 0.08, 
+            filterType: 'lowpass', 
+            frequency: 400, 
+            q: 0.5, 
+            gain: 0.06 
+        });
+        
+        // Wooden resonance
+        this.playTone(120, 0.06, 'sine', 0.05);
+    },
+
+    /**
+     * Zen: Erase/Undo - paper sliding
+     * Soft, airy brush sound
+     */
+    playZenErase() {
+        if (!this.context || !AppState.soundEnabled) return;
+        
+        // Paper-slide white noise burst
+        const duration = 0.1;
+        const buffer = this.createNoiseBuffer(duration);
+        if (!buffer) return;
+        
+        const source = this.context.createBufferSource();
+        source.buffer = buffer;
+        
+        // Bandpass for "papery" texture
+        const filter = this.context.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 3000;
+        filter.Q.value = 0.5;
+        
+        // Gentle fade envelope
+        const gainNode = this.context.createGain();
+        gainNode.gain.setValueAtTime(0.0001, this.context.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.035, this.context.currentTime + 0.02);
+        gainNode.gain.linearRampToValueAtTime(0.0001, this.context.currentTime + duration);
+        
+        source.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.masterGain);
+        
+        source.start(this.context.currentTime);
+        source.stop(this.context.currentTime + duration);
+    },
+
+    /**
+     * Zen: Error - dull wooden block
+     * Not harsh - a "blocked" feeling
+     */
+    playZenBlock() {
+        if (!this.context || !AppState.soundEnabled) return;
+        
+        // Dull thud - like knocking on solid wood
+        this.playNoiseBurst({ 
+            duration: 0.08, 
+            filterType: 'lowpass', 
+            frequency: 300, 
+            q: 0.4, 
+            gain: 0.1 
+        });
+        
+        // Dead resonance (no ring)
+        this.playTone(80, 0.05, 'sine', 0.08);
+        
+        // Muted impact
+        this.playNoiseBurst({ 
+            duration: 0.03, 
+            filterType: 'bandpass', 
+            frequency: 600, 
+            q: 0.8, 
+            gain: 0.04 
+        });
+    },
+
+    /**
+     * Zen: Victory/Completion - singing bowl
+     * Harmonic, resolving tension
+     */
+    playZenComplete() {
+        if (!this.context || !AppState.soundEnabled) return;
+        
+        const now = this.context.currentTime;
+        
+        // Create singing bowl harmonics
+        const fundamentals = [261.6, 523.2, 784.8]; // C4, C5, G5
+        const duration = 2.5;
+        
+        fundamentals.forEach((freq, i) => {
+            const osc = this.context.createOscillator();
+            const gain = this.context.createGain();
+            const filter = this.context.createBiquadFilter();
+            
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            
+            // Gentle low-pass for warmth
+            filter.type = 'lowpass';
+            filter.frequency.value = 6000;
+            
+            // Slow swell and fade
+            const vol = 0.08 - (i * 0.015);
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(vol, now + 0.8);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+            
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.masterGain);
+            
+            osc.start(now + (i * 0.15));
+            osc.stop(now + duration);
+        });
+    },
+
+    /**
+     * Zen: Note toggle - very subtle
+     */
+    playZenNote() {
+        if (!this.context || !AppState.soundEnabled) return;
+        
+        this.playNoiseBurst({ 
+            duration: 0.015, 
+            filterType: 'highpass', 
+            frequency: 4000, 
+            q: 1.0, 
+            gain: 0.02 
+        });
+    },
+
+    // =========================================
+    // STANDARD SOUNDS (Original)
+    // =========================================
+
     /**
      * Cell fill sound - bright, quick feedback for user input
      */
     playCellFill() {
         if (!this.canPlay('cellFill', 40)) return;
+        
+        if (this.zenMode) {
+            this.playZenPlace();
+            return;
+        }
+        
         // Bright noise burst with high-pass characteristics
         this.playNoiseBurst({ duration: 0.08, filterType: 'bandpass', frequency: 1400, q: 1.2, gain: 0.08 });
         // Accompanying tone for clarity
@@ -144,10 +364,31 @@ export const AudioManager = {
     },
 
     /**
+     * Cell selection sound - for when user taps a cell
+     */
+    playCellSelect() {
+        if (!this.canPlay('cellSelect', 30)) return;
+        
+        if (this.zenMode) {
+            this.playZenTap();
+            return;
+        }
+        
+        // Quick, subtle click
+        this.playNoiseBurst({ duration: 0.03, filterType: 'highpass', frequency: 3000, q: 1.5, gain: 0.04 });
+    },
+
+    /**
      * Clear cell sound - similar to fill but slightly different
      */
     playClearCell() {
         if (!this.canPlay('clearCell', 40)) return;
+        
+        if (this.zenMode) {
+            this.playZenErase();
+            return;
+        }
+        
         // Softer, lower frequency burst
         this.playNoiseBurst({ duration: 0.07, filterType: 'bandpass', frequency: 900, q: 1.0, gain: 0.06 });
         this.playTone(200, 0.06, 'sine', 0.2);
@@ -158,6 +399,12 @@ export const AudioManager = {
      */
     playError() {
         if (!this.canPlay('error', 100)) return;
+        
+        if (this.zenMode) {
+            this.playZenBlock();
+            return;
+        }
+        
         // Low frequency burst for emphasis
         this.playNoiseBurst({ duration: 0.14, filterType: 'lowpass', frequency: 260, q: 0.7, gain: 0.12 });
         // Descending sawtooth tones
@@ -170,6 +417,13 @@ export const AudioManager = {
      */
     playCorrect() {
         if (!this.canPlay('correct', 50)) return;
+        
+        if (this.zenMode) {
+            // In Zen mode, correct is silent or very subtle
+            this.playZenTap();
+            return;
+        }
+        
         // Ascending two-tone chime
         this.playTone(520, 0.16, 'sine', 0.4);
         setTimeout(() => this.playTone(660, 0.18, 'sine', 0.4), 90);
@@ -180,6 +434,12 @@ export const AudioManager = {
      */
     playNote() {
         if (!this.canPlay('note', 30)) return;
+        
+        if (this.zenMode) {
+            this.playZenNote();
+            return;
+        }
+        
         this.playTone(880, 0.05, 'sine', 0.15);
     },
 
@@ -189,6 +449,12 @@ export const AudioManager = {
      */
     playVictory() {
         if (!this.canPlay('victory', 200)) return;
+        
+        if (this.zenMode) {
+            this.playZenComplete();
+            return;
+        }
+        
         // Ascending major chord: G-B-D-G
         const frequencies = [392, 523, 659, 784];
         frequencies.forEach((freq, i) => {
@@ -206,6 +472,13 @@ export const AudioManager = {
      */
     playDefeat() {
         if (!this.canPlay('defeat', 200)) return;
+        
+        if (this.zenMode) {
+            // In Zen mode, defeat is quiet - just a soft thud
+            this.playZenBlock();
+            return;
+        }
+        
         // Descending minor chord: A-F#-D-A
         const frequencies = [220, 196, 174, 155];
         frequencies.forEach((freq, i) => {
@@ -218,6 +491,13 @@ export const AudioManager = {
      */
     playTie() {
         if (!this.canPlay('tie', 200)) return;
+        
+        if (this.zenMode) {
+            // Zen tie is a gentle completion
+            this.playZenComplete();
+            return;
+        }
+        
         // Alternating neutral tones
         const frequencies = [440, 330, 440, 330];
         frequencies.forEach((freq, i) => {
@@ -230,6 +510,13 @@ export const AudioManager = {
      */
     playChatPing() {
         if (!this.canPlay('chatPing', 500)) return;
+        
+        if (this.zenMode) {
+            // Zen chat ping - soft wooden knock
+            this.playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 1200, q: 1.2, gain: 0.03 });
+            return;
+        }
+        
         // Bright, high-frequency notification
         this.playNoiseBurst({ duration: 0.07, filterType: 'bandpass', frequency: 900, q: 1.4, gain: 0.055 });
         this.playTone(330, 0.08, 'sine', 0.3);
@@ -240,6 +527,14 @@ export const AudioManager = {
      */
     playDmPing() {
         if (!this.canPlay('dmPing', 500)) return;
+        
+        if (this.zenMode) {
+            // Zen DM - slightly more noticeable than chat
+            this.playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 1400, q: 1.0, gain: 0.04 });
+            this.playTone(260, 0.04, 'sine', 0.03);
+            return;
+        }
+        
         // Higher, more personal notification
         this.playNoiseBurst({ duration: 0.08, filterType: 'bandpass', frequency: 760, q: 1.2, gain: 0.06 });
         this.playTone(494, 0.09, 'sine', 0.35); // B note
@@ -250,6 +545,16 @@ export const AudioManager = {
      */
     playFriendRequest() {
         if (!this.canPlay('friendRequest', 500)) return;
+        
+        if (this.zenMode) {
+            // Zen friend request - gentle double tap
+            this.playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 1600, q: 1.5, gain: 0.03 });
+            setTimeout(() => {
+                this.playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 2000, q: 1.5, gain: 0.025 });
+            }, 80);
+            return;
+        }
+        
         // Warm, ascending notification
         this.playTone(392, 0.15, 'sine', 0.35); // G
         setTimeout(() => this.playTone(523, 0.15, 'sine', 0.35), 120); // D
@@ -260,6 +565,14 @@ export const AudioManager = {
      */
     playBadgeEarned() {
         if (!this.canPlay('badgeEarned', 300)) return;
+        
+        if (this.zenMode) {
+            // Zen badge - gentle singing bowl moment
+            this.playTone(392, 0.4, 'sine', 0.06);
+            setTimeout(() => this.playTone(523, 0.35, 'sine', 0.05), 200);
+            return;
+        }
+        
         // Three ascending notes in major key
         this.playChord([523, 659, 784], 0.2, 'sine', 150); // Major chord spread
     },
@@ -269,6 +582,17 @@ export const AudioManager = {
      */
     playCountdown(number) {
         if (!this.canPlay(`countdown_${number}`, 200)) return;
+        
+        if (this.zenMode) {
+            // Zen countdown - wooden taps
+            if (number === 1) {
+                this.playNoiseBurst({ duration: 0.06, filterType: 'bandpass', frequency: 1800, q: 1.5, gain: 0.06 });
+            } else {
+                this.playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 1400, q: 1.2, gain: 0.04 });
+            }
+            return;
+        }
+        
         if (number === 1) {
             // Final countdown gets higher pitch
             this.playTone(880, 0.2, 'sine', 0.5);
@@ -283,6 +607,13 @@ export const AudioManager = {
      */
     playOpponentMove() {
         if (!this.canPlay('opponentMove', 300)) return;
+        
+        if (this.zenMode) {
+            // Zen opponent - very subtle distant tap
+            this.playNoiseBurst({ duration: 0.025, filterType: 'highpass', frequency: 4000, q: 1.0, gain: 0.015 });
+            return;
+        }
+        
         this.playNoiseBurst({ duration: 0.05, filterType: 'highpass', frequency: 5000, q: 1.5, gain: 0.04 });
     },
 
@@ -291,6 +622,16 @@ export const AudioManager = {
      */
     playSoundToggle(enabled) {
         if (!this.context) return;
+        
+        if (this.zenMode) {
+            if (enabled) {
+                this.playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 1600, q: 1.5, gain: 0.04 });
+            } else {
+                this.playNoiseBurst({ duration: 0.03, filterType: 'lowpass', frequency: 400, q: 0.5, gain: 0.03 });
+            }
+            return;
+        }
+        
         if (enabled) {
             this.playTone(440, 0.1, 'sine', 0.3);
             this.playTone(554, 0.1, 'sine', 0.3);
