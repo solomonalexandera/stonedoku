@@ -222,11 +222,9 @@ export function createOnboardingManager({
         setButtonState(buttons, true, 'Creating...');
 
         try {
-            console.log('onboarding: submitAccount start');
             AppState.pendingUsername = username;
             const credential = await createUserWithEmailAndPassword(auth, email, password);
             const user = credential.user;
-            console.log('onboarding: user created', user?.uid);
             let avatarUrl = null;
 
             // If user supplied an avatar, upload it to storage directly and get URL
@@ -265,7 +263,6 @@ export function createOnboardingManager({
 
                 if (resp && resp.status === 404) {
                     // API not available in this environment (dev); fallback to client-side creation below.
-                    console.log('onboarding: server finalize returned 404, falling back');
                     resp = null;
                 }
 
@@ -291,13 +288,11 @@ export function createOnboardingManager({
 
             // If server not available (dev), fallback to client-side profile creation
             if (!resp) {
-                console.log('onboarding: performing client-side fallback createOrUpdateProfile');
                 try {
                     // Try to reserve and create the profile locally (best-effort fallback)
                     const profilePayload = { username, displayName: username, email };
                     if (avatarUrl) profilePayload.profilePicture = avatarUrl;
                     await ProfileManager.createOrUpdateProfile(user.uid, profilePayload);
-                    console.log('onboarding: client-side profile creation succeeded');
                 } catch (fallbackErr) {
                     console.error('Client-side fallback profile creation failed', fallbackErr);
                     notify('Failed to finalize account (server and fallback both failed). Please try again later.', 'error');
@@ -308,7 +303,6 @@ export function createOnboardingManager({
             }
 
             // success
-            console.log('onboarding: finalize succeeded, advancing to step 4');
             AppState.currentUser = user;
             goToStep(4);
             showError('username-error');

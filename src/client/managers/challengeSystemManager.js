@@ -43,7 +43,6 @@ export function createChallengeSystemManager({ rtdb, ref, set, remove, serverTim
                 
                 // Only process if not stale
                 if (isStale) {
-                    console.log('Skipping stale notification:', snapshot.key);
                     return;
                 }
                 

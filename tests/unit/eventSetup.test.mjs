@@ -14,8 +14,8 @@ global.document = {
             contains(name) {
                 return this._classes.has(name);
             },
-            add(name) { this._classes.add(name); },
-            remove(name) { this._classes.delete(name); }
+            add(...names) { names.forEach(n => this._classes.add(n)); },
+            remove(...names) { names.forEach(n => this._classes.delete(n)); }
         }
     },
     getElementById: () => null,
@@ -48,72 +48,36 @@ const createMockCookieConsent = (canUse = true) => ({
     canUsePreferences: () => canUse
 });
 
-// Zen theme is the only theme now
-test('applyTheme always sets zen-theme class', () => {
+// Zen theme is the only theme - no parameters needed
+test('applyTheme sets zen-theme class', () => {
     document.body.classList._classes.clear();
-    applyTheme('light', createMockCookieConsent());
-    assert.ok(document.body.classList.contains('zen-theme'));
-    assert.ok(!document.body.classList.contains('light-theme'));
-});
-
-test('applyTheme sets zen-theme even for dark mode', () => {
-    document.body.classList._classes.clear();
-    applyTheme('dark', createMockCookieConsent());
-    assert.ok(document.body.classList.contains('zen-theme'));
-    assert.ok(!document.body.classList.contains('dark-theme'));
-});
-
-test('applyTheme sets zen-theme for zen mode', () => {
-    document.body.classList._classes.clear();
-    applyTheme('zen', createMockCookieConsent());
+    applyTheme();
     assert.ok(document.body.classList.contains('zen-theme'));
     assert.ok(!document.body.classList.contains('light-theme'));
     assert.ok(!document.body.classList.contains('dark-theme'));
 });
 
-test('applyTheme sets zen-theme for any mode', () => {
+test('applyTheme removes other theme classes', () => {
     document.body.classList._classes.clear();
-    applyTheme('anything', createMockCookieConsent());
+    document.body.classList.add('light-theme');
+    document.body.classList.add('dark-theme');
+    applyTheme();
+    assert.ok(document.body.classList.contains('zen-theme'));
+    assert.ok(!document.body.classList.contains('light-theme'));
+    assert.ok(!document.body.classList.contains('dark-theme'));
+});
+
+test('initTheme applies zen theme', () => {
+    document.body.classList._classes.clear();
+    global.localStorage.clear();
+    initTheme();
     assert.ok(document.body.classList.contains('zen-theme'));
 });
 
-test('applyTheme does not save theme to localStorage (zen only)', () => {
-    global.localStorage.clear();
-    applyTheme('dark', createMockCookieConsent(true));
-    assert.equal(global.localStorage.getItem('stonedoku_theme'), null);
-});
-
-test('applyTheme does not save theme when cookies not allowed', () => {
-    global.localStorage.clear();
-    applyTheme('dark', createMockCookieConsent(false));
-    assert.equal(global.localStorage.getItem('stonedoku_theme'), null);
-});
-
-test('initTheme applies zen theme by default', () => {
-    document.body.classList._classes.clear();
-    global.localStorage.clear();
-    initTheme(createMockCookieConsent());
-    assert.ok(document.body.classList.contains('zen-theme'));
-});
-
-test('initTheme always applies zen theme regardless of saved preference', () => {
+test('initTheme applies zen theme regardless of saved preference', () => {
     document.body.classList._classes.clear();
     global.localStorage.setItem('stonedoku_theme', 'dark');
-    initTheme(createMockCookieConsent(true));
-    assert.ok(document.body.classList.contains('zen-theme'));
-});
-
-test('initTheme applies zen theme for saved zen preference', () => {
-    document.body.classList._classes.clear();
-    global.localStorage.setItem('stonedoku_theme', 'zen');
-    initTheme(createMockCookieConsent(true));
-    assert.ok(document.body.classList.contains('zen-theme'));
-});
-
-test('initTheme always applies zen theme for saved light preference', () => {
-    document.body.classList._classes.clear();
-    global.localStorage.setItem('stonedoku_theme', 'light');
-    initTheme(createMockCookieConsent(true));
+    initTheme();
     assert.ok(document.body.classList.contains('zen-theme'));
 });
 
@@ -191,20 +155,14 @@ test('setupHeaderMenu toggleHeaderMenu does not throw', () => {
     assert.ok(true);
 });
 
-test('applyTheme handles null CookieConsent', () => {
+test('applyTheme works without parameters', () => {
     document.body.classList._classes.clear();
-    applyTheme('light', null);
+    applyTheme();
     assert.ok(document.body.classList.contains('zen-theme'));
 });
 
-test('initTheme handles null CookieConsent', () => {
+test('initTheme works without parameters', () => {
     document.body.classList._classes.clear();
-    initTheme(null);
-    assert.ok(document.body.classList.contains('zen-theme'));
-});
-
-test('applyTheme handles CookieConsent without canUsePreferences', () => {
-    document.body.classList._classes.clear();
-    applyTheme('dark', {});
+    initTheme();
     assert.ok(document.body.classList.contains('zen-theme'));
 });

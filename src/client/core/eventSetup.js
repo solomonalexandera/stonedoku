@@ -48,15 +48,14 @@ export function setupPasswordToggles() {
  * Zen theme is the only theme - provides a calm, focused experience
  */
 
-export function applyTheme(mode, CookieConsent) {
+export function applyTheme() {
     const body = document.body;
-    // Always apply zen theme
     body.classList.remove('light-theme', 'dark-theme');
     body.classList.add('zen-theme');
 }
 
-export function initTheme(CookieConsent) {
-    applyTheme('zen', CookieConsent);
+export function initTheme() {
+    applyTheme();
 }
 
 export function syncSoundToggleUi(AppState) {
@@ -954,7 +953,7 @@ export function createEventSetup(deps) {
 
     return {
         setup() {
-            initTheme(CookieConsent);
+            initTheme();
             syncSoundToggleUi(AppState);
             syncSettingsToggles();
 
