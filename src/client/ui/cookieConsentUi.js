@@ -90,16 +90,11 @@ export function createCookieConsent({ openLegalModal } = {}) {
         const consent = getConsent();
         if (!consent) return;
         
-        if (consent.analytics) {
-            console.log('Analytics enabled');
-        } else {
-            console.log('Analytics disabled');
-        }
+        // Analytics and preference cookie handling
+        // Analytics: controlled by consent.analytics
+        // Preferences: controlled by consent.preferences
         
-        if (consent.preferences) {
-            console.log('Preference cookies enabled');
-        } else {
-            console.log('Preference cookies disabled');
+        if (!consent.preferences) {
             try { localStorage.removeItem('stonedoku_theme'); } catch { /* ignore */ }
         }
     };
