@@ -46,18 +46,44 @@ export function setupPasswordToggles() {
 /**
  * Theme management utilities
  */
+const THEME_MODES = ['light', 'dark', 'zen'];
+
 export function applyTheme(mode, CookieConsent) {
     const body = document.body;
-    body.classList.toggle('light-theme', mode === 'light');
-    body.classList.toggle('dark-theme', mode !== 'light');
+    // Remove all theme classes
+    body.classList.remove('light-theme', 'dark-theme', 'zen-theme');
+    
+    // Apply the appropriate theme class
+    if (mode === 'zen') {
+        body.classList.add('zen-theme');
+    } else if (mode === 'light') {
+        body.classList.add('light-theme');
+    } else {
+        body.classList.add('dark-theme');
+    }
+    
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) {
-        themeBtn.setAttribute('aria-pressed', mode !== 'light' ? 'true' : 'false');
-        themeBtn.setAttribute('data-tooltip', mode === 'light' ? 'Theme: Light' : 'Theme: Dark');
+        const tooltipText = mode === 'zen' ? 'Theme: Zen' : 
+                           mode === 'light' ? 'Theme: Light' : 'Theme: Dark';
+        themeBtn.setAttribute('data-tooltip', tooltipText);
     }
     if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
         try { localStorage.setItem('stonedoku_theme', mode); } catch { /* ignore */ }
     }
+}
+
+export function getNextTheme(currentTheme) {
+    const currentIndex = THEME_MODES.indexOf(currentTheme);
+    const nextIndex = (currentIndex + 1) % THEME_MODES.length;
+    return THEME_MODES[nextIndex];
+}
+
+export function getCurrentTheme() {
+    const body = document.body;
+    if (body.classList.contains('zen-theme')) return 'zen';
+    if (body.classList.contains('light-theme')) return 'light';
+    return 'dark';
 }
 
 export function initTheme(CookieConsent) {
@@ -65,7 +91,9 @@ export function initTheme(CookieConsent) {
     if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
         try { saved = localStorage.getItem('stonedoku_theme'); } catch { /* ignore */ }
     }
-    applyTheme(saved === 'dark' ? 'dark' : 'light', CookieConsent);
+    // Default to zen theme if no preference saved, or use saved preference
+    const theme = saved && THEME_MODES.includes(saved) ? saved : 'zen';
+    applyTheme(theme, CookieConsent);
 }
 
 export function syncSoundToggleUi(AppState) {
@@ -998,11 +1026,11 @@ export function createEventSetup(deps) {
             setupHeaderMenu();
             setupPasswordToggles();
 
-            // Theme toggle
+            // Theme toggle - cycles through light, dark, and zen
             document.getElementById('theme-toggle')?.addEventListener('click', () => {
-                const body = document.body;
-                const isLight = body.classList.contains('light-theme');
-                applyTheme(isLight ? 'dark' : 'light', CookieConsent);
+                const currentTheme = getCurrentTheme();
+                const nextTheme = getNextTheme(currentTheme);
+                applyTheme(nextTheme, CookieConsent);
             });
 
             // Sound toggle

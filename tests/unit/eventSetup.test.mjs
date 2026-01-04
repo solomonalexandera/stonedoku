@@ -62,7 +62,15 @@ test('applyTheme sets dark-theme class for dark mode', () => {
     assert.ok(!document.body.classList.contains('light-theme'));
 });
 
-test('applyTheme sets dark-theme for any non-light mode', () => {
+test('applyTheme sets zen-theme for zen mode', () => {
+    document.body.classList._classes.clear();
+    applyTheme('zen', createMockCookieConsent());
+    assert.ok(document.body.classList.contains('zen-theme'));
+    assert.ok(!document.body.classList.contains('light-theme'));
+    assert.ok(!document.body.classList.contains('dark-theme'));
+});
+
+test('applyTheme sets dark-theme for unknown mode', () => {
     document.body.classList._classes.clear();
     applyTheme('anything', createMockCookieConsent());
     assert.ok(document.body.classList.contains('dark-theme'));
@@ -80,11 +88,11 @@ test('applyTheme does not save theme when cookies not allowed', () => {
     assert.equal(global.localStorage.getItem('stonedoku_theme'), null);
 });
 
-test('initTheme applies light theme by default', () => {
+test('initTheme applies zen theme by default', () => {
     document.body.classList._classes.clear();
     global.localStorage.clear();
     initTheme(createMockCookieConsent());
-    assert.ok(document.body.classList.contains('light-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
 });
 
 test('initTheme applies saved dark theme', () => {
@@ -92,6 +100,20 @@ test('initTheme applies saved dark theme', () => {
     global.localStorage.setItem('stonedoku_theme', 'dark');
     initTheme(createMockCookieConsent(true));
     assert.ok(document.body.classList.contains('dark-theme'));
+});
+
+test('initTheme applies saved zen theme', () => {
+    document.body.classList._classes.clear();
+    global.localStorage.setItem('stonedoku_theme', 'zen');
+    initTheme(createMockCookieConsent(true));
+    assert.ok(document.body.classList.contains('zen-theme'));
+});
+
+test('initTheme applies saved light theme', () => {
+    document.body.classList._classes.clear();
+    global.localStorage.setItem('stonedoku_theme', 'light');
+    initTheme(createMockCookieConsent(true));
+    assert.ok(document.body.classList.contains('light-theme'));
 });
 
 test('syncSoundToggleUi does not throw when button is null', () => {
@@ -177,7 +199,7 @@ test('applyTheme handles null CookieConsent', () => {
 test('initTheme handles null CookieConsent', () => {
     document.body.classList._classes.clear();
     initTheme(null);
-    assert.ok(document.body.classList.contains('light-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
 });
 
 test('applyTheme handles CookieConsent without canUsePreferences', () => {
