@@ -426,14 +426,14 @@
                                     <span>or sign in for full features</span>
                                 </div>
 
-                                <!-- Auth Mode Tabs -->
+                                <!-- Auth Mode Tabs - Click to expand -->
                                 <div class="auth-mode-tabs">
-                                    <button class="auth-tab active" data-mode="signin">Sign In</button>
-                                    <button class="auth-tab" data-mode="signup">Create Account</button>
+                                    <button class="auth-tab" data-mode="signin" id="auth-tab-signin">Sign In</button>
+                                    <button class="auth-tab" data-mode="signup" id="auth-tab-signup">Create Account</button>
                                 </div>
 
-                                <!-- Sign In Panel -->
-                                <div class="auth-panel" id="signin-panel">
+                                <!-- Sign In Panel - Hidden by default, expands on click -->
+                                <div class="auth-panel collapsed" id="signin-panel" style="display: none;">
                                     <form id="signin-form" class="auth-form">
                                         <div class="form-group">
                                             <label for="signin-email">Email or Username</label>
@@ -460,8 +460,8 @@
                                     </form>
                                 </div>
 
-                                <!-- Sign Up Panel - Now triggers onboarding directly -->
-                                <div class="auth-panel" id="signup-panel" style="display: none;">
+                                <!-- Sign Up Panel - Hidden by default, expands on click -->
+                                <div class="auth-panel collapsed" id="signup-panel" style="display: none;">
                                     <div class="signup-benefits">
                                         <div class="benefit-item">
                                             <svg class="ui-icon" aria-hidden="true"><use href="#i-mountain"></use></svg>
@@ -2639,6 +2639,45 @@
                     } catch (err) {
                         console.error('EARLY_REJECTION_HANDLER_FAILURE', err);
                     }
+                });
+            </script>
+            <!-- Auth tabs - collapsible panels (inline for reliability) -->
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Auth tab switching - collapsible panels
+                    document.querySelectorAll('.auth-tab').forEach(function(tab) {
+                        tab.addEventListener('click', function() {
+                            var mode = tab.dataset.mode;
+                            var signinPanel = document.getElementById('signin-panel');
+                            var signupPanel = document.getElementById('signup-panel');
+                            var isAlreadyActive = tab.classList.contains('active');
+                            
+                            // Remove active from all tabs
+                            document.querySelectorAll('.auth-tab').forEach(function(t) {
+                                t.classList.remove('active');
+                            });
+                            
+                            // Hide all panels
+                            if (signinPanel) signinPanel.style.display = 'none';
+                            if (signupPanel) signupPanel.style.display = 'none';
+                            
+                            // If clicking a different tab, expand that panel
+                            if (!isAlreadyActive) {
+                                tab.classList.add('active');
+                                if (mode === 'signin' && signinPanel) {
+                                    signinPanel.style.display = 'block';
+                                    signinPanel.classList.remove('collapsed');
+                                    setTimeout(function() {
+                                        var emailInput = document.getElementById('signin-email');
+                                        if (emailInput) emailInput.focus();
+                                    }, 100);
+                                } else if (mode === 'signup' && signupPanel) {
+                                    signupPanel.style.display = 'block';
+                                    signupPanel.classList.remove('collapsed');
+                                }
+                            }
+                        });
+                    });
                 });
             </script>
             <!-- Firebase SDK bootstrapping -->

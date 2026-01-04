@@ -9647,3 +9647,91 @@ body.zen-theme::after {
     color: white;
     border-color: var(--color-primary);
 }
+
+/* ===========================================
+   Collapsible Auth Panels
+   =========================================== */
+
+/* Auth panels - collapsed by default */
+.auth-panel {
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auth-panel.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Zen theme collapsible panels styling */
+.zen-theme .auth-tab {
+    background: transparent;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: var(--zen-text-secondary);
+    transition: all 0.3s ease;
+}
+
+.zen-theme .auth-tab:hover {
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--zen-text);
+}
+
+.zen-theme .auth-tab.active {
+    background: var(--zen-accent);
+    color: white;
+    border-color: var(--zen-accent);
+    box-shadow: 0 2px 8px rgba(122, 155, 126, 0.25);
+}
+
+/* Smooth expand animation for auth panels */
+.zen-theme .auth-panel {
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    margin-top: 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.zen-theme .auth-panel[style*="display: none"] {
+    display: none !important;
+}
+
+/* Auth mode tabs - make them look clickable */
+.zen-theme .auth-mode-tabs {
+    background: transparent;
+    border-radius: var(--border-radius-lg);
+    padding: 0;
+    gap: 0.5rem;
+}
+
+/* Signup benefits styling in zen theme */
+.zen-theme .signup-benefits {
+    background: rgba(122, 155, 126, 0.06);
+    border: 1px solid rgba(122, 155, 126, 0.12);
+    border-radius: var(--border-radius-lg);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.zen-theme .benefit-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    color: var(--zen-text-secondary);
+}
+
+.zen-theme .benefit-item .ui-icon {
+    color: var(--zen-accent);
+    flex-shrink: 0;
+}
+
+/* Auth terms text */
+.zen-theme .auth-terms {
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    color: var(--zen-text-muted);
+    text-align: center;
+}
