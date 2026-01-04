@@ -155,14 +155,39 @@ export function setupAuthListeners(deps) {
         }
     });
 
-    // Auth tab switching
+    // Auth tab switching - collapsible panels
+    // Panels start collapsed (hidden). Clicking a tab toggles its panel.
+    // Clicking an already-active tab collapses it.
     document.querySelectorAll('.auth-tab').forEach(tab => {
         tab.addEventListener('click', () => {
-            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
             const mode = tab.dataset.mode;
-            document.getElementById('signin-panel').style.display = mode === 'signin' ? 'block' : 'none';
-            document.getElementById('signup-panel').style.display = mode === 'signup' ? 'block' : 'none';
+            const signinPanel = document.getElementById('signin-panel');
+            const signupPanel = document.getElementById('signup-panel');
+            const isAlreadyActive = tab.classList.contains('active');
+            
+            // Remove active from all tabs
+            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+            
+            // Hide all panels
+            if (signinPanel) signinPanel.style.display = 'none';
+            if (signupPanel) signupPanel.style.display = 'none';
+            
+            // If clicking the same tab, just collapse (already done above)
+            // If clicking a different tab, expand that panel
+            if (!isAlreadyActive) {
+                tab.classList.add('active');
+                if (mode === 'signin' && signinPanel) {
+                    signinPanel.style.display = 'block';
+                    signinPanel.classList.remove('collapsed');
+                    // Focus the email input for better UX
+                    setTimeout(() => {
+                        document.getElementById('signin-email')?.focus();
+                    }, 100);
+                } else if (mode === 'signup' && signupPanel) {
+                    signupPanel.style.display = 'block';
+                    signupPanel.classList.remove('collapsed');
+                }
+            }
         });
     });
 
