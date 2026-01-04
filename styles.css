@@ -9694,10 +9694,6 @@ body.zen-theme::after {
     border: 1px solid rgba(0, 0, 0, 0.04);
 }
 
-.zen-theme .auth-panel[style*="display: none"] {
-    display: none !important;
-}
-
 /* Auth mode tabs - make them look clickable */
 .zen-theme .auth-mode-tabs {
     background: transparent;
