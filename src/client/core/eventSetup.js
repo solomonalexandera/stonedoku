@@ -179,7 +179,8 @@ export function setupAuthListeners(deps) {
                 if (mode === 'signin' && signinPanel) {
                     signinPanel.style.display = 'block';
                     signinPanel.classList.remove('collapsed');
-                    // Focus the email input for better UX
+                    // Small delay allows the panel to render before focusing
+                    // This ensures the input is visible and focusable
                     setTimeout(() => {
                         document.getElementById('signin-email')?.focus();
                     }, 100);

@@ -2796,6 +2796,7 @@
                                 if (mode === 'signin' && signinPanel) {
                                     signinPanel.style.display = 'block';
                                     signinPanel.classList.remove('collapsed');
+                                    // Small delay allows the panel to render before focusing
                                     setTimeout(function() {
                                         var emailInput = document.getElementById('signin-email');
                                         if (emailInput) emailInput.focus();
