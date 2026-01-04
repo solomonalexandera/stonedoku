@@ -44,13 +44,15 @@ export const AudioManager = {
     },
 
     /**
-     * Update Zen mode based on current theme
+     * Zen mode is always active - provides organic, tactile sounds
+     * Master volume is set -6dB lower for a calmer experience
      */
     updateZenMode() {
-        this.zenMode = document.body.classList.contains('zen-theme');
-        // Zen mode uses lower master volume (-6dB = 0.5 linear)
+        // Zen mode is always active now
+        this.zenMode = true;
+        // Lower master volume (-6dB = 0.5 linear) for zen experience
         if (this.masterGain) {
-            this.masterGain.gain.value = this.zenMode ? 0.5 : 1.0;
+            this.masterGain.gain.value = 0.5;
         }
     },
 
@@ -64,8 +66,6 @@ export const AudioManager = {
             return false;
         }
         this.lastPlayTime[eventKey] = now;
-        // Update zen mode on each play
-        this.updateZenMode();
         return true;
     },
 

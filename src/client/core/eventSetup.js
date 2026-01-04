@@ -45,55 +45,31 @@ export function setupPasswordToggles() {
 
 /**
  * Theme management utilities
+ * Zen theme is the only theme - provides a calm, focused experience
  */
-const THEME_MODES = ['light', 'dark', 'zen'];
 
 export function applyTheme(mode, CookieConsent) {
     const body = document.body;
-    // Remove all theme classes
-    body.classList.remove('light-theme', 'dark-theme', 'zen-theme');
-    
-    // Apply the appropriate theme class
-    if (mode === 'zen') {
-        body.classList.add('zen-theme');
-    } else if (mode === 'light') {
-        body.classList.add('light-theme');
-    } else {
-        body.classList.add('dark-theme');
-    }
+    // Always apply zen theme
+    body.classList.remove('light-theme', 'dark-theme');
+    body.classList.add('zen-theme');
     
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) {
-        const tooltipText = mode === 'zen' ? 'Theme: Zen' : 
-                           mode === 'light' ? 'Theme: Light' : 'Theme: Dark';
-        themeBtn.setAttribute('data-tooltip', tooltipText);
-    }
-    if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
-        try { localStorage.setItem('stonedoku_theme', mode); } catch { /* ignore */ }
+        themeBtn.setAttribute('data-tooltip', 'Zen Mode');
     }
 }
 
 export function getNextTheme(currentTheme) {
-    const currentIndex = THEME_MODES.indexOf(currentTheme);
-    const nextIndex = (currentIndex + 1) % THEME_MODES.length;
-    return THEME_MODES[nextIndex];
+    return 'zen';
 }
 
 export function getCurrentTheme() {
-    const body = document.body;
-    if (body.classList.contains('zen-theme')) return 'zen';
-    if (body.classList.contains('light-theme')) return 'light';
-    return 'dark';
+    return 'zen';
 }
 
 export function initTheme(CookieConsent) {
-    let saved = null;
-    if (typeof CookieConsent?.canUsePreferences === 'function' && CookieConsent.canUsePreferences()) {
-        try { saved = localStorage.getItem('stonedoku_theme'); } catch { /* ignore */ }
-    }
-    // Default to zen theme if no preference saved, or use saved preference
-    const theme = saved && THEME_MODES.includes(saved) ? saved : 'zen';
-    applyTheme(theme, CookieConsent);
+    applyTheme('zen', CookieConsent);
 }
 
 export function syncSoundToggleUi(AppState) {
@@ -1026,11 +1002,9 @@ export function createEventSetup(deps) {
             setupHeaderMenu();
             setupPasswordToggles();
 
-            // Theme toggle - cycles through light, dark, and zen
+            // Theme toggle (Zen theme only - button is hidden but listener kept for compatibility)
             document.getElementById('theme-toggle')?.addEventListener('click', () => {
-                const currentTheme = getCurrentTheme();
-                const nextTheme = getNextTheme(currentTheme);
-                applyTheme(nextTheme, CookieConsent);
+                applyTheme('zen', CookieConsent);
             });
 
             // Sound toggle

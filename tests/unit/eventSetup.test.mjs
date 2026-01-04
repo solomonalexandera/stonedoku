@@ -48,18 +48,19 @@ const createMockCookieConsent = (canUse = true) => ({
     canUsePreferences: () => canUse
 });
 
-test('applyTheme sets light-theme class for light mode', () => {
+// Zen theme is the only theme now
+test('applyTheme always sets zen-theme class', () => {
     document.body.classList._classes.clear();
     applyTheme('light', createMockCookieConsent());
-    assert.ok(document.body.classList.contains('light-theme'));
-    assert.ok(!document.body.classList.contains('dark-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
+    assert.ok(!document.body.classList.contains('light-theme'));
 });
 
-test('applyTheme sets dark-theme class for dark mode', () => {
+test('applyTheme sets zen-theme even for dark mode', () => {
     document.body.classList._classes.clear();
     applyTheme('dark', createMockCookieConsent());
-    assert.ok(document.body.classList.contains('dark-theme'));
-    assert.ok(!document.body.classList.contains('light-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
+    assert.ok(!document.body.classList.contains('dark-theme'));
 });
 
 test('applyTheme sets zen-theme for zen mode', () => {
@@ -70,16 +71,16 @@ test('applyTheme sets zen-theme for zen mode', () => {
     assert.ok(!document.body.classList.contains('dark-theme'));
 });
 
-test('applyTheme sets dark-theme for unknown mode', () => {
+test('applyTheme sets zen-theme for any mode', () => {
     document.body.classList._classes.clear();
     applyTheme('anything', createMockCookieConsent());
-    assert.ok(document.body.classList.contains('dark-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
 });
 
-test('applyTheme saves theme to localStorage when cookies allowed', () => {
+test('applyTheme does not save theme to localStorage (zen only)', () => {
     global.localStorage.clear();
     applyTheme('dark', createMockCookieConsent(true));
-    assert.equal(global.localStorage.getItem('stonedoku_theme'), 'dark');
+    assert.equal(global.localStorage.getItem('stonedoku_theme'), null);
 });
 
 test('applyTheme does not save theme when cookies not allowed', () => {
@@ -95,25 +96,25 @@ test('initTheme applies zen theme by default', () => {
     assert.ok(document.body.classList.contains('zen-theme'));
 });
 
-test('initTheme applies saved dark theme', () => {
+test('initTheme always applies zen theme regardless of saved preference', () => {
     document.body.classList._classes.clear();
     global.localStorage.setItem('stonedoku_theme', 'dark');
     initTheme(createMockCookieConsent(true));
-    assert.ok(document.body.classList.contains('dark-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
 });
 
-test('initTheme applies saved zen theme', () => {
+test('initTheme applies zen theme for saved zen preference', () => {
     document.body.classList._classes.clear();
     global.localStorage.setItem('stonedoku_theme', 'zen');
     initTheme(createMockCookieConsent(true));
     assert.ok(document.body.classList.contains('zen-theme'));
 });
 
-test('initTheme applies saved light theme', () => {
+test('initTheme always applies zen theme for saved light preference', () => {
     document.body.classList._classes.clear();
     global.localStorage.setItem('stonedoku_theme', 'light');
     initTheme(createMockCookieConsent(true));
-    assert.ok(document.body.classList.contains('light-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
 });
 
 test('syncSoundToggleUi does not throw when button is null', () => {
@@ -193,7 +194,7 @@ test('setupHeaderMenu toggleHeaderMenu does not throw', () => {
 test('applyTheme handles null CookieConsent', () => {
     document.body.classList._classes.clear();
     applyTheme('light', null);
-    assert.ok(document.body.classList.contains('light-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
 });
 
 test('initTheme handles null CookieConsent', () => {
@@ -205,5 +206,5 @@ test('initTheme handles null CookieConsent', () => {
 test('applyTheme handles CookieConsent without canUsePreferences', () => {
     document.body.classList._classes.clear();
     applyTheme('dark', {});
-    assert.ok(document.body.classList.contains('dark-theme'));
+    assert.ok(document.body.classList.contains('zen-theme'));
 });
