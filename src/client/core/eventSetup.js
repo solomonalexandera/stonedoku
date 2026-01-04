@@ -53,19 +53,6 @@ export function applyTheme(mode, CookieConsent) {
     // Always apply zen theme
     body.classList.remove('light-theme', 'dark-theme');
     body.classList.add('zen-theme');
-    
-    const themeBtn = document.getElementById('theme-toggle');
-    if (themeBtn) {
-        themeBtn.setAttribute('data-tooltip', 'Zen Mode');
-    }
-}
-
-export function getNextTheme(currentTheme) {
-    return 'zen';
-}
-
-export function getCurrentTheme() {
-    return 'zen';
 }
 
 export function initTheme(CookieConsent) {
