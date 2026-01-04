@@ -140,8 +140,7 @@ export function setupAuthListeners(deps) {
         try {
             btn.disabled = true;
             btn.textContent = 'Connecting...';
-            const result = await signInAnonymously(auth);
-            console.log('Anonymous login successful:', result.user.uid);
+            await signInAnonymously(auth);
         } catch (error) {
             console.error('Anonymous login failed:', error);
             if (error.code === 'auth/operation-not-allowed') {
@@ -189,39 +188,25 @@ export function setupAuthListeners(deps) {
             
             // If input doesn't contain @, assume it's a username and look it up
             if (!input.includes('@')) {
-                console.log('Attempting username login for:', input);
                 try {
                     // Query Firestore to find the userId by username
                     const usernameDoc = await getDoc(doc(firestore, 'usernames', input.toLowerCase()));
-                    console.log('Username doc exists:', usernameDoc.exists());
                     if (usernameDoc.exists()) {
                         const userId = usernameDoc.data()?.userId;
-                        console.log('Found userId:', userId);
                         if (userId) {
                             // Get the user's email from their profile
                             const userDoc = await getDoc(doc(firestore, 'users', userId));
-                            console.log('User doc exists:', userDoc.exists());
                             if (userDoc.exists()) {
                                 emailToAuth = userDoc.data()?.email || input;
-                                console.log('Username lookup successful, will sign in with email:', emailToAuth);
-                            } else {
-                                console.warn('User document not found for userId:', userId);
                             }
-                        } else {
-                            console.warn('No userId in username document');
                         }
-                    } else {
-                        console.warn('Username not found in Firestore:', input);
                     }
                 } catch (lookupError) {
                     // If lookup fails, try using input as-is
-                    console.warn('Username lookup failed, attempting direct auth:', lookupError.message);
+                    console.warn('Username lookup failed:', lookupError.message);
                 }
-            } else {
-                console.log('Attempting email login for:', input);
             }
             
-            console.log('Calling signInWithEmailAndPassword with email:', emailToAuth);
             await signInWithEmailAndPassword(auth, emailToAuth, password);
         } catch (error) {
             console.error('Sign in failed:', error);
@@ -352,15 +337,11 @@ export function setupAuthListeners(deps) {
 
     // Logout
     document.getElementById('logout-btn')?.addEventListener('click', async () => {
-        console.log('Logout button clicked');
         try {
-            console.log('Starting logout process...');
             const user = auth.currentUser;
             await PresenceManager.cleanup();
-            console.log('Presence cleaned up');
 
             if (user?.isAnonymous) {
-                console.log('Anonymous user detected; deleting guest account');
                 try {
                     await deleteDoc(doc(firestore, 'users', user.uid));
                 } catch (e) {
@@ -373,11 +354,9 @@ export function setupAuthListeners(deps) {
                     await signOut(auth);
                 }
             } else {
-                console.log('Signing out...');
                 await signOut(auth);
             }
 
-            console.log('Signed out successfully');
             AppState.currentUser = null;
             ViewManager.show('auth');
         } catch (error) {
@@ -452,13 +431,10 @@ export function setupGameListeners(deps) {
 
     // Create room
     document.getElementById('create-room')?.addEventListener('click', async () => {
-        console.log('Create room button clicked');
         try {
             const displayName = AppState.currentUser?.displayName ||
                 `Player_${AppState.currentUser?.uid.substring(0, 6)}`;
-            console.log('Creating room for:', displayName);
             const code = await LobbyManager.createRoom(AppState.currentUser.uid, displayName);
-            console.log('Room created with code:', code);
 
             AppState.currentRoom = code;
             document.getElementById('display-room-code').textContent = code;
@@ -477,8 +453,6 @@ export function setupGameListeners(deps) {
         const codeInput = document.getElementById('room-code-input');
         const code = codeInput?.value?.trim();
 
-        console.log('Attempting to join room with code:', code);
-
         if (!code || code.length !== 4) {
             UI?.showToast?.('Please enter a valid 4-digit room code', 'error');
             return;
@@ -487,10 +461,8 @@ export function setupGameListeners(deps) {
         try {
             const displayName = AppState.currentUser?.displayName ||
                 `Player_${AppState.currentUser?.uid.substring(0, 6)}`;
-            console.log('User:', AppState.currentUser?.uid, 'Display:', displayName);
 
             await LobbyManager.joinRoom(code, AppState.currentUser.uid, displayName);
-            console.log('Successfully joined room');
 
             AppState.currentRoom = code;
             ViewManager.show('waiting');

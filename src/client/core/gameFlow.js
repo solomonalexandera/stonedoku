@@ -180,8 +180,6 @@ export function createGameFlow({
         AppState.currentOpponent = opponentId;
         const opponent = roomData.players[opponentId];
         
-        console.log('Starting versus game:', { matchId, opponentId, opponent });
-        
         GameUI?.createGrid();
         
         const gameContainer = document.querySelector('.game-container');
