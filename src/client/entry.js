@@ -451,8 +451,6 @@ const authFlow = createAuthFlow({
 });
 
 async function handleAuthStateChange(user) {
-    console.log('Auth state changed:', user?.uid || 'signed out');
-    
     if (user) {
         AppState.currentUser = user;
         AppState.passwordReset.active = false;
@@ -463,10 +461,6 @@ async function handleAuthStateChange(user) {
             AppState.currentUser.isSuperAdmin = idTokenResult.claims.superAdmin === true;
             AppState.currentUser.isAdmin = idTokenResult.claims.admin === true;
             AppState.currentUser.isModerator = idTokenResult.claims.moderator === true;
-            
-            if (AppState.currentUser.isAdmin || AppState.currentUser.isSuperAdmin) {
-                console.log('Admin privileges detected');
-            }
         } catch (e) {
             console.warn('Failed to load custom claims:', e);
             AppState.currentUser.isSuperAdmin = false;
@@ -478,7 +472,6 @@ async function handleAuthStateChange(user) {
         await authFlow.configureAuthPersistence();
 
         if (AppState.onboarding?.active) {
-            console.log('Onboarding active, deferring lobby bootstrap');
             AppState.authReady = true;
             return;
         }
