@@ -89,6 +89,39 @@ export const AudioManager = {
     },
 
     /**
+     * Play a tone with a delay using Web Audio API scheduling
+     * @param {number} frequency - Frequency in Hz
+     * @param {number} duration - Duration in seconds
+     * @param {string} type - Waveform type
+     * @param {number} initialGain - Initial gain
+     * @param {number} delaySeconds - Delay before playing
+     */
+    playToneAt(frequency, duration, type = 'sine', initialGain = 0.3, delaySeconds = 0) {
+        if (!this.context || !AppState.soundEnabled) return;
+
+        const startTime = this.context.currentTime + delaySeconds;
+        const oscillator = this.context.createOscillator();
+        const gainNode = this.context.createGain();
+        const filter = this.context.createBiquadFilter();
+        
+        filter.type = 'lowpass';
+        filter.frequency.value = 8000;
+
+        oscillator.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        oscillator.frequency.value = frequency;
+        oscillator.type = type;
+
+        gainNode.gain.setValueAtTime(initialGain, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+    },
+
+    /**
      * Create a buffer of filtered noise
      * @param {number} durationSeconds - Noise duration
      * @returns {AudioBuffer} Noise buffer
@@ -561,9 +594,8 @@ export const AudioManager = {
         
         this.playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 1600, q: 1.5, gain: 0.04 });
         this.playTone(392, 0.1, 'sine', 0.045);
-        setTimeout(() => {
-            this.playTone(523, 0.08, 'sine', 0.04);
-        }, 100);
+        // Schedule second tone using Web Audio API timing
+        this.playToneAt(523, 0.08, 'sine', 0.04, 0.1);
     },
 
     /**
@@ -574,8 +606,9 @@ export const AudioManager = {
         
         this.playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 1800, q: 1.5, gain: 0.05 });
         this.playTone(330, 0.08, 'sine', 0.05);
-        setTimeout(() => this.playTone(440, 0.1, 'sine', 0.045), 80);
-        setTimeout(() => this.playTone(523, 0.08, 'sine', 0.04), 160);
+        // Schedule subsequent tones using Web Audio API timing
+        this.playToneAt(440, 0.1, 'sine', 0.045, 0.08);
+        this.playToneAt(523, 0.08, 'sine', 0.04, 0.16);
     },
 
     /**

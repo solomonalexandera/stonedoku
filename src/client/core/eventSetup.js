@@ -1002,11 +1002,6 @@ export function createEventSetup(deps) {
             setupHeaderMenu();
             setupPasswordToggles();
 
-            // Theme toggle (Zen theme only - button is hidden but listener kept for compatibility)
-            document.getElementById('theme-toggle')?.addEventListener('click', () => {
-                applyTheme('zen', CookieConsent);
-            });
-
             // Sound toggle
             document.getElementById('sound-toggle')?.addEventListener('click', () => {
                 AppState.soundEnabled = !AppState.soundEnabled;
