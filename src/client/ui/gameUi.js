@@ -259,7 +259,9 @@ export function createGameUi({
                             }
 
                             setTimeout(() => {
-                                cell.classList.remove('correct');
+                                if (cell && cell.classList) {
+                                    cell.classList.remove('correct');
+                                }
                             }, 500);
                         } else {
                             audioManager.playError();
@@ -271,10 +273,12 @@ export function createGameUi({
                             }
 
                             setTimeout(() => {
-                                cell.classList.remove('error');
-                                const valueEl = cell.querySelector('.cell-value');
-                                if (valueEl) valueEl.textContent = '';
-                                else cell.textContent = '';
+                                if (cell && cell.classList) {
+                                    cell.classList.remove('error');
+                                    const valueEl = cell.querySelector('.cell-value');
+                                    if (valueEl) valueEl.textContent = '';
+                                    else cell.textContent = '';
+                                }
                             }, 500);
                         }
                     } else {
@@ -327,12 +331,14 @@ export function createGameUi({
                             gameHelpers.updateMistakesDisplay();
 
                             setTimeout(() => {
-                                const valueEl = cell.querySelector('.cell-value');
-                                if (valueEl) valueEl.textContent = '';
-                                else cell.textContent = '';
-                                appState.puzzle[row][col] = 0;
-                                cell.classList.remove('error');
-                                gameHelpers.updateRemainingCounts();
+                                if (cell && cell.classList) {
+                                    const valueEl = cell.querySelector('.cell-value');
+                                    if (valueEl) valueEl.textContent = '';
+                                    else cell.textContent = '';
+                                    appState.puzzle[row][col] = 0;
+                                    cell.classList.remove('error');
+                                    gameHelpers.updateRemainingCounts();
+                                }
                             }, 400);
 
                             if (appState.mistakes >= appState.maxMistakes) {
