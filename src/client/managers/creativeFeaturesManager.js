@@ -43,27 +43,30 @@ export function createCreativeFeatures({ MotionUtils } = {}) {
     const showConfetti = () => {
         if (typeof MotionUtils?.prefersReducedMotion === 'function' && MotionUtils.prefersReducedMotion()) return;
 
-        const colors = ['#d8d1c5', '#c6c1b6', '#9c7b45', '#3f5543', '#0e0f12'];
+        // Zen-inspired colors: earthy tones, stone, moss, brass
+        const colors = ['#d8d1c5', '#c6c1b6', '#b08b4f', '#3f5543', '#2b4a36', '#9a9384'];
 
-        for (let i = 0; i < 26; i++) {
+        // Create fewer, larger particles for zen aesthetic
+        for (let i = 0; i < 20; i++) {
             setTimeout(() => {
                 const chip = document.createElement('div');
-                const w = 3 + Math.random() * 5;
-                const h = 3 + Math.random() * 10;
-                const drift = (Math.random() - 0.5) * 120;
+                const w = 4 + Math.random() * 8;
+                const h = 4 + Math.random() * 12;
+                const drift = (Math.random() - 0.5) * 100; // Less horizontal drift
 
                 chip.className = 'dust-chip';
                 chip.style.left = `${Math.random() * 100}vw`;
                 chip.style.width = `${w.toFixed(1)}px`;
                 chip.style.height = `${h.toFixed(1)}px`;
                 chip.style.background = colors[Math.floor(Math.random() * colors.length)];
-                chip.style.opacity = `${0.2 + Math.random() * 0.35}`;
+                chip.style.opacity = `${0.3 + Math.random() * 0.35}`; // Slightly more visible
                 chip.style.setProperty('--dust-drift', `${drift.toFixed(1)}px`);
-                chip.style.animationDuration = `${3.6 + Math.random() * 2.2}s`;
+                chip.style.animationDuration = `${4 + Math.random() * 2.5}s`; // Slower, more graceful
+                chip.style.borderRadius = `${Math.random() * 3}px`; // Slight roundness
                 document.body.appendChild(chip);
 
-                setTimeout(() => chip.remove(), 6500);
-            }, i * 45);
+                setTimeout(() => chip.remove(), 7000);
+            }, i * 60); // Slightly more staggered
         }
     };
 
