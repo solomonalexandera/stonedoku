@@ -23,12 +23,18 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.moderator == true;
     }
 
-    // User profiles: public readable, writable only by owner
+    // User profiles: authenticated users can read, only owner can write
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      // Only allow anonymous accounts to delete themselves (used for guest cleanup).
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['userId', 'username', 'usernameLower'])
+        && request.resource.data.userId == userId;
+      allow update: if isOwner(userId)
+        // Prevent users from modifying critical fields directly
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.username == resource.data.username
+        && request.resource.data.usernameLower == resource.data.usernameLower;
+      // Only allow anonymous accounts to delete themselves (used for guest cleanup)
       allow delete: if isOwner(userId) && request.auth.token.firebase.sign_in_provider == 'anonymous';
     }
     
@@ -100,10 +106,17 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
-    // Match history - read access for participants
+    // Match history - read access for participants only
+    // Match creation restricted to authenticated users (ideally Cloud Functions)
     match /matchHistory/{matchId} {
       allow read: if isSignedIn() && request.auth.uid in resource.data.players;
-      allow create: if isSignedIn(); // Could be tightened to functions only
+      // Create: require proper structure and participant validation
+      allow create: if isSignedIn()
+        && request.resource.data.players is list
+        && request.resource.data.players.size() >= 1
+        && request.resource.data.players.size() <= 2
+        && request.auth.uid in request.resource.data.players
+        && request.resource.data.keys().hasAll(['players', 'timestamp', 'matchId']);
       allow update, delete: if false;
     }
 
@@ -133,15 +146,18 @@ service cloud.firestore {
     }
 
     // Global chat collection (mirrored from RTDB)
+    // Consistent with RTDB: authenticated users can read/write
     match /globalChat/{messageId} {
-      // Public read (anyone can read global chat)
-      allow read: if true;
+      // Require authentication to read global chat (matches RTDB rules)
+      allow read: if isSignedIn();
       // Allow signed-in clients (including anonymous) to create messages as themselves
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid
         && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500
         && request.resource.data.timestamp != null;
       // Prevent client-side updates/deletes (moderation or functions should handle that)
-      allow update, delete: if false;
+      allow update, delete: if isAdmin();
     }
 
     // Direct messages (per-conversation subcollection)
@@ -190,27 +206,20 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Admin allowlist - DEPRECATED: use custom claims instead
-    // This collection is no longer used. Custom claims in Firebase Auth
-    // handle admin role assignment via Cloud Functions.
-    // Kept for backward compatibility only.
-    match /admins/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
-      allow create, update, delete: if false; // Use Cloud Functions instead
-    }
-    
     // Admin audit log - stores role appointments and admin actions
+    // Readable by admins and moderators, writable only by Cloud Functions
     match /adminAudit/{logId} {
-      // Admins and moderators can read audit logs
-      allow read: if isAdmin() || isModerator();
+      // Admins, super admins, and moderators can read audit logs
+      allow read: if isAdmin() || isSuperAdmin() || isModerator();
       // Only Cloud Functions can write (no direct client writes)
       allow create, update, delete: if false;
     }
 
-    // Community updates / status feed (public read, write via console/admin tooling)
+    // Community updates / status feed (public read, admin write)
     match /updates/{updateId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      // Only admins and super admins can create/update/delete updates
+      allow create, update, delete: if isAdmin() || isSuperAdmin();
     }
   }
 }
