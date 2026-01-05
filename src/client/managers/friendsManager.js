@@ -103,7 +103,8 @@ export function createFriendsManager({
                 const outgoingSnap = await getDocs(outgoingQ);
                 outgoingRequests = outgoingSnap.docs.map(d => ({ id: d.id, ...(d.data() || {}), direction: 'outgoing' }));
             } catch (e) {
-                console.warn('Failed to load friend requests', e);
+                console.error('Failed to load friend requests', e);
+                // Continue with empty arrays
             }
 
             const UI = resolveUI();
@@ -112,7 +113,14 @@ export function createFriendsManager({
             const incomingIds = incomingRequests.map((r) => r?.fromUid).filter(Boolean);
             const outgoingIds = outgoingRequests.map((r) => r?.toUid).filter(Boolean);
             const allRequestIds = [...incomingIds, ...outgoingIds];
-            const requestProfiles = await pm.getProfiles(allRequestIds);
+            
+            let requestProfiles = [];
+            try {
+                requestProfiles = await pm.getProfiles(allRequestIds);
+            } catch (e) {
+                console.error('Failed to load request profiles', e);
+            }
+            
             const profilesMap = new Map(requestProfiles.map(p => [p.id, p]));
             
             requestsList.innerHTML = '';
@@ -155,7 +163,13 @@ export function createFriendsManager({
                 }
             }
 
-            const friendProfiles = await pm.getProfiles(friends);
+            let friendProfiles = [];
+            try {
+                friendProfiles = await pm.getProfiles(friends);
+            } catch (e) {
+                console.error('Failed to load friend profiles', e);
+            }
+            
             friendsList.innerHTML = '';
             if (friendProfiles.length === 0) {
                 friendsList.innerHTML = '<div class="friend-empty">No friends yet.</div>';

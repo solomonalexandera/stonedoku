@@ -63,28 +63,47 @@ export function createCreativeFeatures({ MotionUtils } = {}) {
                 chip.style.setProperty('--dust-drift', `${drift.toFixed(1)}px`);
                 chip.style.animationDuration = `${4 + Math.random() * 2.5}s`; // Slower, more graceful
                 chip.style.borderRadius = `${Math.random() * 3}px`; // Slight roundness
-                document.body.appendChild(chip);
-
-                setTimeout(() => chip.remove(), 7000);
+                
+                // Ensure chip is appended to body
+                if (document.body) {
+                    document.body.appendChild(chip);
+                    
+                    // Clean up after animation completes
+                    setTimeout(() => {
+                        if (chip.parentNode) {
+                            chip.parentNode.removeChild(chip);
+                        }
+                    }, 7000);
+                }
             }, i * 60); // Slightly more staggered
         }
     };
 
     const animateCellComplete = (row, col) => {
         const cell = document.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
-        if (cell) {
-            cell.classList.add('just-completed');
-            setTimeout(() => cell.classList.remove('just-completed'), 400);
-        }
+        if (!cell) return;
+        
+        cell.classList.add('just-completed');
+        setTimeout(() => {
+            if (cell && cell.classList) {
+                cell.classList.remove('just-completed');
+            }
+        }, 400);
     };
 
     const animateGroupComplete = (cells) => {
+        if (!Array.isArray(cells)) return;
+        
         cells.forEach(({ row, col }) => {
             const cell = document.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
-            if (cell) {
-                cell.classList.add('group-complete');
-                setTimeout(() => cell.classList.remove('group-complete'), 600);
-            }
+            if (!cell) return;
+            
+            cell.classList.add('group-complete');
+            setTimeout(() => {
+                if (cell && cell.classList) {
+                    cell.classList.remove('group-complete');
+                }
+            }, 600);
         });
     };
 
