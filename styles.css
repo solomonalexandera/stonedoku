@@ -725,6 +725,39 @@ body:not(.header-compact) .header-menu-toggle {
 /* ===========================================
    Admin Console
    =========================================== */
+
+/* Admin Role Badges */
+.admin-role-badge {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--border-radius);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 1rem;
+    vertical-align: middle;
+}
+
+.admin-badge-super {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+    color: white;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+.admin-badge-admin {
+    background: linear-gradient(135deg, #4ecdc4, #44a8a0);
+    color: white;
+    box-shadow: 0 2px 8px rgba(78, 205, 196, 0.3);
+}
+
+.admin-badge-mod {
+    background: linear-gradient(135deg, #95e1d3, #7cc7ba);
+    color: var(--color-bg);
+    box-shadow: 0 2px 8px rgba(149, 225, 211, 0.3);
+}
+
+/* Admin Console Layout */
 .admin-page {
     padding: 1rem 0 2rem;
 }

@@ -6,17 +6,62 @@ This document describes the security rules and permissions system for Stonedoku.
 
 Stonedoku uses Firebase Security Rules to control access to:
 - **Firestore**: User profiles, friend system, match history, chat, DMs
-- **Realtime Database (RTDB)**: Presence, lobbies, live matches, notifications
+- **Realtime Database (RTDB)**: Presence, lobbies, live matches, notifications, moderation
 - **Storage**: Avatar uploads and public assets
 
 ## Permission Levels
 
 ### User Roles (Custom Claims)
-- **Super Admin**: `superAdmin: true` - Full system access
-- **Admin**: `admin: true` - Moderation and management access
-- **Moderator**: `moderator: true` - Content moderation access
+- **Super Admin**: `superAdmin: true` - Full system access, can appoint admins
+- **Admin**: `admin: true` - Moderation, role management, and content management
+- **Moderator**: `moderator: true` - Content moderation access (mute, block, clear chat)
 - **Registered User**: Has email in auth token
 - **Anonymous User**: No email, temporary guest access
+
+### Role Hierarchy
+```
+Super Admin (highest)
+  ├─ Can appoint/revoke: Admins, Moderators
+  ├─ Full access to all admin features
+  └─ Access to role management and audit logs
+
+Admin
+  ├─ Can appoint/revoke: Moderators only
+  ├─ Full moderation powers
+  ├─ Can manage community updates
+  └─ Access to audit logs
+
+Moderator
+  ├─ Content moderation powers
+  ├─ Can mute/unmute users
+  ├─ Can block/unblock users
+  └─ Can clear chat messages
+
+Regular User
+  └─ Standard application access
+```
+
+## Moderation Features
+
+### Available to Moderators, Admins, and Super Admins
+
+**User Moderation:**
+- `mute` - Prevent user from sending messages (affects global chat and DMs)
+- `unmute` - Remove mute restriction
+- `block` - Prevent user from playing games
+- `unblock` - Remove block restriction
+
+**Chat Management:**
+- `clearUserGlobalChat` - Delete all messages from a specific user in global chat
+- `clearGlobalChat` - Clear entire global chat (use with caution)
+
+### Moderation Actions
+
+All moderation actions:
+1. Update RTDB (`mutes/{uid}` or `blocks/{uid}`)
+2. Update Firestore user profile (`moderation` field)
+3. Send notification to affected user
+4. Are logged for accountability
 
 ## Firestore Rules
 
@@ -99,6 +144,23 @@ Stonedoku uses Firebase Security Rules to control access to:
 - **Read**: Authenticated users
 - **Write**: Owner only
 - **Validation**: Must have `status`, `displayName`, `last_changed`
+
+### Moderation Paths
+
+#### Mutes (`/mutes/{userId}`)
+- **Read**: Authenticated users
+- **Write**: Admins, super admins, and moderators only
+- **Purpose**: Track muted users (prevents chat messages)
+
+#### Blocks (`/blocks/{userId}`)
+- **Read**: Authenticated users
+- **Write**: Admins, super admins, and moderators only
+- **Purpose**: Track blocked users (prevents gameplay)
+
+#### Moderation Notices (`/moderation/notices/{userId}`)
+- **Read**: Owner only
+- **Write**: Admins, super admins, and moderators only
+- **Purpose**: Send moderation notifications to users
 
 ### Lobbies (`/lobbies/{roomCode}`)
 - **Read**: Authenticated users

@@ -26,25 +26,66 @@ export function createAdminManager({ functions, httpsCallable, AppState, UI } = 
         
         const isSuperAdmin = AppState.currentUser.isSuperAdmin === true;
         const isAdmin = AppState.currentUser.isAdmin === true;
+        const isModerator = AppState.currentUser.isModerator === true;
         
-        // Show role management for super-admins
+        // Show role management for super-admins only
         const roleManagementCard = document.getElementById('admin-role-management');
         if (roleManagementCard) {
             roleManagementCard.style.display = isSuperAdmin ? 'block' : 'none';
         }
         
-        // Show audit log for all admins
+        // Show audit log for admins and super-admins
         const auditLogCard = document.getElementById('admin-audit-log');
         if (auditLogCard) {
             auditLogCard.style.display = (isAdmin || isSuperAdmin) ? 'block' : 'none';
         }
         
+        // Display user role badge
+        displayRoleBadge();
+        
         // Setup event listeners
         setupEventListeners();
         
-        // Load audit log if admin
+        // Load audit log if admin or super-admin
         if (isAdmin || isSuperAdmin) {
             loadAuditLog();
+        }
+    }
+    
+    /**
+     * Display role badge in admin console header
+     */
+    function displayRoleBadge() {
+        const adminHeader = document.querySelector('.view-content.admin-console h1');
+        if (!adminHeader) return;
+        
+        // Remove existing badge if any
+        const existingBadge = adminHeader.querySelector('.admin-role-badge');
+        if (existingBadge) existingBadge.remove();
+        
+        const isSuperAdmin = AppState.currentUser.isSuperAdmin === true;
+        const isAdmin = AppState.currentUser.isAdmin === true;
+        const isModerator = AppState.currentUser.isModerator === true;
+        
+        let role = '';
+        let badgeClass = '';
+        
+        if (isSuperAdmin) {
+            role = 'Super Admin';
+            badgeClass = 'admin-badge-super';
+        } else if (isAdmin) {
+            role = 'Admin';
+            badgeClass = 'admin-badge-admin';
+        } else if (isModerator) {
+            role = 'Moderator';
+            badgeClass = 'admin-badge-mod';
+        }
+        
+        if (role) {
+            const badge = document.createElement('span');
+            badge.className = `admin-role-badge ${badgeClass}`;
+            badge.textContent = role;
+            adminHeader.appendChild(badge);
         }
     }
     
