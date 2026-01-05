@@ -75,53 +75,58 @@ export function createGameFlow({
     };
 
     const startSinglePlayerGame = (difficulty, options = null) => {
-        // Stop any existing timer from previous game
-        GameUI?.stopTimer();
-        
-        AppState.gameMode = 'single';
-        AppState.currentDifficulty = difficulty;
-        AppState.playerScore = 0;
-        AppState.selectedCell = null;
-        AppState.timeLimitSeconds = Number(options?.timeLimitSeconds || 0) || 0;
-        AppState.maxMistakes = Number(options?.maxMistakes || AppState.maxMistakes || 3) || 3;
-        if (typeof options?.autoCheck === 'boolean') {
-            AppState.settings.autoCheck = options.autoCheck;
-        }
+        try {
+            // Stop any existing timer from previous game
+            GameUI?.stopTimer();
+            
+            AppState.gameMode = 'single';
+            AppState.currentDifficulty = difficulty;
+            AppState.playerScore = 0;
+            AppState.selectedCell = null;
+            AppState.timeLimitSeconds = Number(options?.timeLimitSeconds || 0) || 0;
+            AppState.maxMistakes = Number(options?.maxMistakes || AppState.maxMistakes || 3) || 3;
+            if (typeof options?.autoCheck === 'boolean') {
+                AppState.settings.autoCheck = options.autoCheck;
+            }
 
-        const autoToggle = document.getElementById('auto-check');
-        if (autoToggle) autoToggle.checked = !!AppState.settings.autoCheck;
-        
-        GameHelpers?.resetGameState();
-        ArchitecturalStateManager?.reset();
-        ArchitecturalStateManager?.startIdleWatch();
-        
-        const { puzzle, solution } = SudokuGenerator.createPuzzle(difficulty);
-        AppState.puzzle = puzzle.map(row => [...row]);
-        AppState.solution = solution;
-        AppState.originalPuzzle = puzzle.map(row => [...row]);
-        
-        GameUI?.createGrid();
-        GameUI?.renderPuzzle(AppState.puzzle);
-        
-        const difficultyLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
-        const currentDiffEl = document.getElementById('current-difficulty');
-        if (currentDiffEl) currentDiffEl.textContent = difficultyLabel;
-        
-        const vsHeader = document.getElementById('game-header-versus');
-        if (vsHeader) vsHeader.style.display = 'none';
-        const singleHeader = document.getElementById('game-header-single');
-        if (singleHeader) singleHeader.style.display = 'flex';
-        
-        const widgetGameTab = document.getElementById('widget-game-tab');
-        if (widgetGameTab) widgetGameTab.style.display = 'none';
-        
-        GameHelpers?.updateRemainingCounts();
-        GameHelpers?.updateProgress();
-        GameHelpers?.updateMistakesDisplay();
-        
-        ViewManager?.show('game');
-        GameUI?.startTimer();
-        PresenceManager?.updateActivity(`Playing: ${difficultyLabel} Mode`);
+            const autoToggle = document.getElementById('auto-check');
+            if (autoToggle) autoToggle.checked = !!AppState.settings.autoCheck;
+            
+            GameHelpers?.resetGameState();
+            ArchitecturalStateManager?.reset();
+            ArchitecturalStateManager?.startIdleWatch();
+            
+            const { puzzle, solution } = SudokuGenerator.createPuzzle(difficulty);
+            AppState.puzzle = puzzle.map(row => [...row]);
+            AppState.solution = solution;
+            AppState.originalPuzzle = puzzle.map(row => [...row]);
+            
+            GameUI?.createGrid();
+            GameUI?.renderPuzzle(AppState.puzzle);
+            
+            const difficultyLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+            const currentDiffEl = document.getElementById('current-difficulty');
+            if (currentDiffEl) currentDiffEl.textContent = difficultyLabel;
+            
+            const vsHeader = document.getElementById('game-header-versus');
+            if (vsHeader) vsHeader.style.display = 'none';
+            const singleHeader = document.getElementById('game-header-single');
+            if (singleHeader) singleHeader.style.display = 'flex';
+            
+            const widgetGameTab = document.getElementById('widget-game-tab');
+            if (widgetGameTab) widgetGameTab.style.display = 'none';
+            
+            GameHelpers?.updateRemainingCounts();
+            GameHelpers?.updateProgress();
+            GameHelpers?.updateMistakesDisplay();
+            
+            ViewManager?.show('game');
+            GameUI?.startTimer();
+            PresenceManager?.updateActivity(`Playing: ${difficultyLabel} Mode`);
+        } catch (error) {
+            console.error('Failed to start single player game:', error);
+            UI?.showToast?.('Failed to start game. Please try again.', 'error');
+        }
     };
 
     const startVersusGame = async (roomData) => {
