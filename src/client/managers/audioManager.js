@@ -426,15 +426,74 @@ export const AudioManager = {
     },
 
     /**
-     * Friend request - welcoming double tap
+     * Friend request - welcoming double tap (enhanced)
+     * Two gentle taps like stones touching
      */
     playFriendRequest() {
         if (!this.canPlay('friendRequest', 500)) return;
         
-        this.playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 1600, q: 1.5, gain: 0.03 });
+        // First tap - higher
+        this.playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 1800, q: 1.6, gain: 0.035 });
+        this.playTone(440, 0.05, 'sine', 0.035);
+        
+        // Second tap - lower, more resonant
         setTimeout(() => {
-            this.playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 2000, q: 1.5, gain: 0.025 });
-        }, 80);
+            this.playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 1400, q: 1.4, gain: 0.03 });
+            this.playTone(330, 0.06, 'sine', 0.03);
+        }, 100);
+    }
+
+    /**
+     * Friend accepted - warm harmonic affirmation
+     * Rising tones that feel welcoming and positive
+     */
+    playFriendAccepted() {
+        if (!this.canPlay('friendAccepted', 500)) return;
+        
+        // Base tone
+        this.playTone(330, 0.15, 'sine', 0.04);
+        // Third above
+        setTimeout(() => this.playTone(415, 0.12, 'sine', 0.035), 80);
+        // Fifth above for resolution
+        setTimeout(() => this.playTone(494, 0.1, 'sine', 0.03), 160);
+        
+        // Gentle noise for texture
+        setTimeout(() => {
+            this.playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 2000, q: 1.5, gain: 0.02 });
+        }, 180);
+    }
+
+    /**
+     * Friend declined - neutral, accepting
+     * No harsh sounds, just a gentle acknowledgment
+     */
+    playFriendDeclined() {
+        if (!this.canPlay('friendDeclined', 500)) return;
+        
+        this.playNoiseBurst({ duration: 0.05, filterType: 'lowpass', frequency: 700, q: 0.7, gain: 0.03 });
+        this.playTone(220, 0.08, 'sine', 0.03);
+    }
+
+    /**
+     * Friend online - gentle presence notification
+     * Like a soft wind chime in the distance
+     */
+    playFriendOnline() {
+        if (!this.canPlay('friendOnline', 1000)) return;
+        
+        this.playTone(523, 0.12, 'sine', 0.025);
+        setTimeout(() => this.playTone(659, 0.08, 'sine', 0.02), 100);
+    }
+
+    /**
+     * Friend offline - gentle departure
+     * Descending, fading tone
+     */
+    playFriendOffline() {
+        if (!this.canPlay('friendOffline', 1000)) return;
+        
+        this.playTone(392, 0.1, 'sine', 0.02);
+        setTimeout(() => this.playTone(330, 0.12, 'sine', 0.015), 80);
     },
 
     /**
@@ -632,5 +691,69 @@ export const AudioManager = {
         } else {
             this.playTone(220, 0.1, 'sine', 0.03);
         }
+    },
+
+    // =========================================
+    // ONBOARDING & TUTORIAL SOUNDS
+    // =========================================
+
+    /**
+     * Tour step advance - gentle page turn
+     * Soft, encouraging progression sound
+     */
+    playTourNext() {
+        if (!this.canPlay('tourNext', 200)) return;
+        
+        this.playNoiseBurst({ duration: 0.06, filterType: 'bandpass', frequency: 2200, q: 1.2, gain: 0.025 });
+        this.playTone(392, 0.08, 'sine', 0.03);
+    },
+
+    /**
+     * Tour complete - gentle achievement
+     * Warm, welcoming completion
+     */
+    playTourComplete() {
+        if (!this.canPlay('tourComplete', 500)) return;
+        
+        // Ascending arpeggio for completion
+        this.playTone(330, 0.15, 'sine', 0.04);
+        setTimeout(() => this.playTone(415, 0.12, 'sine', 0.035), 120);
+        setTimeout(() => this.playTone(523, 0.12, 'sine', 0.03), 240);
+        
+        // Gentle noise texture
+        setTimeout(() => {
+            this.playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 2500, q: 1.5, gain: 0.02 });
+        }, 260);
+    },
+
+    /**
+     * Onboarding step complete - progress affirmation
+     */
+    playStepComplete() {
+        if (!this.canPlay('stepComplete', 200)) return;
+        
+        this.playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 1800, q: 1.5, gain: 0.03 });
+        this.playTone(440, 0.08, 'sine', 0.035);
+    },
+
+    /**
+     * Username validated - gentle confirmation
+     */
+    playUsernameValid() {
+        if (!this.canPlay('usernameValid', 300)) return;
+        
+        this.playTone(392, 0.06, 'sine', 0.03);
+        setTimeout(() => this.playTone(494, 0.05, 'sine', 0.025), 50);
+    },
+
+    /**
+     * Form validation error - gentle correction
+     * Not harsh, just a soft "try again"
+     */
+    playValidationError() {
+        if (!this.canPlay('validationError', 200)) return;
+        
+        this.playNoiseBurst({ duration: 0.05, filterType: 'lowpass', frequency: 400, q: 0.5, gain: 0.04 });
+        this.playTone(165, 0.06, 'sine', 0.04);
     }
 };

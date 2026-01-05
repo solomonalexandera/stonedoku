@@ -2410,10 +2410,20 @@ body:not(.header-compact) .header-menu-toggle {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.6rem 0.75rem;
-    background: rgba(255, 255, 255, 0.05);
+    padding: 0.7rem 0.85rem;
+    background: rgba(255, 255, 255, 0.04);
     border-radius: var(--border-radius);
     font-size: 0.9rem;
+    transition: var(--transition);
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.player-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(var(--color-primary-rgb), 0.2);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
 }
 
 /* Friends Panel */
@@ -2473,10 +2483,54 @@ body:not(.header-compact) .header-menu-toggle {
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.6rem 0.75rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(0, 0, 0, 0.18);
+    padding: 0.7rem 0.85rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.2);
     font-size: 0.9rem;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.friend-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--color-primary);
+    opacity: 0;
+    transition: opacity var(--transition);
+}
+
+.friend-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(var(--color-primary-rgb), 0.3);
+    transform: translateX(2px);
+}
+
+.friend-item:hover::before {
+    opacity: 0.6;
+}
+
+.friend-item.is-online::after {
+    content: '';
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-success);
+    box-shadow: 0 0 8px rgba(43, 74, 54, 0.6);
+    animation: pulse-online 2s ease-in-out infinite;
+}
+
+@keyframes pulse-online {
+    0%, 100% { opacity: 1; transform: translateY(-50%) scale(1); }
+    50% { opacity: 0.7; transform: translateY(-50%) scale(1.1); }
 }
 
 .friend-name {
@@ -7518,11 +7572,12 @@ textarea:focus-visible {
 
 .strength-bar {
     flex: 1;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
     border-radius: var(--border-radius);
     overflow: hidden;
     position: relative;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .strength-bar::after {
@@ -7533,13 +7588,16 @@ textarea:focus-visible {
     height: 100%;
     width: var(--strength, 0%);
     background: var(--strength-color, var(--color-danger));
-    transition: all 0.3s ease;
+    transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: 0 0 8px var(--strength-color, transparent);
 }
 
 .strength-text {
     font-size: 0.75rem;
     color: var(--strength-color, var(--color-text-muted));
     min-width: 60px;
+    font-weight: 500;
+    transition: color 0.3s ease;
 }
 
 /* Profile Upload Area */
@@ -7553,24 +7611,41 @@ textarea:focus-visible {
     margin: 0 auto;
     border-radius: var(--border-radius);
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), var(--shadow-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
     overflow: hidden;
+    position: relative;
+}
+
+.upload-preview::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(var(--color-primary-rgb), 0.1), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.upload-preview:hover::before {
+    opacity: 1;
 }
 
 .upload-preview:hover {
     border-color: var(--color-primary);
     background: rgba(var(--color-primary-rgb), 0.08);
+    transform: scale(1.02);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), var(--shadow-md);
 }
 
 .upload-preview.has-image {
     border-style: solid;
     border-color: var(--color-success);
+    box-shadow: 0 0 0 3px rgba(43, 74, 54, 0.2), var(--shadow-sm);
 }
 
 .upload-placeholder {
@@ -7632,12 +7707,35 @@ textarea:focus-visible {
 }
 
 .tour-card {
-    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.18));
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.16));
+    border: 1px solid rgba(var(--color-primary-rgb), 0.2);
     border-radius: var(--border-radius-xl);
     padding: 2rem;
     margin-bottom: 1.5rem;
     box-shadow: var(--shadow-md);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.tour-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, 
+        var(--color-primary), 
+        var(--color-primary-light), 
+        var(--color-primary));
+    opacity: 0.7;
+}
+
+.tour-card:hover {
+    border-color: rgba(var(--color-primary-rgb), 0.4);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
 }
 
 .tour-icon {
