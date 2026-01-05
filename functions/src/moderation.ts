@@ -12,9 +12,9 @@ type Action =
   | "clearUserGlobalChat";
 
 async function assertAdmin(auth: any): Promise<void> {
-  // Check custom claims instead of /admins collection
-  if (!auth.token.admin && !auth.token.superAdmin) {
-    throw new HttpsError("permission-denied", "Admin access required.");
+  // Check custom claims - allow admins, super admins, and moderators
+  if (!auth.token.admin && !auth.token.superAdmin && !auth.token.moderator) {
+    throw new HttpsError("permission-denied", "Admin or moderator access required.");
   }
 }
 

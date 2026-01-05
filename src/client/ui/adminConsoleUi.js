@@ -77,7 +77,10 @@ export function createAdminConsole({
             return false;
         }
         // Check for custom claims (new system)
-        isAdmin = AppState.currentUser.isAdmin === true || AppState.currentUser.isSuperAdmin === true;
+        // Admins, super-admins, and moderators all get access to admin console
+        isAdmin = AppState.currentUser.isAdmin === true || 
+                  AppState.currentUser.isSuperAdmin === true || 
+                  AppState.currentUser.isModerator === true;
         updateNav();
         return isAdmin;
     };
