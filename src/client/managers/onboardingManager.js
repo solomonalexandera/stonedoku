@@ -372,7 +372,12 @@ export function createOnboardingManager({
             `;
             document.head.appendChild(style);
         }
-        setTimeout(() => { container.innerHTML = ''; }, 5200);
+        // Clean up particles after animation completes
+        setTimeout(() => { 
+            if (container) {
+                container.innerHTML = ''; 
+            }
+        }, 5200);
     };
 
     const finalizeSession = async (action = 'skip') => {
@@ -412,42 +417,58 @@ export function createOnboardingManager({
         const usernameInput = getEl('onboard-username');
         const nextBtn1 = getEl('onboard-next-1');
         const backBtn1 = getEl('onboard-back-1');
+        
+        // Debounce timer for username checking
+        let usernameDebounceTimer = null;
+        
         usernameInput?.addEventListener('input', async (e) => {
             const value = (e.target?.value || '').trim();
             data().username = '';
             AppState.pendingUsername = null;
             showError('username-error');
             if (nextBtn1) nextBtn1.disabled = true;
+            
+            // Clear previous debounce timer
+            if (usernameDebounceTimer) {
+                clearTimeout(usernameDebounceTimer);
+            }
+            
             if (!value) return;
             if (!/^[a-zA-Z0-9_]{3,20}$/.test(value)) {
                 showError('username-error', '3-20 letters, numbers, or underscores.');
                 return;
             }
-            const token = ++state.usernameCheckToken;
+            
+            // Show checking message immediately for UX feedback
             showError('username-error', 'Checking availability...', 'var(--color-secondary)');
-            try {
-                const available = await ProfileManager.checkUsernameAvailable(value);
-                if (token !== state.usernameCheckToken) return;
-                if (available) {
-                    showError('username-error', '');
-                    if (nextBtn1) nextBtn1.disabled = false;
-                    data().username = value;
-                    AppState.pendingUsername = value;
-                } else {
-                    showError('username-error', 'Username already taken.');
-                    if (nextBtn1) nextBtn1.disabled = true;
+            
+            // Debounce the API call by 400ms
+            usernameDebounceTimer = setTimeout(async () => {
+                const token = ++state.usernameCheckToken;
+                try {
+                    const available = await ProfileManager.checkUsernameAvailable(value);
+                    if (token !== state.usernameCheckToken) return;
+                    if (available) {
+                        showError('username-error', '');
+                        if (nextBtn1) nextBtn1.disabled = false;
+                        data().username = value;
+                        AppState.pendingUsername = value;
+                    } else {
+                        showError('username-error', 'Username already taken.');
+                        if (nextBtn1) nextBtn1.disabled = true;
+                    }
+                } catch (err) {
+                    if (token !== state.usernameCheckToken) return;
+                    if (err.message === 'username_reserved') {
+                        showError('username-error', 'This username contains reserved terms and cannot be used.');
+                        if (nextBtn1) nextBtn1.disabled = true;
+                    } else {
+                        console.error('Username availability lookup failed', err);
+                        showError('username-error', 'Unable to verify username right now.');
+                        if (nextBtn1) nextBtn1.disabled = true;
+                    }
                 }
-            } catch (err) {
-                if (token !== state.usernameCheckToken) return;
-                if (err.message === 'username_reserved') {
-                    showError('username-error', 'This username contains reserved terms and cannot be used.');
-                    if (nextBtn1) nextBtn1.disabled = true;
-                } else {
-                    console.warn('Username availability lookup failed', err);
-                    showError('username-error', 'Unable to verify username right now.');
-                    if (nextBtn1) nextBtn1.disabled = true;
-                }
-            }
+            }, 400);
         });
         backBtn1?.addEventListener('click', () => {
             AppState.onboarding.active = false;
