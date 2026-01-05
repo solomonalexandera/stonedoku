@@ -44,19 +44,15 @@ export function setupPasswordToggles() {
 }
 
 /**
- * Theme management utilities
+ * Theme management
  * Zen theme is the only theme - provides a calm, focused experience
  */
-
-export function applyTheme() {
+export function initTheme() {
     const body = document.body;
     body.classList.remove('light-theme', 'dark-theme');
     body.classList.add('zen-theme');
 }
 
-export function initTheme() {
-    applyTheme();
-}
 
 export function syncSoundToggleUi(AppState) {
     const btn = document.getElementById('sound-toggle');

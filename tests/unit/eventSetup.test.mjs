@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyTheme, initTheme, syncSoundToggleUi, setupHeaderMenu } from '../../src/client/core/eventSetup.js';
+import { initTheme, syncSoundToggleUi, setupHeaderMenu } from '../../src/client/core/eventSetup.js';
 
 // Mock DOM
 global.document = {
@@ -48,30 +48,23 @@ const createMockCookieConsent = (canUse = true) => ({
     canUsePreferences: () => canUse
 });
 
-// Zen theme is the only theme - no parameters needed
-test('applyTheme sets zen-theme class', () => {
+// Zen theme is the only theme
+test('initTheme sets zen-theme class', () => {
     document.body.classList._classes.clear();
-    applyTheme();
+    initTheme();
     assert.ok(document.body.classList.contains('zen-theme'));
     assert.ok(!document.body.classList.contains('light-theme'));
     assert.ok(!document.body.classList.contains('dark-theme'));
 });
 
-test('applyTheme removes other theme classes', () => {
+test('initTheme removes other theme classes', () => {
     document.body.classList._classes.clear();
     document.body.classList.add('light-theme');
     document.body.classList.add('dark-theme');
-    applyTheme();
+    initTheme();
     assert.ok(document.body.classList.contains('zen-theme'));
     assert.ok(!document.body.classList.contains('light-theme'));
     assert.ok(!document.body.classList.contains('dark-theme'));
-});
-
-test('initTheme applies zen theme', () => {
-    document.body.classList._classes.clear();
-    global.localStorage.clear();
-    initTheme();
-    assert.ok(document.body.classList.contains('zen-theme'));
 });
 
 test('initTheme applies zen theme regardless of saved preference', () => {
@@ -153,12 +146,6 @@ test('setupHeaderMenu toggleHeaderMenu does not throw', () => {
     const { toggleHeaderMenu } = setupHeaderMenu();
     toggleHeaderMenu();
     assert.ok(true);
-});
-
-test('applyTheme works without parameters', () => {
-    document.body.classList._classes.clear();
-    applyTheme();
-    assert.ok(document.body.classList.contains('zen-theme'));
 });
 
 test('initTheme works without parameters', () => {
