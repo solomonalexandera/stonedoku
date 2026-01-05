@@ -13,8 +13,9 @@
     "lobbies": {
       ".read": "auth != null",
       "$roomCode": {
-        ".write": "auth != null && ( !data.exists() ? newData.child('host').val() == auth.uid : root.child('lobbies').child($roomCode).child('host').val() == auth.uid )",
-        ".validate": "!data.exists() || (data.exists() && (newData.child('host').val() == auth.uid || newData.child('players').hasChild(auth.uid) || data.child('players').hasChild(auth.uid)))",
+        // Host can create/update lobby; participants can update their player data
+        ".write": "auth != null && (!data.exists() ? newData.child('host').val() == auth.uid : (data.child('host').val() == auth.uid || data.child('players').child(auth.uid).exists()))",
+        ".validate": "newData.hasChildren(['host', 'code'])",
         "players": {
           "$playerId": {
             ".read": "auth != null",
@@ -24,7 +25,7 @@
         "rematchVotes": {
           "$voterId": {
             ".read": "auth != null",
-            ".write": "auth != null && (auth.uid == $voterId || root.child('lobbies').child($roomCode).child('host').val() == auth.uid || root.child('lobbies').child($roomCode).child('players').child(auth.uid).exists())",
+            ".write": "auth != null && auth.uid == $voterId",
             ".validate": "newData.hasChildren(['vote']) && (newData.child('vote').val() === true || newData.child('vote').val() === false)"
           }
         }
@@ -39,15 +40,14 @@
     },
     "globalChat": {
       ".read": "auth != null",
-      ".write": "auth != null",
       "$messageId": {
-        ".validate": "newData.hasChildren(['userId', 'displayName', 'text', 'timestamp']) && newData.child('userId').val() === auth.uid"
+        ".write": "auth != null && newData.child('userId').val() === auth.uid",
+        ".validate": "newData.hasChildren(['userId', 'displayName', 'text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500"
       }
     },
     "dmParticipants": {
       "$dmId": {
         ".read": "auth != null && (data.child('a').val() === auth.uid || data.child('b').val() === auth.uid)",
-        // Allow creating the participant record, and allow idempotent re-writes that keep the same pair.
         ".write": "auth != null && (!data.exists() || (data.child('a').val() === newData.child('a').val() && data.child('b').val() === newData.child('b').val())) && (newData.child('a').val() === auth.uid || newData.child('b').val() === auth.uid)",
         ".validate": "newData.hasChildren(['a', 'b']) && newData.child('a').isString() && newData.child('b').isString() && newData.child('a').val() !== newData.child('b').val()"
       }
@@ -55,9 +55,9 @@
     "directMessages": {
       "$dmId": {
         ".read": "auth != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid)",
-        ".write": "auth != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid)",
         "$messageId": {
-          ".validate": "newData.hasChildren(['from', 'to', 'text', 'timestamp']) && newData.child('from').val() === auth.uid"
+          ".write": "auth != null && root.child('dmParticipants').child($dmId).exists() && (root.child('dmParticipants').child($dmId).child('a').val() === auth.uid || root.child('dmParticipants').child($dmId).child('b').val() === auth.uid) && newData.child('from').val() === auth.uid",
+          ".validate": "newData.hasChildren(['from', 'to', 'text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 1000"
         }
       }
     },
@@ -74,9 +74,9 @@
     "notifications": {
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
-        ".write": "auth != null && auth.uid == $userId",
         "$notificationId": {
-          ".write": "auth != null && (auth.uid == $userId || auth.uid == newData.child('from').val())"
+          ".write": "auth != null && (auth.uid == $userId || auth.uid == newData.child('from').val())",
+          ".validate": "newData.hasChildren(['type', 'timestamp'])"
         }
       }
     }
