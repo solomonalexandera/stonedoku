@@ -2043,6 +2043,15 @@ body.light-theme .btn-daily:hover {
 /* Auth Panel */
 .auth-panel {
     animation: none;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auth-panel.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding: 0;
+    margin: 0;
 }
 
 @keyframes fadeIn {
